@@ -1,0 +1,174 @@
+{
+  "categories": [
+    { "id": "laptop", "name": "Laptop", "count": 28, "icon": "💻" },
+    { "id": "gaming-pc", "name": "PC Gaming", "count": 16, "icon": "🖥️" },
+    { "id": "office-pc", "name": "PC Văn Phòng", "count": 12, "icon": "🧑‍💻" },
+    { "id": "cpu", "name": "CPU", "count": 20, "icon": "⚙️" },
+    { "id": "gpu", "name": "GPU", "count": 18, "icon": "🎮" },
+    { "id": "ram", "name": "RAM", "count": 14, "icon": "🧠" },
+    { "id": "ssd", "name": "SSD", "count": 22, "icon": "💾" },
+    { "id": "monitor", "name": "Màn Hình", "count": 15, "icon": "🖥️" },
+    { "id": "keyboard", "name": "Bàn Phím", "count": 19, "icon": "⌨️" },
+    { "id": "mouse", "name": "Chuột", "count": 17, "icon": "🖱️" },
+    { "id": "headset", "name": "Tai Nghe", "count": 13, "icon": "🎧" },
+    { "id": "accessories", "name": "Phụ Kiện", "count": 24, "icon": "🔌" }
+  ],
+  "products": [
+    {
+      "id": "lap-001",
+      "name": "Pro Gaming Laptop X15",
+      "category": "laptop",
+      "price": 18990000,
+      "oldPrice": 20990000,
+      "discount": 10,
+      "rating": 4.9,
+      "reviewCount": 128,
+      "stock": 15,
+      "isFeatured": true,
+      "isNew": true,
+      "isSale": true,
+      "isHot": true,
+      "image": "https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=1200&q=80",
+      "images": [
+        "https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=1200&q=80",
+        "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=1200&q=80",
+        "https://images.unsplash.com/photo-1524758631624-e2822e304c36?auto=format&fit=crop&w=1200&q=80",
+        "https://images.unsplash.com/photo-1545239351-1141bd82e8a6?auto=format&fit=crop&w=1200&q=80"
+      ],
+      "description": "Laptop gaming mạnh mẽ dành cho gameplay, sáng tạo và làm việc chuyên nghiệp, với hiệu năng cao và màn hình sắc nét.",
+      "features": ["Intel Core i7", "RTX 4070", "32GB DDR5", "1TB NVMe SSD", "144Hz display"],
+      "specifications": {
+        "CPU": "Intel Core i7-13700H",
+        "GPU": "NVIDIA RTX 4070",
+        "RAM": "32GB DDR5",
+        "Storage": "1TB NVMe SSD",
+        "Display": "15.6\" QHD 165Hz",
+        "Resolution": "2560x1440",
+        "RefreshRate": "165Hz",
+        "OS": "Windows 11 Pro",
+        "Battery": "80Wh",
+        "Weight": "2.1kg",
+        "Warranty": "24 months"
+      }
+    },
+    {
+      "id": "lap-002",
+      "name": "UltraBook Pro 14",
+      "category": "laptop",
+      "price": 13990000,
+      "oldPrice": 15990000,
+      "discount": 12,
+      "rating": 4.8,
+      "reviewCount": 95,
+      "stock": 20,
+      "isFeatured": true,
+      "isNew": true,
+      "image": "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=1200&q=80",
+      "images": [
+        "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=1200&q=80",
+        "https://images.unsplash.com/photo-1524758631624-e2822e304c36?auto=format&fit=crop&w=1200&q=80"
+      ],
+      "description": "Ultrabook siêu nhẹ, pin lâu dành cho công việc văn phòng và di động.",
+      "features": ["Intel Core i5", "16GB RAM", "512GB SSD", "14\" 4K display"],
+      "specifications": {
+        "CPU": "Intel Core i5-1340P",
+        "RAM": "16GB LPDDR5",
+        "Storage": "512GB SSD",
+        "Display": "14\" 4K",
+        "Weight": "1.2kg"
+      }
+    },
+    {
+      "id": "cpu-001",
+      "name": "Intel Core i9-13900K",
+      "category": "cpu",
+      "price": 8990000,
+      "oldPrice": 9990000,
+      "discount": 10,
+      "rating": 4.9,
+      "reviewCount": 450,
+      "stock": 45,
+      "isFeatured": true,
+      "isSale": true,
+      "image": "https://images.unsplash.com/photo-1597872200969-2b65d56bd16b?auto=format&fit=crop&w=1200&q=80",
+      "images": [
+        "https://images.unsplash.com/photo-1597872200969-2b65d56bd16b?auto=format&fit=crop&w=1200&q=80"
+      ],
+      "description": "CPU cao cấp cho gaming và workstation chuyên nghiệp",
+      "features": ["24 cores", "8P+16E cores", "5.8 GHz Max", "Raptor Lake"],
+      "specifications": {
+        "Cores": "24 (8P+16E)",
+        "Threads": "32",
+        "Base Clock": "3.0 GHz",
+        "Max Clock": "5.8 GHz",
+        "TDP": "253W"
+      }
+    },
+    {
+      "id": "gpu-001",
+      "name": "RTX 4090",
+      "category": "gpu",
+      "price": 22990000,
+      "oldPrice": 24990000,
+      "discount": 8,
+      "rating": 4.95,
+      "reviewCount": 320,
+      "stock": 8,
+      "isFeatured": true,
+      "isHot": true,
+      "image": "https://images.unsplash.com/photo-1587202372775-e229f172b9d7?auto=format&fit=crop&w=1200&q=80",
+      "images": [
+        "https://images.unsplash.com/photo-1587202372775-e229f172b9d7?auto=format&fit=crop&w=1200&q=80"
+      ],
+      "description": "Card đồ họa flagship cho gaming 4K ultra settings",
+      "features": ["16,384 CUDA cores", "24GB GDDR6X", "PCIe 4.0"],
+      "specifications": {
+        "Memory": "24GB GDDR6X",
+        "Memory Speed": "20 Gbps",
+        "TDP": "450W"
+      }
+    }
+  ],
+  "users": [
+    {
+      "id": 1,
+      "email": "nguyenvana@gmail.com",
+      "password": "password123",
+      "name": "Nguyễn Văn A",
+      "phone": "0909 123 456",
+      "address": "123 Đường Lê Lợi, Phường Bến Nghé, Quận 1",
+      "city": "TP. Hồ Chí Minh",
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80"
+    }
+  ],
+  "orders": [],
+  "cart": [],
+  "wishlist": [],
+  "reviews": [
+    {
+      "id": 1,
+      "productId": "lap-001",
+      "userId": 1,
+      "userName": "Trần Tuấn Anh",
+      "userAvatar": "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80",
+      "rating": 5.0,
+      "comment": "Máy cực kỳ mát khi render Premiere và chiến game nặng. Màn hình sắc nét 2K cực đã!",
+      "createdAt": "2026-03-10T09:30:00.000Z"
+    },
+    {
+      "id": 2,
+      "productId": "lap-001",
+      "userId": 2,
+      "userName": "Lê Hoàng Nam",
+      "userAvatar": "https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?auto=format&fit=crop&w=200&q=80",
+      "rating": 4.8,
+      "comment": "Đóng gói cẩn thận, nhận hàng sau 2 tiếng đặt tại HCM. Rất ưng ý!",
+      "createdAt": "2026-03-12T14:15:00.000Z"
+    }
+  ],
+  "vouchers": [
+    { "code": "DPC50K", "discount": 50000, "minOrder": 2000000, "label": "Giảm 50.000₫ đơn từ 2tr", "expiryDate": "2026-12-31" },
+    { "code": "FREESHIP", "discount": 30000, "minOrder": 0, "label": "Miễn phí giao hàng toàn quốc", "expiryDate": "2026-12-31" },
+    { "code": "VIP200K", "discount": 200000, "minOrder": 20000000, "label": "Giảm 200.000₫ đơn từ 20tr", "expiryDate": "2026-12-31" }
+  ]
+}
