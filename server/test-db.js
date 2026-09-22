@@ -9,11 +9,11 @@ async function testConnection() {
       host: process.env.DB_HOST || 'localhost',
       user: process.env.DB_USER || 'root',
       password: process.env.DB_PASSWORD || '',
-      database: process.env.DB_NAME || 'promart',
+      database: process.env.DB_NAME || 'maytinh',
     });
 
     console.log('✅ Connected to MySQL successfully!');
-    console.log(`📊 Database: ${process.env.DB_NAME || 'promart'}`);
+    console.log(`📊 Database: ${process.env.DB_NAME || 'maytinh'}`);
     console.log(`👤 User: ${process.env.DB_USER || 'root'}`);
     console.log(`🖥️  Host: ${process.env.DB_HOST || 'localhost'}\n`);
 
@@ -47,7 +47,7 @@ async function testConnection() {
     console.error('❌ Connection failed:', error.message);
     console.error('\n⚠️  Make sure:');
     console.error('  1. MySQL is running (XAMPP)');
-    console.error('  2. Database "promart" exists');
+    console.error('  2. Database "maytinh" exists');
     console.error('  3. .env.local has correct DB credentials\n');
     process.exit(1);
   }

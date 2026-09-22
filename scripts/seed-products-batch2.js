@@ -766,12 +766,12 @@ const batch2 = [
 ];
 
 async function run() {
-  console.log('🌱 Bắt đầu thêm 24 sản phẩm đợt 2 vào MySQL promart...');
+  console.log('🌱 Bắt đầu thêm 24 sản phẩm đợt 2 vào MySQL maytinh...');
   const connection = await mysql.createConnection({
     host: process.env.DB_HOST || 'localhost',
     user: process.env.DB_USER || 'root',
     password: process.env.DB_PASSWORD || '',
-    database: process.env.DB_NAME || 'promart',
+    database: process.env.DB_NAME || 'maytinh',
   });
 
   for (const p of batch2) {

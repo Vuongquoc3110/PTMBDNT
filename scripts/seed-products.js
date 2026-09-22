@@ -596,12 +596,12 @@ const newProducts = [
 ];
 
 async function seed() {
-  console.log('🌱 Bắt đầu thêm sản phẩm vào MySQL promart...');
+  console.log('🌱 Bắt đầu thêm sản phẩm vào MySQL maytinh...');
   const connection = await mysql.createConnection({
     host: process.env.DB_HOST || 'localhost',
     user: process.env.DB_USER || 'root',
     password: process.env.DB_PASSWORD || '',
-    database: process.env.DB_NAME || 'promart',
+    database: process.env.DB_NAME || 'maytinh',
   });
 
   for (const p of newProducts) {

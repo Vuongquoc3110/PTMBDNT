@@ -4,9 +4,9 @@
 -- ============================================
 
 -- Tạo Database
-CREATE DATABASE IF NOT EXISTS promart
+CREATE DATABASE IF NOT EXISTS maytinh
   CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE promart;
+USE maytinh;
 
 -- Tắt kiểm tra foreign key tạm thời
 SET FOREIGN_KEY_CHECKS = 0;

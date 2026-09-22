@@ -15,10 +15,16 @@ const pool = mysql.createPool({
   port: parseInt(process.env.DB_PORT || '3306'),
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_NAME || 'promart',
+  database: process.env.DB_NAME || 'maytinh',
+  charset: 'utf8mb4',
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
+});
+
+app.use((req, res, next) => {
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  next();
 });
 
 // Health check
@@ -900,6 +906,6 @@ app.get('/admin/stats', async (req, res) => {
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`🚀 API Server running on http://localhost:${PORT}`);
-  console.log(`📊 Database: ${process.env.DB_NAME || 'promart'}`);
+  console.log(`📊 Database: ${process.env.DB_NAME || 'maytinh'}`);
   console.log(`👤 DB User: ${process.env.DB_USER || 'root'}`);
 });
