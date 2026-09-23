@@ -69,6 +69,16 @@ async function initTables() {
       )
     `);
 
+    // Ensure products table has isHidden column
+    try {
+      await connection.query(`ALTER TABLE products ADD COLUMN isHidden BOOLEAN DEFAULT FALSE`);
+      console.log('✅ Added isHidden column to products table');
+    } catch (err) {
+      if (err.code !== 'ER_DUP_FIELDNAME') {
+        console.warn('⚠️ Could not add isHidden column:', err.message);
+      }
+    }
+
     // Seed default vouchers
     await connection.query(`
       INSERT INTO vouchers (code, discount, minOrder, label, expiryDate) VALUES
@@ -170,10 +180,14 @@ app.delete('/categories/:id', async (req, res) => {
 app.get('/products', async (req, res) => {
   try {
     const connection = await pool.getConnection();
-    const { category, featured, new: isNew, sale, hot, q, minPrice, maxPrice, sortBy, limit = 100, offset = 0 } = req.query;
+    const { category, featured, new: isNew, sale, hot, q, minPrice, maxPrice, sortBy, limit = 500, offset = 0, admin } = req.query;
     
     let query = 'SELECT * FROM products WHERE 1=1';
     const params = [];
+
+    if (admin !== 'true') {
+      query += ' AND (isHidden IS NULL OR isHidden = FALSE)';
+    }
 
     if (category) {
       query += ' AND (category_id = ? OR category_id LIKE ?)';
@@ -260,26 +274,19 @@ app.get('/products/:id', async (req, res) => {
 app.post('/products', async (req, res) => {
   try {
     const connection = await pool.getConnection();
-    const { id, name, category_id, price, oldPrice, discount, rating, stock, image, description, specifications, features } = req.body;
-
-    const query = `
-      INSERT INTO products (id, name, category_id, price, oldPrice, discount, rating, stock, image, description, specifications, features)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `;
-
-    await connection.query(query, [
-      id,
-      name,
-      category_id,
-      price,
-      oldPrice,
-      discount,
-      rating,
-      stock,
-      image,
-      description,
-      JSON.stringify(specifications || {}),
-      JSON.stringify(features || []),
+    const p = req.body;
+    
+    await connection.query(`
+      INSERT INTO products (
+        id, name, category_id, price, oldPrice, discount, rating, reviewCount, stock,
+        isFeatured, isNew, isSale, isHot, isHidden, image, description, specifications, features
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      p.id, p.name, p.category_id, p.price, p.oldPrice || null, p.discount || 0,
+      p.rating || 5.0, p.reviewCount || 0, p.stock || 0,
+      p.isFeatured || false, p.isNew || false, p.isSale || false, p.isHot || false, p.isHidden || false,
+      p.image || '', p.description || '',
+      JSON.stringify(p.specifications || {}), JSON.stringify(p.features || [])
     ]);
 
     connection.release();
@@ -309,6 +316,7 @@ app.put('/products/:id', async (req, res) => {
       isNew,
       isSale,
       isHot,
+      isHidden,
     } = req.body;
 
     const query = `
@@ -327,7 +335,8 @@ app.put('/products/:id', async (req, res) => {
         isFeatured = COALESCE(?, isFeatured),
         isNew = COALESCE(?, isNew),
         isSale = COALESCE(?, isSale),
-        isHot = COALESCE(?, isHot)
+        isHot = COALESCE(?, isHot),
+        isHidden = COALESCE(?, isHidden)
       WHERE id = ?
     `;
 
@@ -347,6 +356,7 @@ app.put('/products/:id', async (req, res) => {
       isNew !== undefined ? isNew : null,
       isSale !== undefined ? isSale : null,
       isHot !== undefined ? isHot : null,
+      isHidden !== undefined ? isHidden : null,
       req.params.id,
     ]);
 

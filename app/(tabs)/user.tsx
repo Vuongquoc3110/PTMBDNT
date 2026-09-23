@@ -356,74 +356,71 @@ export default function UserTabScreen() {
       ) : null}
 
       <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
-        <View style={[styles.mainLayout, isWideScreen && styles.mainLayoutWide]}>
-          {/* LEFT COLUMN: Profile info, stats, order tracker, VIP perks */}
-          <View style={[styles.leftColumn, isWideScreen && styles.columnHalf]}>
-            {/* 1. VIP GAMER & PRO MEMBER PASS */}
-            <View style={styles.vipPassCard}>
-              {/* Decorative Cyber Glow */}
-              <View style={styles.vipPassGlow} />
-
-              {/* Card Header Row: Brand & Tier */}
-              <View style={styles.vipPassTopRow}>
-                <View style={styles.vipBrandBadge}>
-                  <Ionicons name="hardware-chip" size={15} color="#38bdf8" />
-                  <Text style={styles.vipBrandText}>DANGVINHPC • PRO PASS</Text>
-                </View>
-
-                <Pressable style={styles.vipTierPill} onPress={() => setActiveModal('tier')}>
-                  <Ionicons name="sparkles" size={12} color="#f59e0b" />
-                  <Text style={styles.vipTierText}>VIP PLATINUM</Text>
+        {isAdmin ? (
+          <View style={[styles.mainLayout, isWideScreen && styles.mainLayoutWide, { justifyContent: 'center', alignItems: 'center', paddingVertical: 60 }]}>
+            <View style={{ width: '100%', maxWidth: 460, backgroundColor: '#ffffff', borderRadius: 24, padding: 32, alignItems: 'center', borderColor: '#e2e8f0', borderWidth: 1, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 20 }}>
+              <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: '#fee2e2', justifyContent: 'center', alignItems: 'center', marginBottom: 20 }}>
+                <Ionicons name="shield-checkmark" size={36} color="#dc2626" />
+              </View>
+              <Text style={{ fontSize: 24, fontWeight: '800', color: '#0f172a', marginBottom: 8, textAlign: 'center' }}>
+                {profile.name}
+              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 20, backgroundColor: '#fef2f2', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 }}>
+                <Ionicons name="flash" size={14} color="#dc2626" />
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#dc2626' }}>QUẢN TRỊ VIÊN HỆ THỐNG</Text>
+              </View>
+              <Text style={{ fontSize: 15, color: '#64748b', marginBottom: 32, textAlign: 'center', lineHeight: 24 }}>
+                <Text style={{ fontWeight: '600' }}>Email:</Text> {profile.email}{'\n'}
+                <Text style={{ fontWeight: '600' }}>Điện thoại:</Text> {profile.phone || 'Chưa cập nhật'}
+              </Text>
+              <View style={{ width: '100%', gap: 12 }}>
+                <Pressable
+                  style={{ backgroundColor: '#2563eb', paddingVertical: 14, borderRadius: 12, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8 }}
+                  onPress={() => router.push('/admin' as any)}
+                >
+                  <Ionicons name="construct-outline" size={20} color="#fff" />
+                  <Text style={{ color: '#fff', fontSize: 15, fontWeight: '700' }}>Vào Trang Quản Trị (Admin Panel)</Text>
+                </Pressable>
+                <Pressable
+                  style={{ backgroundColor: '#f1f5f9', paddingVertical: 14, borderRadius: 12, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8 }}
+                  onPress={() => setActiveModal('logoutConfirm')}
+                >
+                  <Ionicons name="log-out-outline" size={20} color="#e11d48" />
+                  <Text style={{ color: '#e11d48', fontSize: 15, fontWeight: '700' }}>Đăng xuất tài khoản</Text>
                 </Pressable>
               </View>
+            </View>
+            <View style={[styles.versionFooter, { marginTop: 40 }]}>
+              <Text style={styles.versionText}>DANGVINHPC Admin System • Phiên bản 2.5.0</Text>
+              <Text style={styles.copyrightText}>© 2026 DANGVINHPC Co., Ltd.</Text>
+            </View>
+          </View>
+        ) : (
+          <View style={[styles.mainLayout, isWideScreen && styles.mainLayoutWide]}>
+            {/* LEFT COLUMN: Profile info, stats, order tracker, VIP perks */}
+            <View style={[styles.leftColumn, isWideScreen && styles.columnHalf]}>
+              {/* 1. VIP GAMER & PRO MEMBER PASS */}
+              <View style={styles.vipPassCard}>
+                {/* Decorative Cyber Glow */}
+                <View style={styles.vipPassGlow} />
 
-              {/* User Bio Row */}
-              <View style={styles.vipUserRow}>
-                <Pressable
-                  style={styles.avatarWrapper}
-                  onPress={() => {
-                    setEditName(profile.name);
-                    setEditEmail(profile.email);
-                    setEditPhone(profile.phone);
-                    setEditCity(profile.city);
-                    setActiveModal('editProfile');
-                  }}
-                >
-                  <Image
-                    source={{
-                      uri: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
-                    }}
-                    style={styles.avatar}
-                  />
-                  <View style={styles.onlinePulse} />
-                  <View style={styles.avatarCameraBadge}>
-                    <Ionicons name="camera" size={11} color="#ffffff" />
+                {/* Card Header Row: Brand & Tier */}
+                <View style={styles.vipPassTopRow}>
+                  <View style={styles.vipBrandBadge}>
+                    <Ionicons name="hardware-chip" size={15} color="#38bdf8" />
+                    <Text style={styles.vipBrandText}>DANGVINHPC • PRO PASS</Text>
                   </View>
-                </Pressable>
 
-                <View style={styles.vipUserInfo}>
-                  <View style={styles.userNameBadgeRow}>
-                    <Text style={styles.vipUserName} numberOfLines={1}>
-                      {isLoggedOut ? 'Khách ghé thăm' : profile.name}
-                    </Text>
-                    {isAdmin && (
-                      <View style={styles.adminMiniTag}>
-                        <Text style={styles.adminMiniTagText}>🛡️ ADMIN</Text>
-                      </View>
-                    )}
-                  </View>
-                  <Text style={styles.vipUserEmail}>
-                    {isLoggedOut ? 'Chưa đăng nhập' : profile.email}
-                  </Text>
-                  <Text style={styles.vipUserSub}>
-                    <Ionicons name="location-sharp" size={12} color="#64748b" />{' '}
-                    {isLoggedOut ? 'Đăng nhập để nhận ưu đãi' : `${profile.phone} • ${profile.city || 'TP. Hồ Chí Minh'}`}
-                  </Text>
+                  <Pressable style={styles.vipTierPill} onPress={() => setActiveModal('tier')}>
+                    <Ionicons name="sparkles" size={12} color="#f59e0b" />
+                    <Text style={styles.vipTierText}>VIP PLATINUM</Text>
+                  </Pressable>
                 </View>
 
-                {!isLoggedOut && (
+                {/* User Bio Row */}
+                <View style={styles.vipUserRow}>
                   <Pressable
-                    style={styles.editProfileGlassBtn}
+                    style={styles.avatarWrapper}
                     onPress={() => {
                       setEditName(profile.name);
                       setEditEmail(profile.email);
@@ -432,350 +429,394 @@ export default function UserTabScreen() {
                       setActiveModal('editProfile');
                     }}
                   >
-                    <Ionicons name="create-outline" size={18} color="#38bdf8" />
+                    <Image
+                      source={{
+                        uri: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
+                      }}
+                      style={styles.avatar}
+                    />
+                    <View style={styles.onlinePulse} />
+                    <View style={styles.avatarCameraBadge}>
+                      <Ionicons name="camera" size={11} color="#ffffff" />
+                    </View>
                   </Pressable>
-                )}
+
+                  <View style={styles.vipUserInfo}>
+                    <View style={styles.userNameBadgeRow}>
+                      <Text style={styles.vipUserName} numberOfLines={1}>
+                        {isLoggedOut ? 'Khách ghé thăm' : profile.name}
+                      </Text>
+                      {isAdmin && (
+                        <View style={styles.adminMiniTag}>
+                          <Text style={styles.adminMiniTagText}>🛡️ ADMIN</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={styles.vipUserEmail}>
+                      {isLoggedOut ? 'Chưa đăng nhập' : profile.email}
+                    </Text>
+                    <Text style={styles.vipUserSub}>
+                      <Ionicons name="location-sharp" size={12} color="#64748b" />{' '}
+                      {isLoggedOut ? 'Đăng nhập để nhận ưu đãi' : `${profile.phone} • ${profile.city || 'TP. Hồ Chí Minh'}`}
+                    </Text>
+                  </View>
+
+                  {!isLoggedOut && (
+                    <Pressable
+                      style={styles.editProfileGlassBtn}
+                      onPress={() => {
+                        setEditName(profile.name);
+                        setEditEmail(profile.email);
+                        setEditPhone(profile.phone);
+                        setEditCity(profile.city);
+                        setActiveModal('editProfile');
+                      }}
+                    >
+                      <Ionicons name="create-outline" size={18} color="#38bdf8" />
+                    </Pressable>
+                  )}
+                </View>
+
+                {/* VIP XP Level Progress Bar */}
+                <View style={styles.vipLevelBlock}>
+                  <View style={styles.vipLevelHeader}>
+                    <Text style={styles.vipLevelLabel}>Hạng thành viên: Tier 3 • VIP Platinum</Text>
+                    <Text style={styles.vipLevelExp}>3.240 / 5.000 XP (65%)</Text>
+                  </View>
+                  <View style={styles.vipProgressBarBg}>
+                    <View style={styles.vipProgressBarFill} />
+                  </View>
+                  <Text style={styles.vipNextTierNote}>
+                    ⚡ Còn 1.760 XP nữa để thăng hạng VIP Diamond (Đặc quyền giảm 8% trọn đời)
+                  </Text>
+                </View>
+
+                {/* Integrated Glassmorphic Wallet & Coins Hub */}
+                <View style={styles.vipWalletHub}>
+                  <View style={styles.walletHubCol}>
+                    <View style={styles.walletHubTitleRow}>
+                      <Ionicons name="wallet" size={14} color="#38bdf8" />
+                      <Text style={styles.walletHubTitle}>Số dư ví DPC</Text>
+                    </View>
+                    <Text style={styles.walletHubAmount}>{walletBalance.toLocaleString('vi-VN')} ₫</Text>
+                  </View>
+
+                  <View style={styles.walletHubDivider} />
+
+                  <View style={styles.walletHubCol}>
+                    <View style={styles.walletHubTitleRow}>
+                      <Ionicons name="star" size={14} color="#f59e0b" />
+                      <Text style={styles.walletHubTitle}>Điểm thưởng</Text>
+                    </View>
+                    <Text style={styles.walletHubCoins}>{rewardPoints.toLocaleString('vi-VN')} xu</Text>
+                    <Text style={styles.walletHubSubNote}>≈ 32.400 ₫ mua sắm</Text>
+                  </View>
+
+                  <View style={styles.walletHubActionCol}>
+                    <Pressable
+                      style={styles.depositGlassBtn}
+                      onPress={() => {
+                        setDepositAmount('500000');
+                        setActiveModal('deposit');
+                      }}
+                    >
+                      <Ionicons name="add-circle" size={16} color="#ffffff" />
+                      <Text style={styles.depositGlassBtnText}>Nạp ví</Text>
+                    </Pressable>
+                  </View>
+                </View>
               </View>
 
-              {/* VIP XP Level Progress Bar */}
-              <View style={styles.vipLevelBlock}>
-                <View style={styles.vipLevelHeader}>
-                  <Text style={styles.vipLevelLabel}>Hạng thành viên: Tier 3 • VIP Platinum</Text>
-                  <Text style={styles.vipLevelExp}>3.240 / 5.000 XP (65%)</Text>
-                </View>
-                <View style={styles.vipProgressBarBg}>
-                  <View style={styles.vipProgressBarFill} />
-                </View>
-                <Text style={styles.vipNextTierNote}>
-                  ⚡ Còn 1.760 XP nữa để thăng hạng VIP Diamond (Đặc quyền giảm 8% trọn đời)
-                </Text>
-              </View>
-
-              {/* Integrated Glassmorphic Wallet & Coins Hub */}
-              <View style={styles.vipWalletHub}>
-                <View style={styles.walletHubCol}>
-                  <View style={styles.walletHubTitleRow}>
-                    <Ionicons name="wallet" size={14} color="#38bdf8" />
-                    <Text style={styles.walletHubTitle}>Số dư ví DPC</Text>
-                  </View>
-                  <Text style={styles.walletHubAmount}>{walletBalance.toLocaleString('vi-VN')} ₫</Text>
-                </View>
-
-                <View style={styles.walletHubDivider} />
-
-                <View style={styles.walletHubCol}>
-                  <View style={styles.walletHubTitleRow}>
-                    <Ionicons name="star" size={14} color="#f59e0b" />
-                    <Text style={styles.walletHubTitle}>Điểm thưởng</Text>
-                  </View>
-                  <Text style={styles.walletHubCoins}>{rewardPoints.toLocaleString('vi-VN')} xu</Text>
-                  <Text style={styles.walletHubSubNote}>≈ 32.400 ₫ mua sắm</Text>
-                </View>
-
-                <View style={styles.walletHubActionCol}>
-                  <Pressable
-                    style={styles.depositGlassBtn}
-                    onPress={() => {
-                      setDepositAmount('500000');
-                      setActiveModal('deposit');
-                    }}
-                  >
-                    <Ionicons name="add-circle" size={16} color="#ffffff" />
-                    <Text style={styles.depositGlassBtnText}>Nạp ví</Text>
-                  </Pressable>
-                </View>
-              </View>
-            </View>
-
-            {/* 2. HIGH-TECH TELEMETRY STAT CARDS */}
-            <View style={styles.statsGrid}>
-              <Pressable
-                style={styles.statCard}
-                onPress={() => router.push('/(tabs)/explore' as any)}
-              >
-                <View style={[styles.statIconWrap, { backgroundColor: '#e0f2fe' }]}>
-                  <Ionicons name="cube" size={20} color="#0284c7" />
-                </View>
-                <View style={styles.statContent}>
-                  <Text style={styles.statNumber}>24</Text>
-                  <Text style={styles.statTitle}>Đơn hàng</Text>
-                  <View style={[styles.statPill, { backgroundColor: '#f0fdf4' }]}>
-                    <Text style={[styles.statPillText, { color: '#16a34a' }]}>2 đang giao 🚚</Text>
-                  </View>
-                </View>
-              </Pressable>
-
-              <Pressable
-                style={styles.statCard}
-                onPress={() => router.push('/wishlist' as any)}
-              >
-                <View style={[styles.statIconWrap, { backgroundColor: '#ffe4e6' }]}>
-                  <Ionicons name="heart" size={20} color="#e11d48" />
-                </View>
-                <View style={styles.statContent}>
-                  <Text style={styles.statNumber}>12</Text>
-                  <Text style={styles.statTitle}>Yêu thích</Text>
-                  <View style={[styles.statPill, { backgroundColor: '#fef2f2' }]}>
-                    <Text style={[styles.statPillText, { color: '#ef4444' }]}>3 đang sale 🔥</Text>
-                  </View>
-                </View>
-              </Pressable>
-
-              <Pressable
-                style={styles.statCard}
-                onPress={() => setActiveModal('voucher')}
-              >
-                <View style={[styles.statIconWrap, { backgroundColor: '#fef3c7' }]}>
-                  <Ionicons name="ticket" size={20} color="#d97706" />
-                </View>
-                <View style={styles.statContent}>
-                  <Text style={styles.statNumber}>{vouchers.length}</Text>
-                  <Text style={styles.statTitle}>Voucher</Text>
-                  <View style={[styles.statPill, { backgroundColor: '#fffbeb' }]}>
-                    <Text style={[styles.statPillText, { color: '#b45309' }]}>Tối đa 200k 🎟️</Text>
-                  </View>
-                </View>
-              </Pressable>
-
-              <Pressable
-                style={styles.statCard}
-                onPress={() => setActiveModal('tier')}
-              >
-                <View style={[styles.statIconWrap, { backgroundColor: '#f3e8ff' }]}>
-                  <Ionicons name="shield-checkmark" size={20} color="#9333ea" />
-                </View>
-                <View style={styles.statContent}>
-                  <Text style={styles.statNumber}>Tier 3</Text>
-                  <Text style={styles.statTitle}>Hạng mức</Text>
-                  <View style={[styles.statPill, { backgroundColor: '#faf5ff' }]}>
-                    <Text style={[styles.statPillText, { color: '#7e22ce' }]}>Giảm 5% VIP ⭐</Text>
-                  </View>
-                </View>
-              </Pressable>
-            </View>
-
-            {/* 3. SMART ORDER LOGISTICS TRACKER */}
-            <View style={styles.trackerCard}>
-              <View style={styles.trackerHeader}>
-                <View style={styles.trackerTitleGroup}>
-                  <Ionicons name="navigate-circle" size={20} color="#0284c7" />
-                  <Text style={styles.trackerHeaderTitle}>Tiến độ đơn hàng trực tiếp</Text>
-                </View>
+              {/* 2. HIGH-TECH TELEMETRY STAT CARDS */}
+              <View style={styles.statsGrid}>
                 <Pressable
-                  style={styles.trackerLinkWrap}
+                  style={styles.statCard}
                   onPress={() => router.push('/(tabs)/explore' as any)}
                 >
-                  <Text style={styles.trackerHeaderLink}>Tất cả đơn hàng</Text>
-                  <Ionicons name="chevron-forward" size={14} color="#0284c7" />
+                  <View style={[styles.statIconWrap, { backgroundColor: '#e0f2fe' }]}>
+                    <Ionicons name="cube" size={20} color="#0284c7" />
+                  </View>
+                  <View style={styles.statContent}>
+                    <Text style={styles.statNumber}>24</Text>
+                    <Text style={styles.statTitle}>Đơn hàng</Text>
+                    <View style={[styles.statPill, { backgroundColor: '#f0fdf4' }]}>
+                      <Text style={[styles.statPillText, { color: '#16a34a' }]}>2 đang giao 🚚</Text>
+                    </View>
+                  </View>
+                </Pressable>
+
+                <Pressable
+                  style={styles.statCard}
+                  onPress={() => router.push('/wishlist' as any)}
+                >
+                  <View style={[styles.statIconWrap, { backgroundColor: '#ffe4e6' }]}>
+                    <Ionicons name="heart" size={20} color="#e11d48" />
+                  </View>
+                  <View style={styles.statContent}>
+                    <Text style={styles.statNumber}>12</Text>
+                    <Text style={styles.statTitle}>Yêu thích</Text>
+                    <View style={[styles.statPill, { backgroundColor: '#fef2f2' }]}>
+                      <Text style={[styles.statPillText, { color: '#ef4444' }]}>3 đang sale 🔥</Text>
+                    </View>
+                  </View>
+                </Pressable>
+
+                <Pressable
+                  style={styles.statCard}
+                  onPress={() => setActiveModal('voucher')}
+                >
+                  <View style={[styles.statIconWrap, { backgroundColor: '#fef3c7' }]}>
+                    <Ionicons name="ticket" size={20} color="#d97706" />
+                  </View>
+                  <View style={styles.statContent}>
+                    <Text style={styles.statNumber}>{vouchers.length}</Text>
+                    <Text style={styles.statTitle}>Voucher</Text>
+                    <View style={[styles.statPill, { backgroundColor: '#fffbeb' }]}>
+                      <Text style={[styles.statPillText, { color: '#b45309' }]}>Tối đa 200k 🎟️</Text>
+                    </View>
+                  </View>
+                </Pressable>
+
+                <Pressable
+                  style={styles.statCard}
+                  onPress={() => setActiveModal('tier')}
+                >
+                  <View style={[styles.statIconWrap, { backgroundColor: '#f3e8ff' }]}>
+                    <Ionicons name="shield-checkmark" size={20} color="#9333ea" />
+                  </View>
+                  <View style={styles.statContent}>
+                    <Text style={styles.statNumber}>Tier 3</Text>
+                    <Text style={styles.statTitle}>Hạng mức</Text>
+                    <View style={[styles.statPill, { backgroundColor: '#faf5ff' }]}>
+                      <Text style={[styles.statPillText, { color: '#7e22ce' }]}>Giảm 5% VIP ⭐</Text>
+                    </View>
+                  </View>
                 </Pressable>
               </View>
 
-              {/* Flow Steps with connected line */}
-              <View style={styles.trackerStepsContainer}>
-                <View style={styles.trackerProgressLine} />
+              {/* 3. SMART ORDER LOGISTICS TRACKER */}
+              <View style={styles.trackerCard}>
+                <View style={styles.trackerHeader}>
+                  <View style={styles.trackerTitleGroup}>
+                    <Ionicons name="navigate-circle" size={20} color="#0284c7" />
+                    <Text style={styles.trackerHeaderTitle}>Tiến độ đơn hàng trực tiếp</Text>
+                  </View>
+                  <Pressable
+                    style={styles.trackerLinkWrap}
+                    onPress={() => router.push('/(tabs)/explore' as any)}
+                  >
+                    <Text style={styles.trackerHeaderLink}>Tất cả đơn hàng</Text>
+                    <Ionicons name="chevron-forward" size={14} color="#0284c7" />
+                  </Pressable>
+                </View>
 
-                <Pressable
-                  style={styles.trackerStep}
-                  onPress={() => {
-                    showToast('Đang mở đơn hàng chờ duyệt...');
-                    router.push('/(tabs)/explore' as any);
-                  }}
-                >
-                  <View style={styles.trackerIconWrap}>
-                    <Ionicons name="receipt-outline" size={20} color="#475569" />
-                    <View style={styles.stepBadge}>
-                      <Text style={styles.stepBadgeText}>1</Text>
+                {/* Flow Steps with connected line */}
+                <View style={styles.trackerStepsContainer}>
+                  <View style={styles.trackerProgressLine} />
+
+                  <Pressable
+                    style={styles.trackerStep}
+                    onPress={() => {
+                      showToast('Đang mở đơn hàng chờ duyệt...');
+                      router.push('/(tabs)/explore' as any);
+                    }}
+                  >
+                    <View style={styles.trackerIconWrap}>
+                      <Ionicons name="receipt-outline" size={20} color="#475569" />
+                      <View style={styles.stepBadge}>
+                        <Text style={styles.stepBadgeText}>1</Text>
+                      </View>
                     </View>
-                  </View>
-                  <Text style={styles.trackerStepText}>Chờ duyệt</Text>
-                </Pressable>
+                    <Text style={styles.trackerStepText}>Chờ duyệt</Text>
+                  </Pressable>
 
-                <Pressable
-                  style={styles.trackerStep}
-                  onPress={() => {
-                    showToast('Hiện không có đơn chờ lấy hàng');
-                    router.push('/(tabs)/explore' as any);
-                  }}
-                >
-                  <View style={styles.trackerIconWrap}>
-                    <Ionicons name="cube-outline" size={20} color="#475569" />
-                  </View>
-                  <Text style={styles.trackerStepText}>Đóng gói</Text>
-                </Pressable>
-
-                <Pressable
-                  style={styles.trackerStep}
-                  onPress={() => {
-                    showToast('Đang mở 2 đơn hàng đang vận chuyển...');
-                    router.push('/(tabs)/explore' as any);
-                  }}
-                >
-                  <View style={[styles.trackerIconWrap, styles.trackerIconActive]}>
-                    <Ionicons name="bicycle" size={22} color="#0284c7" />
-                    <View style={[styles.stepBadge, { backgroundColor: '#0284c7' }]}>
-                      <Text style={styles.stepBadgeText}>2</Text>
+                  <Pressable
+                    style={styles.trackerStep}
+                    onPress={() => {
+                      showToast('Hiện không có đơn chờ lấy hàng');
+                      router.push('/(tabs)/explore' as any);
+                    }}
+                  >
+                    <View style={styles.trackerIconWrap}>
+                      <Ionicons name="cube-outline" size={20} color="#475569" />
                     </View>
-                  </View>
-                  <Text style={[styles.trackerStepText, styles.trackerStepTextActive]}>
-                    Đang giao
-                  </Text>
-                </Pressable>
+                    <Text style={styles.trackerStepText}>Đóng gói</Text>
+                  </Pressable>
 
-                <Pressable
-                  style={styles.trackerStep}
-                  onPress={() => {
-                    showToast('Đang mở 3 đơn hàng chờ đánh giá...');
-                    router.push('/(tabs)/explore' as any);
-                  }}
-                >
-                  <View style={styles.trackerIconWrap}>
-                    <Ionicons name="star" size={20} color="#eab308" />
-                    <View style={styles.stepBadge}>
-                      <Text style={styles.stepBadgeText}>3</Text>
+                  <Pressable
+                    style={styles.trackerStep}
+                    onPress={() => {
+                      showToast('Đang mở 2 đơn hàng đang vận chuyển...');
+                      router.push('/(tabs)/explore' as any);
+                    }}
+                  >
+                    <View style={[styles.trackerIconWrap, styles.trackerIconActive]}>
+                      <Ionicons name="bicycle" size={22} color="#0284c7" />
+                      <View style={[styles.stepBadge, { backgroundColor: '#0284c7' }]}>
+                        <Text style={styles.stepBadgeText}>2</Text>
+                      </View>
                     </View>
+                    <Text style={[styles.trackerStepText, styles.trackerStepTextActive]}>
+                      Đang giao
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    style={styles.trackerStep}
+                    onPress={() => {
+                      showToast('Đang mở 3 đơn hàng chờ đánh giá...');
+                      router.push('/(tabs)/explore' as any);
+                    }}
+                  >
+                    <View style={styles.trackerIconWrap}>
+                      <Ionicons name="star" size={20} color="#eab308" />
+                      <View style={styles.stepBadge}>
+                        <Text style={styles.stepBadgeText}>3</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.trackerStepText}>Đánh giá</Text>
+                  </Pressable>
+                </View>
+
+                {/* Active Delivery Status Banner */}
+                <Pressable
+                  style={styles.liveDeliveryBanner}
+                  onPress={() => router.push('/(tabs)/explore' as any)}
+                >
+                  <View style={styles.liveDeliveryIconBox}>
+                    <Ionicons name="flash" size={16} color="#0284c7" />
                   </View>
-                  <Text style={styles.trackerStepText}>Đánh giá</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.liveDeliveryTitle}>Đơn hàng #ORD-20260810-002 đang trên đường giao</Text>
+                    <Text style={styles.liveDeliverySubtitle}>
+                      Viettel Post • Dự kiến giao trước 18:00 hôm nay tại địa chỉ của bạn
+                    </Text>
+                  </View>
+                  <Ionicons name="arrow-forward" size={16} color="#0284c7" />
                 </Pressable>
               </View>
 
-              {/* Active Delivery Status Banner */}
-              <Pressable
-                style={styles.liveDeliveryBanner}
-                onPress={() => router.push('/(tabs)/explore' as any)}
-              >
-                <View style={styles.liveDeliveryIconBox}>
-                  <Ionicons name="flash" size={16} color="#0284c7" />
+              {/* 4. EXCLUSIVE HI-END STORE PRIVILEGES */}
+              <View style={styles.perksCard}>
+                <View style={styles.perksHeader}>
+                  <Ionicons name="diamond" size={18} color="#0ea5e9" />
+                  <Text style={styles.perksTitle}>Đặc Quyền DPC VIP Club</Text>
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.liveDeliveryTitle}>Đơn hàng #ORD-20260810-002 đang trên đường giao</Text>
-                  <Text style={styles.liveDeliverySubtitle}>
-                    Viettel Post • Dự kiến giao trước 18:00 hôm nay tại địa chỉ của bạn
-                  </Text>
+
+                <View style={styles.perksGrid}>
+                  <View style={styles.perkItem}>
+                    <View style={[styles.perkIcon, { backgroundColor: '#eff6ff' }]}>
+                      <Ionicons name="shield-checkmark" size={18} color="#2563eb" />
+                    </View>
+                    <View style={styles.perkTextGroup}>
+                      <Text style={styles.perkName}>Bảo hành 1 đổi 1</Text>
+                      <Text style={styles.perkDesc}>36 tháng tận nơi, đổi mới 30 ngày</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.perkItem}>
+                    <View style={[styles.perkIcon, { backgroundColor: '#ecfeff' }]}>
+                      <Ionicons name="snow" size={18} color="#0891b2" />
+                    </View>
+                    <View style={styles.perkTextGroup}>
+                      <Text style={styles.perkName}>Vệ sinh PC trọn đời</Text>
+                      <Text style={styles.perkDesc}>Tra keo Thermal Grizzly miễn phí</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.perkItem}>
+                    <View style={[styles.perkIcon, { backgroundColor: '#f0fdf4' }]}>
+                      <Ionicons name="rocket" size={18} color="#16a34a" />
+                    </View>
+                    <View style={styles.perkTextGroup}>
+                      <Text style={styles.perkName}>Freeship hỏa tốc 2H</Text>
+                      <Text style={styles.perkDesc}>Áp dụng mọi linh kiện & PC Case</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.perkItem}>
+                    <View style={[styles.perkIcon, { backgroundColor: '#faf5ff' }]}>
+                      <Ionicons name="color-wand" size={18} color="#9333ea" />
+                    </View>
+                    <View style={styles.perkTextGroup}>
+                      <Text style={styles.perkName}>Cân màu & Ép xung</Text>
+                      <Text style={styles.perkDesc}>Kỹ thuật viên căn chỉnh màn hình</Text>
+                    </View>
+                  </View>
                 </View>
-                <Ionicons name="arrow-forward" size={16} color="#0284c7" />
-              </Pressable>
+              </View>
             </View>
 
-            {/* 4. EXCLUSIVE HI-END STORE PRIVILEGES */}
-            <View style={styles.perksCard}>
-              <View style={styles.perksHeader}>
-                <Ionicons name="diamond" size={18} color="#0ea5e9" />
-                <Text style={styles.perksTitle}>Đặc Quyền DPC VIP Club</Text>
-              </View>
+            {/* RIGHT COLUMN: Settings Groups & Logout */}
+            <View style={[styles.rightColumn, isWideScreen && styles.columnHalf]}>
+              {menuSections.map((section, secIdx) => (
+                <View key={secIdx} style={styles.sectionCard}>
+                  <Text style={styles.sectionHeading}>{section.title}</Text>
+                  <View style={styles.menuList}>
+                    {section.items.map((item, idx) => (
+                      <Pressable
+                        key={idx}
+                        onPress={item.action}
+                        style={({ pressed }) => [
+                          styles.menuItem,
+                          idx < section.items.length - 1 && styles.menuItemBorder,
+                          pressed && styles.menuItemPressed,
+                        ]}
+                      >
+                        <View style={[styles.menuIconContainer, { backgroundColor: item.iconBg }]}>
+                          <Ionicons name={item.icon} size={20} color={item.iconColor} />
+                        </View>
 
-              <View style={styles.perksGrid}>
-                <View style={styles.perkItem}>
-                  <View style={[styles.perkIcon, { backgroundColor: '#eff6ff' }]}>
-                    <Ionicons name="shield-checkmark" size={18} color="#2563eb" />
-                  </View>
-                  <View style={styles.perkTextGroup}>
-                    <Text style={styles.perkName}>Bảo hành 1 đổi 1</Text>
-                    <Text style={styles.perkDesc}>36 tháng tận nơi, đổi mới 30 ngày</Text>
+                        <View style={styles.menuTextCol}>
+                          <Text style={styles.menuTitle}>{item.title}</Text>
+                          {item.subtitle ? (
+                            <Text style={styles.menuSubtitle} numberOfLines={1}>
+                              {item.subtitle}
+                            </Text>
+                          ) : null}
+                        </View>
+
+                        <View style={styles.menuRightCol}>
+                          {item.badge ? (
+                            <View style={styles.pillBadge}>
+                              <Text style={styles.pillBadgeText}>{item.badge}</Text>
+                            </View>
+                          ) : null}
+                          <Ionicons name="chevron-forward" size={18} color="#94a3b8" />
+                        </View>
+                      </Pressable>
+                    ))}
                   </View>
                 </View>
+              ))}
 
-                <View style={styles.perkItem}>
-                  <View style={[styles.perkIcon, { backgroundColor: '#ecfeff' }]}>
-                    <Ionicons name="snow" size={18} color="#0891b2" />
-                  </View>
-                  <View style={styles.perkTextGroup}>
-                    <Text style={styles.perkName}>Vệ sinh PC trọn đời</Text>
-                    <Text style={styles.perkDesc}>Tra keo Thermal Grizzly miễn phí</Text>
-                  </View>
-                </View>
+              {/* LOGOUT OR LOGIN BUTTON */}
+              {isLoggedOut ? (
+                <Pressable
+                  style={[styles.logoutBtn, { backgroundColor: '#eff6ff', borderColor: '#bfdbfe' }]}
+                  onPress={() => router.push('/login' as any)}
+                >
+                  <Ionicons name="log-in-outline" size={20} color="#2563eb" style={{ marginRight: 8 }} />
+                  <Text style={[styles.logoutBtnText, { color: '#2563eb' }]}>Đăng nhập lại</Text>
+                </Pressable>
+              ) : (
+                <Pressable
+                  style={({ pressed }) => [styles.logoutBtn, pressed && styles.logoutBtnPressed]}
+                  onPress={() => setActiveModal('logoutConfirm')}
+                >
+                  <Ionicons name="log-out-outline" size={20} color="#e11d48" style={{ marginRight: 8 }} />
+                  <Text style={styles.logoutBtnText}>Đăng xuất tài khoản</Text>
+                </Pressable>
+              )}
 
-                <View style={styles.perkItem}>
-                  <View style={[styles.perkIcon, { backgroundColor: '#f0fdf4' }]}>
-                    <Ionicons name="rocket" size={18} color="#16a34a" />
-                  </View>
-                  <View style={styles.perkTextGroup}>
-                    <Text style={styles.perkName}>Freeship hỏa tốc 2H</Text>
-                    <Text style={styles.perkDesc}>Áp dụng mọi linh kiện & PC Case</Text>
-                  </View>
-                </View>
-
-                <View style={styles.perkItem}>
-                  <View style={[styles.perkIcon, { backgroundColor: '#faf5ff' }]}>
-                    <Ionicons name="color-wand" size={18} color="#9333ea" />
-                  </View>
-                  <View style={styles.perkTextGroup}>
-                    <Text style={styles.perkName}>Cân màu & Ép xung</Text>
-                    <Text style={styles.perkDesc}>Kỹ thuật viên căn chỉnh màn hình</Text>
-                  </View>
-                </View>
+              {/* FOOTER APP VERSION */}
+              <View style={styles.versionFooter}>
+                <Text style={styles.versionText}>DANGVINHPC Shopping App • Phiên bản 2.5.0</Text>
+                <Text style={styles.copyrightText}>© 2026 DANGVINHPC Co., Ltd. Đã đăng ký bản quyền.</Text>
               </View>
             </View>
           </View>
-
-          {/* RIGHT COLUMN: Settings Groups & Logout */}
-          <View style={[styles.rightColumn, isWideScreen && styles.columnHalf]}>
-            {menuSections.map((section, secIdx) => (
-              <View key={secIdx} style={styles.sectionCard}>
-                <Text style={styles.sectionHeading}>{section.title}</Text>
-                <View style={styles.menuList}>
-                  {section.items.map((item, idx) => (
-                    <Pressable
-                      key={idx}
-                      onPress={item.action}
-                      style={({ pressed }) => [
-                        styles.menuItem,
-                        idx < section.items.length - 1 && styles.menuItemBorder,
-                        pressed && styles.menuItemPressed,
-                      ]}
-                    >
-                      <View style={[styles.menuIconContainer, { backgroundColor: item.iconBg }]}>
-                        <Ionicons name={item.icon} size={20} color={item.iconColor} />
-                      </View>
-
-                      <View style={styles.menuTextCol}>
-                        <Text style={styles.menuTitle}>{item.title}</Text>
-                        {item.subtitle ? (
-                          <Text style={styles.menuSubtitle} numberOfLines={1}>
-                            {item.subtitle}
-                          </Text>
-                        ) : null}
-                      </View>
-
-                      <View style={styles.menuRightCol}>
-                        {item.badge ? (
-                          <View style={styles.pillBadge}>
-                            <Text style={styles.pillBadgeText}>{item.badge}</Text>
-                          </View>
-                        ) : null}
-                        <Ionicons name="chevron-forward" size={18} color="#94a3b8" />
-                      </View>
-                    </Pressable>
-                  ))}
-                </View>
-              </View>
-            ))}
-
-            {/* LOGOUT OR LOGIN BUTTON */}
-            {isLoggedOut ? (
-              <Pressable
-                style={[styles.logoutBtn, { backgroundColor: '#eff6ff', borderColor: '#bfdbfe' }]}
-                onPress={() => router.push('/login' as any)}
-              >
-                <Ionicons name="log-in-outline" size={20} color="#2563eb" style={{ marginRight: 8 }} />
-                <Text style={[styles.logoutBtnText, { color: '#2563eb' }]}>Đăng nhập lại</Text>
-              </Pressable>
-            ) : (
-              <Pressable
-                style={({ pressed }) => [styles.logoutBtn, pressed && styles.logoutBtnPressed]}
-                onPress={() => setActiveModal('logoutConfirm')}
-              >
-                <Ionicons name="log-out-outline" size={20} color="#e11d48" style={{ marginRight: 8 }} />
-                <Text style={styles.logoutBtnText}>Đăng xuất tài khoản</Text>
-              </Pressable>
-            )}
-
-            {/* FOOTER APP VERSION */}
-            <View style={styles.versionFooter}>
-              <Text style={styles.versionText}>DANGVINHPC Shopping App • Phiên bản 2.5.0</Text>
-              <Text style={styles.copyrightText}>© 2026 DANGVINHPC Co., Ltd. Đã đăng ký bản quyền.</Text>
-            </View>
-          </View>
-        </View>
+        )}
       </ScrollView>
 
       {/* ==================== ALL INTERACTIVE MODALS ==================== */}

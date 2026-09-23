@@ -192,7 +192,7 @@ export default function AdminScreen() {
       setLoading(true);
       const [statsData, productsData, ordersData, categoriesData, usersData] = await Promise.all([
         apiService.getAdminStats().catch(() => null),
-        apiService.getProducts().catch(() => []),
+        apiService.getProducts({ admin: 'true' }).catch(() => []),
         apiService.getOrders().catch(() => []),
         apiService.getCategories().catch(() => []),
         apiService.getAllUsers().catch(() => []),
@@ -225,7 +225,6 @@ export default function AdminScreen() {
     }
   }, [isAdmin, loadData]);
 
-  // Product Actions
   const handleOpenAddProduct = () => {
     const autoId = `prod-${Date.now().toString().slice(-4)}`;
     setEditingProduct(null);
@@ -240,6 +239,19 @@ export default function AdminScreen() {
       description: '',
     });
     setIsProductModalOpen(true);
+  };
+
+  const toggleProductVisibility = async (prod: ProductItem) => {
+    try {
+      setLoading(true);
+      // Wait for update
+      await apiService.updateProduct(prod.id, { ...prod, isHidden: !prod.isHidden } as any);
+      showToast(!prod.isHidden ? `Đã ẩn sản phẩm ${prod.id}` : `Đã hiển thị sản phẩm ${prod.id}`);
+      await loadData();
+    } catch (err) {
+      showToast('Lỗi khi cập nhật trạng thái');
+      setLoading(false);
+    }
   };
 
   const handleOpenEditProduct = (prod: ProductItem) => {
@@ -576,6 +588,16 @@ export default function AdminScreen() {
 
                     {/* ACTION BUTTONS: EDIT & DELETE */}
                     <View style={styles.actionsGroup}>
+                      <Pressable 
+                        style={[styles.actionBtnEdit, { borderColor: p.isHidden ? '#f59e0b' : '#10b981', backgroundColor: p.isHidden ? '#fffbeb' : '#ecfdf5' }]} 
+                        onPress={() => toggleProductVisibility(p)}
+                      >
+                        <Ionicons name={p.isHidden ? 'eye-off-outline' : 'eye-outline'} size={16} color={p.isHidden ? '#f59e0b' : '#10b981'} />
+                        <Text style={[styles.actionBtnEditText, { color: p.isHidden ? '#f59e0b' : '#10b981' }]}>
+                          {p.isHidden ? 'Đang Ẩn' : 'Hiển thị'}
+                        </Text>
+                      </Pressable>
+
                       <Pressable style={styles.actionBtnEdit} onPress={() => handleOpenEditProduct(p)}>
                         <Ionicons name="pencil" size={16} color="#2563eb" />
                         <Text style={styles.actionBtnEditText}>Sửa</Text>

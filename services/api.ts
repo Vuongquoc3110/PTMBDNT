@@ -24,6 +24,7 @@ export interface Product {
   isNew?: boolean;
   isSale?: boolean;
   isHot?: boolean;
+  isHidden?: boolean;
   image?: string;
   images?: string[];
   description?: string;
@@ -213,6 +214,9 @@ class ApiService {
   async getProducts(params?: Record<string, any>): Promise<Product[]> {
     try {
       const query = new URLSearchParams();
+      if (!params?.limit) {
+        query.append('limit', '500');
+      }
       if (params) {
         Object.entries(params).forEach(([key, value]) => {
           if (value !== undefined && value !== null && value !== '') {

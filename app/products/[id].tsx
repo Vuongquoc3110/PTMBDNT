@@ -569,7 +569,34 @@ export default function ProductDetailScreen() {
             {/* TAB CONTENT: DESCRIPTION */}
             {activeTab === 'desc' && (
               <View style={styles.tabBody}>
-                <Text style={styles.descTitle}>Tổng quan sản phẩm</Text>
+                {displaySpecs && Object.keys(displaySpecs).length > 0 && (
+                  <View style={styles.techSpecsBox}>
+                    <View style={styles.techSpecsBadge}>
+                      <Ionicons name="hardware-chip" size={16} color="#fff" />
+                      <Text style={styles.techSpecsBadgeText}>THÔNG SỐ SẢN PHẨM</Text>
+                    </View>
+                    <Text style={styles.techSpecsBoxIntro}>
+                      Các thông số cấu hình của <Text style={styles.techSpecsBoxIntroHighlight}>{product.name}</Text>
+                    </Text>
+                    
+                    <View style={styles.techSpecsList}>
+                      {Object.entries(displaySpecs).slice(0, 10).map(([k, v], idx) => {
+                        const isLast = idx === Math.min(Object.keys(displaySpecs).length, 10) - 1;
+                        return (
+                          <View key={k} style={[styles.techSpecsListItem, isLast && { borderBottomWidth: 0, paddingBottom: 0 }]}>
+                            <Ionicons name="checkmark-sharp" size={20} color="#16a34a" style={{ marginTop: 2 }} />
+                            <Text style={styles.techSpecsListText}>
+                              <Text style={{ fontWeight: '700', color: '#1f2937' }}>{k}: </Text>
+                              {v}
+                            </Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  </View>
+                )}
+
+                <Text style={[styles.descTitle, { marginTop: 32 }]}>Tổng quan sản phẩm</Text>
                 <Text style={styles.descParagraph}>
                   {product.description ||
                     `${product.name} là dòng sản phẩm hàng đầu trong phân khúc ${product.category}, được tối ưu hóa tối đa cho nhu cầu làm việc cường độ cao, đồ họa chuyên nghiệp và giải trí đỉnh cao.`}
@@ -605,12 +632,14 @@ export default function ProductDetailScreen() {
                 <View style={styles.specsTableWrap}>
                   {Object.entries(displaySpecs).map(([k, v], idx) => {
                     const isEven = idx % 2 === 0;
+                    const isLast = idx === Object.entries(displaySpecs).length - 1;
                     return (
                       <View
                         key={k}
                         style={[
                           styles.specsTableRow,
                           { backgroundColor: isEven ? '#ffffff' : '#f8fafc' },
+                          isLast && { borderBottomWidth: 0 }
                         ]}
                       >
                         <Text style={styles.specsTableKey}>{k}</Text>

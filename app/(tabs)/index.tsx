@@ -46,9 +46,9 @@ export default function HomeScreen() {
 	const { products } = useProducts();
 	const { categories } = useCategories();
 
-	const flashSaleProducts = products.filter((p: any) => p.isSale || (p.discount && p.discount > 0)).slice(0, 6);
-	const featuredProducts = products.filter((p: any) => p.isFeatured).slice(0, 6);
-	const newArrivals = products.filter((p: any) => p.isNew).slice(0, 6);
+	const flashSaleProducts = products.filter((p: any) => p.isSale || (p.discount && p.discount > 0)).slice(0, 8);
+	const featuredProducts = products.filter((p: any) => p.isFeatured).slice(0, 8);
+	const newArrivals = products.filter((p: any) => p.isNew).slice(0, 8);
 
 	useEffect(() => {
 		Animated.parallel([

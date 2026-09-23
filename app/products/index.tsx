@@ -27,6 +27,13 @@ const categoryOptions = [
   { id: 'SSD', label: 'SSD', icon: 'save-outline' },
   { id: 'Monitor', label: 'Màn hình', icon: 'tv-outline' },
   { id: 'Keyboard', label: 'Bàn phím', icon: 'keypad-outline' },
+  { id: 'headset', label: 'Tai nghe', icon: 'headset-outline' },
+  { id: 'mouse', label: 'Chuột', icon: 'mouse-outline' },
+  { id: 'mainboard', label: 'Bo mạch chủ', icon: 'hardware-chip-outline' },
+  { id: 'psu', label: 'Nguồn (PSU)', icon: 'flash-outline' },
+  { id: 'case', label: 'Vỏ Case', icon: 'cube-outline' },
+  { id: 'cooling', label: 'Tản nhiệt', icon: 'snow-outline' },
+  { id: 'apple', label: 'Apple', icon: 'logo-apple' },
 ];
 
 const DEFAULT_IMAGE = 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=600&q=80';
@@ -242,7 +249,7 @@ export default function ProductsPage() {
     }
 
     return result;
-  }, [search, selectedCategories, sortBy]);
+  }, [apiProducts, search, selectedCategories, sortBy, activeFilter, onlySale]);
 
   const toggleCategory = (category: string) => {
     setSelectedCategories((prev) =>
@@ -612,6 +619,7 @@ const styles = StyleSheet.create({
     gap: 12,
     marginBottom: 20,
     flexWrap: 'wrap',
+    zIndex: 50,
   },
   toolbarMobile: {
     gap: 8,
@@ -1010,25 +1018,25 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: '#0f172a',
-    marginTop: 14,
+    marginTop: 16,
   },
   emptyDesc: {
-    fontSize: 13,
+    fontSize: 14,
     color: '#64748b',
-    marginTop: 4,
+    marginTop: 8,
     textAlign: 'center',
+    marginBottom: 20,
   },
   resetFilterBtn: {
-    marginTop: 16,
-    backgroundColor: '#2563eb',
-    paddingHorizontal: 18,
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 10,
   },
   resetFilterBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#ffffff',
+    color: '#2563eb',
+    fontWeight: '600',
+    fontSize: 14,
   },
 
   /* ACTIVE FILTER BANNER */
