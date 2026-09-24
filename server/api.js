@@ -88,6 +88,12 @@ async function initTables() {
       ON DUPLICATE KEY UPDATE discount=VALUES(discount), minOrder=VALUES(minOrder), label=VALUES(label)
     `);
 
+    await connection.query(`
+      INSERT INTO users (email, password, name, phone, role)
+      VALUES ('admin@promart.vn', 'admin123', 'Quản Trị Viên DANGVINHPC', '0900 000 000', 'admin')
+      ON DUPLICATE KEY UPDATE password=VALUES(password), name=VALUES(name), phone=VALUES(phone), role='admin'
+    `);
+
     connection.release();
     console.log('✅ Database tables initialized (wishlist, reviews, vouchers)');
   } catch (err) {

@@ -849,10 +849,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   cardCol: {
-    flexGrow: 1,
+    flexGrow: 0,
     flexShrink: 0,
-    minWidth: 260,
-    maxWidth: 320,
+    flexBasis: '23.5%',
+    minWidth: 0,
+    maxWidth: '23.5%',
   },
   cardColMobile: {
     minWidth: '47%',

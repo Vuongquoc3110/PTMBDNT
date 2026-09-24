@@ -2,23 +2,23 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Image,
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  useWindowDimensions,
-  View,
+    ActivityIndicator,
+    Image,
+    Modal,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    useWindowDimensions,
+    View,
 } from 'react-native';
 
+import { useAppContext } from '@/context/AppContext';
 import { formatPrice } from '@/data/products';
 import { apiService, type Order, type User } from '@/services/api';
-import { useAppContext } from '@/context/AppContext';
 
-type AdminTab = 'products' | 'orders' | 'categories' | 'users';
+type AdminTab = 'overview' | 'products' | 'orders' | 'categories' | 'users';
 
 interface ProductItem {
   id: string;
@@ -107,7 +107,7 @@ export default function AdminScreen() {
   const isDesktop = width >= 860;
   const { user, isAdmin } = useAppContext();
 
-  const [activeTab, setActiveTab] = useState<AdminTab>('products');
+  const [activeTab, setActiveTab] = useState<AdminTab>('overview');
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState('');
 
@@ -401,6 +401,11 @@ export default function AdminScreen() {
       u.phone?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const recentOrders = [...orderList]
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, 5);
+  const lowStockProducts = productList.filter((product) => (product.stock ?? 0) <= 5).slice(0, 5);
+
   if (!isAdmin) {
     return (
       <View style={{ flex: 1, backgroundColor: '#f4f8ff', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
@@ -513,6 +518,7 @@ export default function AdminScreen() {
         <View style={styles.tabsRow}>
           <View style={styles.tabButtons}>
             {[
+              { id: 'overview', label: 'Tổng quan', icon: 'home-outline', count: null },
               { id: 'products', label: 'Sản phẩm', icon: 'hardware-chip-outline', count: productList.length },
               { id: 'orders', label: 'Đơn hàng', icon: 'receipt-outline', count: orderList.length },
               { id: 'categories', label: 'Danh mục', icon: 'grid-outline', count: categoryList.length },
@@ -533,24 +539,127 @@ export default function AdminScreen() {
                   style={{ marginRight: 6 }}
                 />
                 <Text style={[styles.tabBtnText, activeTab === tab.id && styles.tabBtnTextActive]}>
-                  {tab.label} ({tab.count})
+                  {tab.label}{tab.count === null ? '' : ` (${tab.count})`}
                 </Text>
               </Pressable>
             ))}
           </View>
 
           {/* QUICK SEARCH */}
-          <View style={styles.searchWrap}>
-            <Ionicons name="search-outline" size={16} color="#64748b" style={{ marginRight: 6 }} />
-            <TextInput
-              value={searchTerm}
-              onChangeText={setSearchTerm}
-              placeholder="Lọc nhanh danh sách..."
-              placeholderTextColor="#94a3b8"
-              style={styles.searchInput}
-            />
-          </View>
+          {activeTab !== 'overview' && (
+            <View style={styles.searchWrap}>
+              <Ionicons name="search-outline" size={16} color="#64748b" style={{ marginRight: 6 }} />
+              <TextInput
+                value={searchTerm}
+                onChangeText={setSearchTerm}
+                placeholder="Lọc nhanh danh sách..."
+                placeholderTextColor="#94a3b8"
+                style={styles.searchInput}
+              />
+            </View>
+          )}
         </View>
+
+        {activeTab === 'overview' && (
+          <View style={styles.overviewWrap}>
+            <View style={[styles.welcomePanel, !isDesktop && styles.welcomePanelMobile]}>
+              <View style={styles.welcomeIconWrap}>
+                <Ionicons name="shield-checkmark" size={28} color="#ffffff" />
+              </View>
+              <View style={styles.welcomeCopy}>
+                <Text style={styles.welcomeTitle}>Xin chào, {user?.name || 'Quản trị viên'}!</Text>
+                <Text style={styles.welcomeText}>Đây là trung tâm điều hành của DANGVINHPC. Theo dõi hoạt động cửa hàng và xử lý công việc nhanh chóng.</Text>
+              </View>
+              <Pressable style={styles.welcomeAction} onPress={loadData}>
+                <Ionicons name="sync-outline" size={17} color="#2563eb" />
+                <Text style={styles.welcomeActionText}>Cập nhật dữ liệu</Text>
+              </Pressable>
+            </View>
+
+            <View style={[styles.dashboardColumns, !isDesktop && styles.dashboardColumnsMobile]}>
+              <View style={[styles.dashboardCard, styles.quickActionsCard]}>
+                <View style={styles.dashboardCardHeader}>
+                  <View>
+                    <Text style={styles.dashboardCardTitle}>Thao tác nhanh</Text>
+                    <Text style={styles.dashboardCardSubtitle}>Các công việc thường dùng</Text>
+                  </View>
+                  <Ionicons name="flash-outline" size={22} color="#ea580c" />
+                </View>
+                <View style={styles.quickActionsGrid}>
+                  {[
+                    { label: 'Thêm sản phẩm', icon: 'add-circle-outline', color: '#2563eb', action: handleOpenAddProduct },
+                    { label: 'Xem đơn hàng', icon: 'receipt-outline', color: '#059669', action: () => setActiveTab('orders') },
+                    { label: 'Quản lý khách hàng', icon: 'people-outline', color: '#7c3aed', action: () => setActiveTab('users') },
+                    { label: 'Quản lý danh mục', icon: 'grid-outline', color: '#d97706', action: () => setActiveTab('categories') },
+                  ].map((action) => (
+                    <Pressable key={action.label} style={styles.quickActionItem} onPress={action.action}>
+                      <View style={[styles.quickActionIcon, { backgroundColor: `${action.color}15` }]}>
+                        <Ionicons name={action.icon as any} size={21} color={action.color} />
+                      </View>
+                      <Text style={styles.quickActionLabel}>{action.label}</Text>
+                      <Ionicons name="arrow-forward" size={15} color="#94a3b8" />
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+
+              <View style={styles.dashboardCard}>
+                <View style={styles.dashboardCardHeader}>
+                  <View>
+                    <Text style={styles.dashboardCardTitle}>Tồn kho cần chú ý</Text>
+                    <Text style={styles.dashboardCardSubtitle}>Sản phẩm còn 5 hoặc ít hơn</Text>
+                  </View>
+                  <Ionicons name="alert-circle-outline" size={22} color="#dc2626" />
+                </View>
+                {lowStockProducts.length === 0 ? (
+                  <Text style={styles.dashboardEmptyText}>Kho hàng đang ở trạng thái tốt.</Text>
+                ) : (
+                  lowStockProducts.map((product) => (
+                    <Pressable key={product.id} style={styles.dashboardListRow} onPress={() => setActiveTab('products')}>
+                      <View style={styles.dashboardListIcon}>
+                        <Ionicons name="cube-outline" size={17} color="#dc2626" />
+                      </View>
+                      <Text style={styles.dashboardListName} numberOfLines={1}>{product.name}</Text>
+                      <Text style={styles.stockWarningText}>{product.stock ?? 0} sp</Text>
+                    </Pressable>
+                  ))
+                )}
+              </View>
+            </View>
+
+            <View style={styles.dashboardCard}>
+              <View style={styles.dashboardCardHeader}>
+                <View>
+                  <Text style={styles.dashboardCardTitle}>Đơn hàng gần đây</Text>
+                  <Text style={styles.dashboardCardSubtitle}>Theo dõi các giao dịch mới nhất</Text>
+                </View>
+                <Pressable style={styles.dashboardLink} onPress={() => setActiveTab('orders')}>
+                  <Text style={styles.dashboardLinkText}>Xem tất cả</Text>
+                  <Ionicons name="arrow-forward" size={15} color="#2563eb" />
+                </Pressable>
+              </View>
+              {recentOrders.length === 0 ? (
+                <Text style={styles.dashboardEmptyText}>Chưa có đơn hàng nào.</Text>
+              ) : (
+                recentOrders.map((order) => (
+                  <Pressable key={order.id} style={styles.dashboardOrderRow} onPress={() => setActiveTab('orders')}>
+                    <View style={styles.dashboardOrderIcon}>
+                      <Ionicons name="receipt-outline" size={18} color="#2563eb" />
+                    </View>
+                    <View style={styles.dashboardOrderInfo}>
+                      <Text style={styles.dashboardOrderNumber}>{order.orderNumber || `#ORD-${order.id}`}</Text>
+                      <Text style={styles.dashboardOrderDate}>{new Date(order.createdAt).toLocaleDateString('vi-VN')}</Text>
+                    </View>
+                    <Text style={styles.dashboardOrderTotal}>{formatPrice(order.totalAmount)}</Text>
+                    <View style={styles.dashboardOrderStatus}>
+                      <Text style={styles.dashboardOrderStatusText}>{order.status || 'pending'}</Text>
+                    </View>
+                  </Pressable>
+                ))
+              )}
+            </View>
+          </View>
+        )}
 
         {/* TAB 1: QUẢN LÝ SẢN PHẨM */}
         {activeTab === 'products' && (
@@ -1424,6 +1533,215 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     color: '#0f172a',
+  },
+
+  /* ADMIN OVERVIEW */
+  overviewWrap: {
+    gap: 16,
+  },
+  welcomePanel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    backgroundColor: '#0f172a',
+    borderRadius: 20,
+    padding: 20,
+    overflow: 'hidden',
+  },
+  welcomePanelMobile: {
+    alignItems: 'flex-start',
+    flexWrap: 'wrap',
+  },
+  welcomeIconWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#2563eb',
+  },
+  welcomeCopy: {
+    flex: 1,
+    minWidth: 220,
+  },
+  welcomeTitle: {
+    color: '#ffffff',
+    fontSize: 19,
+    fontWeight: '800',
+  },
+  welcomeText: {
+    color: '#cbd5e1',
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 4,
+  },
+  welcomeAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 10,
+  },
+  welcomeActionText: {
+    color: '#2563eb',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  dashboardColumns: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  dashboardColumnsMobile: {
+    flexDirection: 'column',
+  },
+  dashboardCard: {
+    flex: 1,
+    minWidth: 320,
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 18,
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
+    elevation: 1,
+  },
+  quickActionsCard: {
+    flex: 1.2,
+  },
+  dashboardCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  dashboardCardTitle: {
+    color: '#0f172a',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  dashboardCardSubtitle: {
+    color: '#94a3b8',
+    fontSize: 12,
+    marginTop: 3,
+  },
+  quickActionsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  quickActionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+    width: '48%',
+    minWidth: 170,
+    padding: 10,
+    borderRadius: 12,
+    backgroundColor: '#f8fafc',
+  },
+  quickActionIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickActionLabel: {
+    flex: 1,
+    color: '#334155',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  dashboardListRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+    paddingVertical: 9,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+  },
+  dashboardListIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fef2f2',
+  },
+  dashboardListName: {
+    flex: 1,
+    color: '#334155',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  stockWarningText: {
+    color: '#dc2626',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  dashboardLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  dashboardLinkText: {
+    color: '#2563eb',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  dashboardEmptyText: {
+    color: '#94a3b8',
+    fontSize: 13,
+    paddingVertical: 12,
+  },
+  dashboardOrderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+  },
+  dashboardOrderIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#eff6ff',
+  },
+  dashboardOrderInfo: {
+    flex: 1,
+  },
+  dashboardOrderNumber: {
+    color: '#334155',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  dashboardOrderDate: {
+    color: '#94a3b8',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  dashboardOrderTotal: {
+    color: '#0f172a',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  dashboardOrderStatus: {
+    backgroundColor: '#fef3c7',
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  dashboardOrderStatusText: {
+    color: '#b45309',
+    fontSize: 10,
+    fontWeight: '700',
   },
 
   /* TABLE CARD */

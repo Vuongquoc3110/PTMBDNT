@@ -138,7 +138,17 @@
       "phone": "0909 123 456",
       "address": "123 Đường Lê Lợi, Phường Bến Nghé, Quận 1",
       "city": "TP. Hồ Chí Minh",
-      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80"
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
+      "role": "customer"
+    },
+    {
+      "id": 99,
+      "email": "admin@promart.vn",
+      "password": "admin123",
+      "name": "Quản Trị Viên DANGVINHPC",
+      "phone": "0900 000 000",
+      "role": "admin",
+      "avatar": "https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&w=400&q=80"
     }
   ],
   "orders": [],
