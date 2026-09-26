@@ -1417,6 +1417,58 @@ const styles = StyleSheet.create({
   tabBody: {
     padding: 24,
   },
+  techSpecsBox: {
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#dbeafe',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 24,
+  },
+  techSpecsBadge: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#2563eb',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  techSpecsBadgeText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.4,
+  },
+  techSpecsBoxIntro: {
+    color: '#64748b',
+    fontSize: 13,
+    lineHeight: 20,
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  techSpecsBoxIntroHighlight: {
+    color: '#0f172a',
+    fontWeight: '800',
+  },
+  techSpecsList: {
+    marginTop: 8,
+  },
+  techSpecsListItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+  },
+  techSpecsListText: {
+    flex: 1,
+    color: '#475569',
+    fontSize: 13,
+    lineHeight: 20,
+  },
   descTitle: {
     fontSize: 18,
     fontWeight: '800',

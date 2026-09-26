@@ -18,7 +18,7 @@ import { useAppContext } from '@/context/AppContext';
 import { formatPrice } from '@/data/products';
 import { apiService, type Order, type User } from '@/services/api';
 
-type AdminTab = 'overview' | 'products' | 'orders' | 'categories' | 'users';
+type AdminTab = 'overview' | 'products' | 'orders' | 'categories' | 'users' | 'inventory';
 
 interface ProductItem {
   id: string;
@@ -36,6 +36,8 @@ interface ProductItem {
   isNew?: boolean;
   isSale?: boolean;
   isHot?: boolean;
+  isHidden?: boolean;
+  specifications?: Record<string, string>;
 }
 
 interface CategoryItem {
@@ -46,6 +48,10 @@ interface CategoryItem {
 }
 
 const DEFAULT_IMAGE = 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=600&q=80';
+
+function getProductBrand(product: ProductItem) {
+  return product.specifications?.['Thương hiệu'] || product.specifications?.Brand || product.name.split(' ')[0] || 'Khác';
+}
 
 const PRESET_CATEGORIES = [
   { id: 'laptop', label: 'Laptop', icon: '💻' },
@@ -105,7 +111,7 @@ export default function AdminScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const isDesktop = width >= 860;
-  const { user, isAdmin } = useAppContext();
+  const { user, isAdmin, isDark, toggleTheme } = useAppContext();
 
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
   const [loading, setLoading] = useState(true);
@@ -127,6 +133,7 @@ export default function AdminScreen() {
 
   // Search in tabs
   const [searchTerm, setSearchTerm] = useState('');
+  const [inventoryQuantities, setInventoryQuantities] = useState<Record<string, string>>({});
 
   // Modals
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
@@ -405,6 +412,36 @@ export default function AdminScreen() {
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .slice(0, 5);
   const lowStockProducts = productList.filter((product) => (product.stock ?? 0) <= 5).slice(0, 5);
+  const brandInventory = Object.values(
+    productList.reduce<Record<string, { brand: string; products: ProductItem[]; stock: number }>>((groups, product) => {
+      const brand = getProductBrand(product);
+      const current = groups[brand] || { brand, products: [], stock: 0 };
+      current.products.push(product);
+      current.stock += product.stock ?? 0;
+      groups[brand] = current;
+      return groups;
+    }, {}),
+  ).sort((a, b) => b.stock - a.stock);
+
+  const handleInventoryAdjustment = async (product: ProductItem, direction: 'in' | 'out') => {
+    const quantity = Math.max(1, parseInt(inventoryQuantities[product.id] || '1', 10) || 1);
+    const currentStock = product.stock ?? 0;
+    const nextStock = direction === 'in' ? currentStock + quantity : Math.max(0, currentStock - quantity);
+    if (direction === 'out' && quantity > currentStock) {
+      showToast(`Không thể xuất quá tồn kho của ${product.name}`);
+      return;
+    }
+    try {
+      setLoading(true);
+      await apiService.updateProduct(product.id, { ...product, stock: nextStock });
+      setInventoryQuantities((prev) => ({ ...prev, [product.id]: '' }));
+      showToast(`${direction === 'in' ? 'Đã nhập' : 'Đã xuất'} ${quantity} sản phẩm ${product.name}`);
+      await loadData();
+    } catch {
+      setLoading(false);
+      showToast('Không thể cập nhật tồn kho');
+    }
+  };
 
   if (!isAdmin) {
     return (
@@ -439,7 +476,7 @@ export default function AdminScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, isDark && styles.containerDark]}>
       {/* TOAST */}
       {toast ? (
         <View style={styles.toast}>
@@ -449,23 +486,32 @@ export default function AdminScreen() {
       ) : null}
 
       {/* ADMIN HEADER */}
-      <View style={styles.header}>
+      <View style={[styles.header, isDark && styles.headerDark]}>
         <View style={styles.headerLeft}>
           <Pressable style={styles.backBtn} onPress={() => router.push('/(tabs)' as any)}>
             <Ionicons name="arrow-back" size={20} color="#334155" />
           </Pressable>
           <View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Text style={styles.headerBrand}>DANGVINHPC</Text>
+              <Text style={[styles.headerBrand, isDark && styles.textDark]}>DANGVINHPC</Text>
               <View style={styles.adminBadge}>
                 <Text style={styles.adminBadgeText}>ADMIN PORTAL</Text>
               </View>
             </View>
-            <Text style={styles.headerSubtitle}>Quản lý hệ thống, sản phẩm và đơn hàng</Text>
+            <Text style={[styles.headerSubtitle, isDark && styles.textMutedDark]}>Quản lý hệ thống, sản phẩm và đơn hàng</Text>
           </View>
         </View>
 
         <View style={styles.headerActions}>
+          <Pressable
+            style={[styles.themeBtn, isDark && styles.themeBtnDark]}
+            onPress={toggleTheme}
+            accessibilityLabel={isDark ? 'Chuyển sang giao diện sáng' : 'Chuyển sang giao diện tối'}
+          >
+            <Ionicons name={isDark ? 'sunny-outline' : 'moon-outline'} size={18} color={isDark ? '#fbbf24' : '#334155'} />
+            {isDesktop && <Text style={[styles.themeBtnText, isDark && styles.themeBtnTextDark]}>{isDark ? 'Sáng' : 'Tối'}</Text>}
+          </Pressable>
+
           <Pressable style={styles.refreshBtn} onPress={loadData}>
             <Ionicons name="refresh" size={18} color="#2563eb" />
             <Text style={styles.refreshBtnText}>Tải lại</Text>
@@ -481,7 +527,7 @@ export default function AdminScreen() {
       <ScrollView style={styles.contentScroll} contentContainerStyle={styles.contentContainer}>
         {/* STATS OVERVIEW CARDS */}
         <View style={styles.statsGrid}>
-          <View style={[styles.statCard, { borderLeftColor: '#2563eb' }]}>
+          <View style={[styles.statCard, isDark && styles.cardDark, { borderLeftColor: '#2563eb' }]}> 
             <View style={[styles.statIconWrap, { backgroundColor: '#eff6ff' }]}>
               <Ionicons name="wallet-outline" size={22} color="#2563eb" />
             </View>
@@ -489,7 +535,7 @@ export default function AdminScreen() {
             <Text style={styles.statLabel}>Tổng doanh thu bán hàng</Text>
           </View>
 
-          <View style={[styles.statCard, { borderLeftColor: '#059669' }]}>
+          <View style={[styles.statCard, isDark && styles.cardDark, { borderLeftColor: '#059669' }]}> 
             <View style={[styles.statIconWrap, { backgroundColor: '#f0fdf4' }]}>
               <Ionicons name="cube-outline" size={22} color="#059669" />
             </View>
@@ -497,7 +543,7 @@ export default function AdminScreen() {
             <Text style={styles.statLabel}>Tổng số đơn hàng</Text>
           </View>
 
-          <View style={[styles.statCard, { borderLeftColor: '#d97706' }]}>
+          <View style={[styles.statCard, isDark && styles.cardDark, { borderLeftColor: '#d97706' }]}> 
             <View style={[styles.statIconWrap, { backgroundColor: '#fffbeb' }]}>
               <Ionicons name="hardware-chip-outline" size={22} color="#d97706" />
             </View>
@@ -505,7 +551,7 @@ export default function AdminScreen() {
             <Text style={styles.statLabel}>Sản phẩm trong kho</Text>
           </View>
 
-          <View style={[styles.statCard, { borderLeftColor: '#7c3aed' }]}>
+          <View style={[styles.statCard, isDark && styles.cardDark, { borderLeftColor: '#7c3aed' }]}> 
             <View style={[styles.statIconWrap, { backgroundColor: '#faf5ff' }]}>
               <Ionicons name="people-outline" size={22} color="#7c3aed" />
             </View>
@@ -519,6 +565,7 @@ export default function AdminScreen() {
           <View style={styles.tabButtons}>
             {[
               { id: 'overview', label: 'Tổng quan', icon: 'home-outline', count: null },
+              { id: 'inventory', label: 'Nhập / Xuất', icon: 'swap-vertical-outline', count: productList.length },
               { id: 'products', label: 'Sản phẩm', icon: 'hardware-chip-outline', count: productList.length },
               { id: 'orders', label: 'Đơn hàng', icon: 'receipt-outline', count: orderList.length },
               { id: 'categories', label: 'Danh mục', icon: 'grid-outline', count: categoryList.length },
@@ -526,7 +573,7 @@ export default function AdminScreen() {
             ].map((tab) => (
               <Pressable
                 key={tab.id}
-                style={[styles.tabBtn, activeTab === tab.id && styles.tabBtnActive]}
+                style={[styles.tabBtn, isDark && styles.tabBtnDark, activeTab === tab.id && styles.tabBtnActive]}
                 onPress={() => {
                   setActiveTab(tab.id as AdminTab);
                   setSearchTerm('');
@@ -538,7 +585,7 @@ export default function AdminScreen() {
                   color={activeTab === tab.id ? '#2563eb' : '#64748b'}
                   style={{ marginRight: 6 }}
                 />
-                <Text style={[styles.tabBtnText, activeTab === tab.id && styles.tabBtnTextActive]}>
+                <Text style={[styles.tabBtnText, isDark && styles.textMutedDark, activeTab === tab.id && styles.tabBtnTextActive]}>
                   {tab.label}{tab.count === null ? '' : ` (${tab.count})`}
                 </Text>
               </Pressable>
@@ -577,7 +624,7 @@ export default function AdminScreen() {
             </View>
 
             <View style={[styles.dashboardColumns, !isDesktop && styles.dashboardColumnsMobile]}>
-              <View style={[styles.dashboardCard, styles.quickActionsCard]}>
+              <View style={[styles.dashboardCard, isDark && styles.cardDark, styles.quickActionsCard]}>
                 <View style={styles.dashboardCardHeader}>
                   <View>
                     <Text style={styles.dashboardCardTitle}>Thao tác nhanh</Text>
@@ -603,7 +650,7 @@ export default function AdminScreen() {
                 </View>
               </View>
 
-              <View style={styles.dashboardCard}>
+              <View style={[styles.dashboardCard, isDark && styles.cardDark]}>
                 <View style={styles.dashboardCardHeader}>
                   <View>
                     <Text style={styles.dashboardCardTitle}>Tồn kho cần chú ý</Text>
@@ -627,7 +674,7 @@ export default function AdminScreen() {
               </View>
             </View>
 
-            <View style={styles.dashboardCard}>
+            <View style={[styles.dashboardCard, isDark && styles.cardDark]}>
               <View style={styles.dashboardCardHeader}>
                 <View>
                   <Text style={styles.dashboardCardTitle}>Đơn hàng gần đây</Text>
@@ -661,9 +708,77 @@ export default function AdminScreen() {
           </View>
         )}
 
+        {activeTab === 'inventory' && (
+          <View style={[styles.inventoryWrap, isDark && styles.cardDark]}>
+            <View style={[styles.inventoryHero, !isDesktop && styles.inventoryHeroMobile]}>
+              <View style={styles.inventoryHeroIcon}>
+                <Ionicons name="swap-vertical" size={25} color="#ffffff" />
+              </View>
+              <View style={styles.inventoryHeroCopy}>
+                <Text style={[styles.inventoryTitle, isDark && styles.textDark]}>Quản lý nhập / xuất theo hãng</Text>
+                <Text style={[styles.inventorySubtitle, isDark && styles.textMutedDark]}>Theo dõi tồn kho từng thương hiệu và cập nhật số lượng ngay trên danh sách.</Text>
+              </View>
+              <View style={styles.inventorySummary}>
+                <Text style={styles.inventorySummaryValue}>{brandInventory.length}</Text>
+                <Text style={styles.inventorySummaryLabel}>hãng</Text>
+              </View>
+            </View>
+
+            {brandInventory.length === 0 ? (
+              <View style={styles.emptyWrap}>
+                <Text style={styles.emptyText}>Chưa có dữ liệu tồn kho</Text>
+              </View>
+            ) : brandInventory.map((group) => (
+              <View key={group.brand} style={[styles.brandInventoryCard, isDark && styles.brandInventoryCardDark]}>
+                <View style={styles.brandInventoryHeader}>
+                  <View style={styles.brandIdentity}>
+                    <View style={styles.brandAvatar}>
+                      <Text style={styles.brandAvatarText}>{group.brand.slice(0, 2).toUpperCase()}</Text>
+                    </View>
+                    <View>
+                      <Text style={[styles.brandName, isDark && styles.textDark]}>{group.brand}</Text>
+                      <Text style={[styles.brandProductCount, isDark && styles.textMutedDark]}>{group.products.length} sản phẩm đang quản lý</Text>
+                    </View>
+                  </View>
+                  <View style={styles.brandStockTotal}>
+                    <Text style={styles.brandStockValue}>{group.stock}</Text>
+                    <Text style={styles.brandStockLabel}>tồn kho</Text>
+                  </View>
+                </View>
+
+                {group.products.map((product) => (
+                  <View key={product.id} style={[styles.inventoryProductRow, !isDesktop && styles.inventoryProductRowMobile, isDark && styles.inventoryProductRowDark]}>
+                    <Image source={{ uri: product.image || DEFAULT_IMAGE }} style={styles.inventoryProductImage} />
+                    <View style={styles.inventoryProductInfo}>
+                      <Text style={[styles.inventoryProductName, isDark && styles.textDark]} numberOfLines={1}>{product.name}</Text>
+                      <Text style={[styles.inventoryProductMeta, isDark && styles.textMutedDark]}>{product.category_id || product.category || 'Khác'} · Tồn hiện tại: {product.stock ?? 0}</Text>
+                    </View>
+                    <TextInput
+                      value={inventoryQuantities[product.id] || ''}
+                      onChangeText={(value) => setInventoryQuantities((prev) => ({ ...prev, [product.id]: value.replace(/[^0-9]/g, '') }))}
+                      keyboardType="number-pad"
+                      placeholder="SL"
+                      placeholderTextColor="#94a3b8"
+                      style={[styles.inventoryQuantityInput, isDark && styles.inventoryQuantityInputDark]}
+                    />
+                    <Pressable style={styles.inventoryInButton} onPress={() => handleInventoryAdjustment(product, 'in')}>
+                      <Ionicons name="arrow-down" size={15} color="#059669" />
+                      <Text style={styles.inventoryInText}>Nhập</Text>
+                    </Pressable>
+                    <Pressable style={styles.inventoryOutButton} onPress={() => handleInventoryAdjustment(product, 'out')}>
+                      <Ionicons name="arrow-up" size={15} color="#dc2626" />
+                      <Text style={styles.inventoryOutText}>Xuất</Text>
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            ))}
+          </View>
+        )}
+
         {/* TAB 1: QUẢN LÝ SẢN PHẨM */}
         {activeTab === 'products' && (
-          <View style={styles.tableCard}>
+          <View style={[styles.tableCard, isDark && styles.cardDark]}>
             <View style={styles.tableHeader}>
               <Text style={styles.tableTitle}>Danh sách Sản phẩm ({filteredProducts.length})</Text>
               <Pressable style={styles.miniBtn} onPress={handleOpenAddProduct}>
@@ -735,7 +850,7 @@ export default function AdminScreen() {
 
         {/* TAB 2: QUẢN LÝ ĐƠN HÀNG */}
         {activeTab === 'orders' && (
-          <View style={styles.tableCard}>
+          <View style={[styles.tableCard, isDark && styles.cardDark]}>
             <View style={styles.tableHeader}>
               <Text style={styles.tableTitle}>Danh sách Đơn hàng ({filteredOrders.length})</Text>
             </View>
@@ -822,7 +937,7 @@ export default function AdminScreen() {
 
         {/* TAB 3: QUẢN LÝ DANH MỤC */}
         {activeTab === 'categories' && (
-          <View style={styles.tableCard}>
+          <View style={[styles.tableCard, isDark && styles.cardDark]}>
             <View style={styles.tableHeader}>
               <Text style={styles.tableTitle}>Danh mục linh kiện ({categoryList.length})</Text>
               <Pressable
@@ -865,7 +980,7 @@ export default function AdminScreen() {
 
         {/* TAB 4: QUẢN LÝ KHÁCH HÀNG */}
         {activeTab === 'users' && (
-          <View style={styles.tableCard}>
+          <View style={[styles.tableCard, isDark && styles.cardDark]}>
             <View style={styles.tableHeader}>
               <Text style={styles.tableTitle}>Danh sách Khách hàng ({filteredUsers.length})</Text>
             </View>
@@ -1327,6 +1442,29 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8fafc',
   },
+  containerDark: {
+    backgroundColor: '#0b1120',
+  },
+  headerDark: {
+    backgroundColor: '#111827',
+    borderBottomColor: '#263449',
+  },
+  cardDark: {
+    backgroundColor: '#111827',
+    borderColor: '#263449',
+    shadowColor: '#000000',
+    shadowOpacity: 0.2,
+  },
+  tabBtnDark: {
+    backgroundColor: '#172033',
+    borderColor: '#334155',
+  },
+  textDark: {
+    color: '#f8fafc',
+  },
+  textMutedDark: {
+    color: '#94a3b8',
+  },
   toast: {
     position: 'absolute',
     top: 20,
@@ -1426,6 +1564,29 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 13,
     fontWeight: '700',
+  },
+  themeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#f1f5f9',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  themeBtnDark: {
+    backgroundColor: '#1f2937',
+    borderColor: '#334155',
+  },
+  themeBtnText: {
+    color: '#334155',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  themeBtnTextDark: {
+    color: '#fbbf24',
   },
 
   /* CONTENT */
@@ -1742,6 +1903,199 @@ const styles = StyleSheet.create({
     color: '#b45309',
     fontSize: 10,
     fontWeight: '700',
+  },
+
+  /* INVENTORY */
+  inventoryWrap: {
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 18,
+    gap: 14,
+  },
+  inventoryHero: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 16,
+    borderRadius: 16,
+    backgroundColor: '#eff6ff',
+  },
+  inventoryHeroMobile: {
+    alignItems: 'flex-start',
+    flexWrap: 'wrap',
+  },
+  inventoryHeroIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#2563eb',
+  },
+  inventoryHeroCopy: {
+    flex: 1,
+  },
+  inventoryTitle: {
+    color: '#0f172a',
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  inventorySubtitle: {
+    color: '#64748b',
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 3,
+  },
+  inventorySummary: {
+    alignItems: 'flex-end',
+  },
+  inventorySummaryValue: {
+    color: '#2563eb',
+    fontSize: 22,
+    fontWeight: '800',
+  },
+  inventorySummaryLabel: {
+    color: '#64748b',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  brandInventoryCard: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 14,
+  },
+  brandInventoryCardDark: {
+    backgroundColor: '#172033',
+    borderColor: '#334155',
+  },
+  brandInventoryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  brandIdentity: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  brandAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#dbeafe',
+  },
+  brandAvatarText: {
+    color: '#1d4ed8',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  brandName: {
+    color: '#0f172a',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  brandProductCount: {
+    color: '#64748b',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  brandStockTotal: {
+    alignItems: 'flex-end',
+  },
+  brandStockValue: {
+    color: '#059669',
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  brandStockLabel: {
+    color: '#64748b',
+    fontSize: 10,
+  },
+  inventoryProductRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+    paddingVertical: 9,
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+  },
+  inventoryProductRowDark: {
+    borderTopColor: '#334155',
+  },
+  inventoryProductRowMobile: {
+    flexWrap: 'wrap',
+  },
+  inventoryProductImage: {
+    width: 38,
+    height: 38,
+    borderRadius: 9,
+    backgroundColor: '#e2e8f0',
+  },
+  inventoryProductInfo: {
+    flex: 1,
+    minWidth: 120,
+  },
+  inventoryProductName: {
+    color: '#334155',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  inventoryProductMeta: {
+    color: '#64748b',
+    fontSize: 10,
+    marginTop: 3,
+  },
+  inventoryQuantityInput: {
+    width: 54,
+    height: 34,
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    backgroundColor: '#ffffff',
+    color: '#0f172a',
+    textAlign: 'center',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  inventoryQuantityInputDark: {
+    backgroundColor: '#111827',
+    borderColor: '#475569',
+    color: '#f8fafc',
+  },
+  inventoryInButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#dcfce7',
+    borderRadius: 9,
+    paddingHorizontal: 9,
+    paddingVertical: 8,
+  },
+  inventoryInText: {
+    color: '#047857',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  inventoryOutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#fee2e2',
+    borderRadius: 9,
+    paddingHorizontal: 9,
+    paddingVertical: 8,
+  },
+  inventoryOutText: {
+    color: '#b91c1c',
+    fontSize: 11,
+    fontWeight: '800',
   },
 
   /* TABLE CARD */

@@ -18,7 +18,7 @@ import { apiService, type Product } from '@/services/api';
 const POPULAR_SEARCHES = ['Laptop Gaming', 'RTX 4090', 'RAM DDR5', 'Màn hình 4K', 'MacBook', 'Bàn phím cơ'];
 
 export function Header() {
-  const { cartCount, user, wishlist } = useAppContext();
+  const { cartCount, user, wishlist, isDark, toggleTheme } = useAppContext();
   const [search, setSearch] = useState('');
   const [isFocused, setIsFocused] = useState(false);
   const [matchingProducts, setMatchingProducts] = useState<Product[]>([]);
@@ -74,7 +74,7 @@ export function Header() {
   };
 
   return (
-    <View style={[styles.container, !isDesktop && styles.containerMobile]}>
+    <View style={[styles.container, isDark && styles.containerDark, !isDesktop && styles.containerMobile]}>
       <View style={[styles.inner, !isDesktop && styles.innerMobile]}>
         {/* BRAND LOGO FOR DESKTOP & MOBILE */}
         <Pressable style={[styles.brandContainer, !isDesktop && styles.brandContainerMobile]} onPress={() => router.push('/(tabs)')}>
@@ -260,6 +260,15 @@ export function Header() {
 
         <View style={[styles.actionRow, !isDesktop && styles.actionRowMobile]}>
           <Pressable
+            style={[styles.actionButton, isDark && styles.actionButtonDark, !isDesktop && styles.actionButtonMobile]}
+            onPress={toggleTheme}
+            accessibilityLabel={isDark ? 'Chuyển sang giao diện sáng' : 'Chuyển sang giao diện tối'}
+            {...({ dataSet: { navItem: 'true' } } as any)}
+          >
+            <Ionicons name={isDark ? 'sunny-outline' : 'moon-outline'} size={20} color={isDark ? '#fbbf24' : '#334155'} />
+          </Pressable>
+
+          <Pressable
             style={[styles.actionButton, !isDesktop && styles.actionButtonMobile]}
             onPress={() => router.push('/wishlist' as any)}
             {...({ dataSet: { navItem: 'true' } } as any)}
@@ -312,6 +321,10 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 2,
     zIndex: 1000,
+  },
+  containerDark: {
+    backgroundColor: '#111827',
+    borderBottomColor: '#263449',
   },
   containerMobile: {
     shadowRadius: 4,
@@ -590,6 +603,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: '#dfeafc',
+  },
+  actionButtonDark: {
+    backgroundColor: '#1f2937',
+    borderColor: '#334155',
   },
   actionButtonMobile: {
     width: 34,

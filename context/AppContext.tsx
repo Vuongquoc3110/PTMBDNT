@@ -17,6 +17,9 @@ export interface CartItem {
 interface AppContextType {
   user: User | null;
   isAdmin: boolean;
+  themeMode: 'light' | 'dark';
+  isDark: boolean;
+  toggleTheme: () => void;
   login: (email: string, pass: string) => Promise<User>;
   register: (data: Record<string, any>) => Promise<any>;
   logout: () => void;
@@ -43,6 +46,7 @@ const STORAGE_KEYS = {
   USER: 'promart_user',
   CART: 'promart_cart',
   WISHLIST: 'promart_wishlist',
+  THEME: 'promart_theme',
 };
 
 const DEFAULT_USER: User = {
@@ -118,6 +122,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return [];
   });
 
+  const [themeMode, setThemeMode] = useState<'light' | 'dark'>(() => {
+    if (Platform.OS === 'web' && typeof localStorage !== 'undefined') {
+      const savedTheme = localStorage.getItem(STORAGE_KEYS.THEME);
+      if (savedTheme === 'dark' || savedTheme === 'light') return savedTheme;
+    }
+    return 'light';
+  });
+
+  const isDark = themeMode === 'dark';
+
+  const toggleTheme = () => {
+    setThemeMode((current) => (current === 'dark' ? 'light' : 'dark'));
+  };
+
   // Sync to localStorage
   useEffect(() => {
     if (Platform.OS === 'web' && typeof localStorage !== 'undefined') {
@@ -162,6 +180,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem(STORAGE_KEYS.WISHLIST, JSON.stringify(wishlist));
     }
   }, [wishlist]);
+
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof localStorage !== 'undefined' && typeof document !== 'undefined') {
+      localStorage.setItem(STORAGE_KEYS.THEME, themeMode);
+      document.documentElement.dataset.appTheme = themeMode;
+      document.body.style.backgroundColor = themeMode === 'dark' ? '#0b1120' : '#f4f8ff';
+    }
+  }, [themeMode]);
 
   // Sync initial cart & wishlist from backend on mount if available
   useEffect(() => {
@@ -317,6 +343,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       value={{
         user,
         isAdmin,
+        themeMode,
+        isDark,
+        toggleTheme,
         login,
         register,
         logout,

@@ -1,9 +1,8 @@
-import { DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 
-import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Platform } from 'react-native';
 
 if (Platform.OS === 'web' && typeof document !== 'undefined') {
@@ -55,25 +54,31 @@ if (Platform.OS === 'web' && typeof document !== 'undefined') {
   }
 }
 
-import { AppProvider } from '@/context/AppContext';
+import { AppProvider, useAppContext } from '@/context/AppContext';
 
 export const unstable_settings = {
   anchor: '(tabs)',
 };
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
-
   return (
     <AppProvider>
-      <ThemeProvider value={DefaultTheme}>
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="index" />
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal', headerShown: true }} />
-        </Stack>
-        <StatusBar style="dark" />
-      </ThemeProvider>
+      <RootNavigator />
     </AppProvider>
+  );
+}
+
+function RootNavigator() {
+  const { isDark } = useAppContext();
+
+  return (
+    <ThemeProvider value={isDark ? DarkTheme : DefaultTheme}>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="index" />
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal', headerShown: true }} />
+      </Stack>
+      <StatusBar style={isDark ? 'light' : 'dark'} />
+    </ThemeProvider>
   );
 }
