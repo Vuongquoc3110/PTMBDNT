@@ -3,6 +3,8 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 
+import { SupportChatWidget } from '@/components/SupportChatWidget';
+import { AppProvider, useAppContext } from '@/context/AppContext';
 import { Platform } from 'react-native';
 
 if (Platform.OS === 'web' && typeof document !== 'undefined') {
@@ -54,8 +56,6 @@ if (Platform.OS === 'web' && typeof document !== 'undefined') {
   }
 }
 
-import { AppProvider, useAppContext } from '@/context/AppContext';
-
 export const unstable_settings = {
   anchor: '(tabs)',
 };
@@ -78,6 +78,7 @@ function RootNavigator() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal', headerShown: true }} />
       </Stack>
+      <SupportChatWidget />
       <StatusBar style={isDark ? 'light' : 'dark'} />
     </ThemeProvider>
   );

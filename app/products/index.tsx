@@ -18,15 +18,15 @@ import { formatPrice } from '@/data/products';
 import { useProducts } from '@/hooks/useApi';
 
 const categoryOptions = [
-  { id: 'Laptop', label: 'Laptop', icon: 'laptop-outline' },
-  { id: 'Gaming PC', label: 'PC Gaming', icon: 'desktop-outline' },
-  { id: 'Office PC', label: 'PC Văn Phòng', icon: 'business-outline' },
-  { id: 'CPU', label: 'CPU', icon: 'hardware-chip-outline' },
-  { id: 'GPU', label: 'GPU (Card)', icon: 'game-controller-outline' },
-  { id: 'RAM', label: 'RAM', icon: 'albums-outline' },
-  { id: 'SSD', label: 'SSD', icon: 'save-outline' },
-  { id: 'Monitor', label: 'Màn hình', icon: 'tv-outline' },
-  { id: 'Keyboard', label: 'Bàn phím', icon: 'keypad-outline' },
+  { id: 'laptop', label: 'Laptop', icon: 'laptop-outline' },
+  { id: 'gaming-pc', label: 'PC Gaming', icon: 'desktop-outline' },
+  { id: 'office-pc', label: 'PC Văn Phòng', icon: 'business-outline' },
+  { id: 'cpu', label: 'CPU', icon: 'hardware-chip-outline' },
+  { id: 'gpu', label: 'GPU (Card)', icon: 'game-controller-outline' },
+  { id: 'ram', label: 'RAM', icon: 'albums-outline' },
+  { id: 'ssd', label: 'SSD', icon: 'save-outline' },
+  { id: 'monitor', label: 'Màn hình', icon: 'tv-outline' },
+  { id: 'keyboard', label: 'Bàn phím', icon: 'keypad-outline' },
   { id: 'headset', label: 'Tai nghe', icon: 'headset-outline' },
   { id: 'mouse', label: 'Chuột', icon: 'mouse-outline' },
   { id: 'mainboard', label: 'Bo mạch chủ', icon: 'hardware-chip-outline' },
@@ -37,6 +37,8 @@ const categoryOptions = [
 ];
 
 const DEFAULT_IMAGE = 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=600&q=80';
+
+const normalizeCategory = (value: string) => value.trim().toLowerCase().replace(/[\s_-]+/g, '');
 
 function ProductGridItem({
   item,
@@ -51,6 +53,9 @@ function ProductGridItem({
 }) {
   const { width } = useWindowDimensions();
   const isMobile = width < 920;
+  const categoryLabel = categoryOptions.find(
+    (category) => normalizeCategory(category.id) === normalizeCategory(item.category_id || item.category || ''),
+  )?.label || item.category;
 
   const badgeText = item.discount
     ? `−${item.discount}%`
@@ -100,7 +105,7 @@ function ProductGridItem({
 
           {/* PRODUCT CONTENT */}
           <View style={[styles.cardBody, isMobile && styles.cardBodyMobile]}>
-            <Text style={styles.cardCategory}>{item.category}</Text>
+            <Text style={styles.cardCategory}>{categoryLabel}</Text>
             <Text
               style={styles.cardName}
               numberOfLines={2}
@@ -223,10 +228,11 @@ export default function ProductsPage() {
     }
 
     if (selectedCategories.length > 0) {
-      const selectedLower = selectedCategories.map((c) => c.toLowerCase());
+      const selectedNormalized = new Set(selectedCategories.map(normalizeCategory));
       result = result.filter((item) =>
-        selectedLower.includes(item.category?.toLowerCase() || '') ||
-        selectedLower.includes(item.category_id?.toLowerCase() || '')
+        [item.category, item.category_id]
+          .filter((category): category is string => Boolean(category))
+          .some((category) => selectedNormalized.has(normalizeCategory(category)))
       );
     }
 
@@ -252,8 +258,11 @@ export default function ProductsPage() {
   }, [apiProducts, search, selectedCategories, sortBy, activeFilter, onlySale]);
 
   const toggleCategory = (category: string) => {
+    const normalizedCategory = normalizeCategory(category);
     setSelectedCategories((prev) =>
-      prev.includes(category) ? prev.filter((item) => item !== category) : [...prev, category],
+      prev.some((item) => normalizeCategory(item) === normalizedCategory)
+        ? prev.filter((item) => normalizeCategory(item) !== normalizedCategory)
+        : [...prev, category],
     );
   };
 
@@ -384,7 +393,7 @@ export default function ProductsPage() {
               )}
               {search.trim().length > 0 && (
                 <View style={styles.filterChip}>
-                  <Text style={styles.filterChipText}>Từ khóa: "{search.trim()}"</Text>
+                  <Text style={styles.filterChipText}>Từ khóa: &quot;{search.trim()}&quot;</Text>
                   <Pressable onPress={() => setSearch('')} hitSlop={6}>
                     <Ionicons name="close" size={14} color="#64748b" style={{ marginLeft: 4 }} />
                   </Pressable>
@@ -392,7 +401,9 @@ export default function ProductsPage() {
               )}
               {selectedCategories.map((cat) => (
                 <View key={cat} style={styles.filterChip}>
-                  <Text style={styles.filterChipText}>{cat}</Text>
+                  <Text style={styles.filterChipText}>
+                    {categoryOptions.find((category) => normalizeCategory(category.id) === normalizeCategory(cat))?.label || cat}
+                  </Text>
                   <Pressable onPress={() => toggleCategory(cat)} hitSlop={6}>
                     <Ionicons name="close" size={14} color="#64748b" style={{ marginLeft: 4 }} />
                   </Pressable>
@@ -423,7 +434,9 @@ export default function ProductsPage() {
 
             <View style={[styles.categoryList, !isDesktop && styles.categoryListMobile]}>
               {categoryOptions.map((cat) => {
-                const isSelected = selectedCategories.includes(cat.id);
+                const isSelected = selectedCategories.some(
+                  (selected) => normalizeCategory(selected) === normalizeCategory(cat.id),
+                );
                 return (
                   <Pressable
                     key={cat.id}

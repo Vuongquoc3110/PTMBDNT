@@ -112,8 +112,76 @@ export const categories = [
     "count": 21,
     "icon": "💾",
     "createdAt": "2026-09-22T14:02:40.000Z"
+  },
+  {
+    "id": "apple",
+    "name": "Apple",
+    "count": 3,
+    "icon": "",
+    "createdAt": "2026-09-22T14:02:40.000Z"
+  },
+  {
+    "id": "case",
+    "name": "Vỏ Case",
+    "count": 3,
+    "icon": "🖥️",
+    "createdAt": "2026-09-22T14:02:40.000Z"
+  },
+  {
+    "id": "cooling",
+    "name": "Tản nhiệt",
+    "count": 3,
+    "icon": "❄️",
+    "createdAt": "2026-09-22T14:02:40.000Z"
+  },
+  {
+    "id": "mainboard",
+    "name": "Bo mạch chủ",
+    "count": 3,
+    "icon": "⚙️",
+    "createdAt": "2026-09-22T14:02:40.000Z"
+  },
+  {
+    "id": "psu",
+    "name": "Nguồn (PSU)",
+    "count": 3,
+    "icon": "🔌",
+    "createdAt": "2026-09-22T14:02:40.000Z"
   }
 ];
+
+const additionalCategoryProducts: Product[] = [
+  { id: 'mainboard-001', name: 'Mainboard ASUS TUF Gaming B760M-PLUS WIFI II DDR5', category_id: 'mainboard', price: 4490000, image: 'https://images.unsplash.com/photo-1591799264318-7e6ef8ddb7ea?auto=format&fit=crop&w=1000&q=80', specifications: { 'Socket': 'Intel LGA1700', 'Bộ nhớ': 'DDR5, 4 khe DIMM', 'Kết nối': 'Wi-Fi 6, 2.5Gb LAN' } },
+  { id: 'mainboard-002', name: 'Mainboard MSI PRO B650M-A WIFI DDR5', category_id: 'mainboard', price: 3690000, image: 'https://images.unsplash.com/photo-1587202372634-32705e3bf49c?auto=format&fit=crop&w=1000&q=80', specifications: { 'Socket': 'AMD AM5', 'Bộ nhớ': 'DDR5, tối đa 192GB', 'Kết nối': 'Wi-Fi 6E, 2.5Gb LAN' } },
+  { id: 'mainboard-003', name: 'Mainboard Gigabyte Z790 AORUS ELITE AX DDR5', category_id: 'mainboard', price: 7290000, image: 'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1000&q=80', specifications: { 'Socket': 'Intel LGA1700', 'Bộ nhớ': 'DDR5 7600MHz OC', 'Kết nối': 'Wi-Fi 6E, PCIe 5.0' } },
+  { id: 'psu-001', name: 'Nguồn Corsair RM750e 750W 80 Plus Gold ATX 3.0', category_id: 'psu', price: 2590000, image: 'https://images.unsplash.com/photo-1587202372775-e229f172b9d7?auto=format&fit=crop&w=1000&q=80', specifications: { 'Công suất': '750W', 'Chứng nhận': '80 Plus Gold', 'Tiêu chuẩn': 'ATX 3.0, PCIe 5.0' } },
+  { id: 'psu-002', name: 'Nguồn Cooler Master MWE 650 Bronze V2 650W', category_id: 'psu', price: 1290000, image: 'https://images.unsplash.com/photo-1591488320449-011701bb6704?auto=format&fit=crop&w=1000&q=80', specifications: { 'Công suất': '650W', 'Chứng nhận': '80 Plus Bronze', 'Quạt': '120mm HDB yên tĩnh' } },
+  { id: 'psu-003', name: 'Nguồn ASUS ROG STRIX 1000W Gold Aura Edition', category_id: 'psu', price: 6490000, image: 'https://images.unsplash.com/photo-1587202372616-b43abea06c2a?auto=format&fit=crop&w=1000&q=80', specifications: { 'Công suất': '1000W', 'Chứng nhận': '80 Plus Gold', 'Tiêu chuẩn': 'ATX 3.0, cáp PCIe 5.0' } },
+  { id: 'case-001', name: 'Vỏ Case Corsair 4000D Airflow Mid-Tower', category_id: 'case', price: 2390000, image: 'https://images.unsplash.com/photo-1593640408182-31c70c8268f5?auto=format&fit=crop&w=1000&q=80', specifications: { 'Kích thước': 'Mid-Tower', 'Mặt trước': 'Lưới Airflow', 'Hỗ trợ VGA': 'Tối đa 360mm' } },
+  { id: 'case-002', name: 'Vỏ Case NZXT H6 Flow RGB White', category_id: 'case', price: 3690000, image: 'https://images.unsplash.com/photo-1616588589676-62b3bd4ff6d2?auto=format&fit=crop&w=1000&q=80', specifications: { 'Thiết kế': 'Panoramic hai mặt kính', 'Quạt': 'Tích hợp 3 quạt RGB', 'Hỗ trợ mainboard': 'ATX, Micro-ATX, Mini-ITX' } },
+  { id: 'case-003', name: 'Vỏ Case Montech KING 95 PRO Panorama Black', category_id: 'case', price: 3290000, image: 'https://images.unsplash.com/photo-1593642702821-c8da6771f0c6?auto=format&fit=crop&w=1000&q=80', specifications: { 'Thiết kế': 'Kính cong panorama', 'Quạt': '6 quạt ARGB đi kèm', 'Hỗ trợ tản nhiệt': 'Radiator tối đa 360mm' } },
+  { id: 'cooling-001', name: 'Tản nhiệt khí DeepCool AK620 Digital', category_id: 'cooling', price: 1890000, image: 'https://images.unsplash.com/photo-1587202372634-32705e3bf49c?auto=format&fit=crop&w=1000&q=80', specifications: { 'Loại tản': 'Khí, hai tháp', 'Quạt': '2 x 120mm PWM', 'Socket': 'Intel LGA1700, AMD AM5' } },
+  { id: 'cooling-002', name: 'Tản nhiệt khí Thermalright Peerless Assassin 120 SE', category_id: 'cooling', price: 990000, image: 'https://images.unsplash.com/photo-1591799264318-7e6ef8ddb7ea?auto=format&fit=crop&w=1000&q=80', specifications: { 'Loại tản': 'Khí, dual tower', 'Quạt': '2 x 120mm PWM', 'Socket': 'Intel LGA1700, AMD AM5' } },
+  { id: 'cooling-003', name: 'Tản nhiệt nước Corsair iCUE LINK H150i LCD 360mm', category_id: 'cooling', price: 6890000, image: 'https://images.unsplash.com/photo-1616588589676-62b3bd4ff6d2?auto=format&fit=crop&w=1000&q=80', specifications: { 'Kích thước radiator': '360mm', 'Màn hình': 'IPS LCD 2.1 inch', 'Socket': 'Intel LGA1700/1851, AMD AM5/AM4' } },
+  { id: 'apple-001', name: 'Apple MacBook Air 13 inch M4 16GB 256GB', category_id: 'apple', price: 26990000, image: 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=1000&q=80', specifications: { 'Chip': 'Apple M4', 'Bộ nhớ': '16GB unified memory', 'Lưu trữ': '256GB SSD' } },
+  { id: 'apple-002', name: 'Apple Mac mini M4 16GB 256GB', category_id: 'apple', price: 14990000, image: 'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1000&q=80', specifications: { 'Chip': 'Apple M4', 'Bộ nhớ': '16GB unified memory', 'Lưu trữ': '256GB SSD' } },
+  { id: 'apple-003', name: 'Apple iMac 24 inch M4 16GB 256GB', category_id: 'apple', price: 34990000, image: 'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=1000&q=80', specifications: { 'Chip': 'Apple M4', 'Màn hình': '24 inch Retina 4.5K', 'Bộ nhớ': '16GB unified memory' } },
+].map((product, index): Product => ({
+  ...product,
+  category: product.category_id,
+  oldPrice: Math.round((product.price * 1.1) / 10000) * 10000,
+  discount: 10,
+  rating: 4.8,
+  reviewCount: 24 + index * 7,
+  stock: 8 + index * 2,
+  isFeatured: index % 4 === 0,
+  isNew: index % 2 === 0,
+  isSale: true,
+  isHot: index % 5 === 0,
+  images: [product.image],
+  description: `${product.name} chính hãng, phù hợp nâng cấp dàn máy và góc làm việc. Sản phẩm được kiểm tra trước khi giao và hỗ trợ bảo hành theo chính sách cửa hàng.`,
+  features: ['Sản phẩm chính hãng', 'Kiểm tra kỹ trước khi giao', 'Hỗ trợ tư vấn tương thích cấu hình'],
+}));
 
 export const products: Product[] = [
   {
@@ -11269,7 +11337,8 @@ export const products: Product[] = [
       "Tích hợp tản nhiệt": "Heatsink mỏng gọn đạt chuẩn lắp trực tiếp vào PlayStation 5",
       "Tốc độ đọc": "7450 MB/s"
     }
-  }
+  },
+  ...additionalCategoryProducts
 ];
 
 export const featuredProducts = products.filter((p) => p.isFeatured || p.isHot || p.isSale);

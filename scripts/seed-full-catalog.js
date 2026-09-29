@@ -328,12 +328,47 @@ const newAccessories = [
   { id: 'acc-022', name: 'Bộ Vệ Sinh Bàn Phím & Màn Hình Laptop Đa Năng 8 Trong 1', price: 99000, specs: { 'Bao gồm': 'Chổi quét bụi, dụng cụ nhổ keycap, bút lau tai nghe, bình xịt cồn và khăn lau nhung' } }
 ];
 
+const newMainboards = [
+  { id: 'mainboard-001', name: 'Mainboard ASUS TUF Gaming B760M-PLUS WIFI II DDR5', price: 4490000, specs: { Socket: 'Intel LGA1700', RAM: 'DDR5, 4 khe DIMM', 'Kết nối': 'Wi-Fi 6, 2.5Gb LAN' } },
+  { id: 'mainboard-002', name: 'Mainboard MSI PRO B650M-A WIFI DDR5', price: 3690000, specs: { Socket: 'AMD AM5', RAM: 'DDR5, tối đa 192GB', 'Kết nối': 'Wi-Fi 6E, 2.5Gb LAN' } },
+  { id: 'mainboard-003', name: 'Mainboard Gigabyte Z790 AORUS ELITE AX DDR5', price: 7290000, specs: { Socket: 'Intel LGA1700', RAM: 'DDR5 7600MHz OC', 'Kết nối': 'Wi-Fi 6E, PCIe 5.0' } },
+];
+
+const newPowerSupplies = [
+  { id: 'psu-001', name: 'Nguồn Corsair RM750e 750W 80 Plus Gold ATX 3.0', price: 2590000, specs: { 'Công suất': '750W', 'Chứng nhận': '80 Plus Gold', 'Tiêu chuẩn': 'ATX 3.0, PCIe 5.0' } },
+  { id: 'psu-002', name: 'Nguồn Cooler Master MWE 650 Bronze V2 650W', price: 1290000, specs: { 'Công suất': '650W', 'Chứng nhận': '80 Plus Bronze', Quạt: '120mm HDB yên tĩnh' } },
+  { id: 'psu-003', name: 'Nguồn ASUS ROG STRIX 1000W Gold Aura Edition', price: 6490000, specs: { 'Công suất': '1000W', 'Chứng nhận': '80 Plus Gold', 'Tiêu chuẩn': 'ATX 3.0, PCIe 5.0' } },
+];
+
+const newCases = [
+  { id: 'case-001', name: 'Vỏ Case Corsair 4000D Airflow Mid-Tower', price: 2390000, specs: { 'Kích thước': 'Mid-Tower', 'Mặt trước': 'Lưới Airflow', 'Hỗ trợ VGA': 'Tối đa 360mm' } },
+  { id: 'case-002', name: 'Vỏ Case NZXT H6 Flow RGB White', price: 3690000, specs: { 'Thiết kế': 'Panoramic hai mặt kính', Quạt: 'Tích hợp 3 quạt RGB', 'Hỗ trợ mainboard': 'ATX, Micro-ATX, Mini-ITX' } },
+  { id: 'case-003', name: 'Vỏ Case Montech KING 95 PRO Panorama Black', price: 3290000, specs: { 'Thiết kế': 'Kính cong panorama', Quạt: '6 quạt ARGB đi kèm', 'Hỗ trợ tản nhiệt': 'Radiator tối đa 360mm' } },
+];
+
+const newCooling = [
+  { id: 'cooling-001', name: 'Tản nhiệt khí DeepCool AK620 Digital', price: 1890000, specs: { Loại: 'Khí, hai tháp', Quạt: '2 x 120mm PWM', Socket: 'Intel LGA1700, AMD AM5' } },
+  { id: 'cooling-002', name: 'Tản nhiệt khí Thermalright Peerless Assassin 120 SE', price: 990000, specs: { Loại: 'Khí, dual tower', Quạt: '2 x 120mm PWM', Socket: 'Intel LGA1700, AMD AM5' } },
+  { id: 'cooling-003', name: 'Tản nhiệt nước Corsair iCUE LINK H150i LCD 360mm', price: 6890000, specs: { Radiator: '360mm', 'Màn hình': 'IPS LCD 2.1 inch', Socket: 'Intel LGA1700/1851, AMD AM5/AM4' } },
+];
+
+const newAppleProducts = [
+  { id: 'apple-001', name: 'Apple MacBook Air 13 inch M4 16GB 256GB', price: 26990000, specs: { Chip: 'Apple M4', RAM: '16GB unified memory', 'Ổ cứng': '256GB SSD' } },
+  { id: 'apple-002', name: 'Apple Mac mini M4 16GB 256GB', price: 14990000, specs: { Chip: 'Apple M4', RAM: '16GB unified memory', 'Ổ cứng': '256GB SSD' } },
+  { id: 'apple-003', name: 'Apple iMac 24 inch M4 16GB 256GB', price: 34990000, specs: { Chip: 'Apple M4', 'Màn hình': '24 inch Retina 4.5K', RAM: '16GB unified memory' } },
+];
+
 // Combine all groups into a unified product builder
 const catalogGroups = [
   { cat: 'cpu', items: newCpu, imgCat: 'cpu', descPrefix: 'Bộ vi xử lý CPU hiệu năng cao hàng chính hãng' },
   { cat: 'gpu', items: newGpu, imgCat: 'gpu', descPrefix: 'Card màn hình đồ họa GPU đỉnh cao chuyên game và đồ họa' },
   { cat: 'gaming-pc', items: newGamingPc, imgCat: 'gamingPc', descPrefix: 'Dàn máy tính PC Gaming cấu hình mạnh mẽ, tối ưu hóa FPS' },
   { cat: 'office-pc', items: newOfficePc, imgCat: 'officePc', descPrefix: 'Bộ máy tính PC văn phòng đồng bộ, độ bền cao và tiết kiệm điện' },
+  { cat: 'mainboard', items: newMainboards, imgCat: 'cpu', descPrefix: 'Bo mạch chủ chính hãng, nền tảng ổn định cho cấu hình PC' },
+  { cat: 'psu', items: newPowerSupplies, imgCat: 'cpu', descPrefix: 'Bộ nguồn máy tính hiệu suất cao, cấp điện ổn định' },
+  { cat: 'case', items: newCases, imgCat: 'gamingPc', descPrefix: 'Vỏ case PC tối ưu luồng gió và không gian lắp ráp' },
+  { cat: 'cooling', items: newCooling, imgCat: 'cpu', descPrefix: 'Giải pháp tản nhiệt PC vận hành mát mẻ và ổn định' },
+  { cat: 'apple', items: newAppleProducts, imgCat: 'officePc', descPrefix: 'Thiết bị Apple chính hãng cho công việc và sáng tạo' },
   { cat: 'monitor', items: newMonitors, imgCat: 'monitor', descPrefix: 'Màn hình máy tính hiển thị sắc nét, màu sắc chuẩn xác' },
   { cat: 'keyboard', items: newKeyboards, imgCat: 'keyboard', descPrefix: 'Bàn phím cơ cao cấp cảm giác gõ êm ái, bền bỉ' },
   { cat: 'mouse', items: newMice, imgCat: 'mouse', descPrefix: 'Chuột máy tính độ chính xác cao, thao tác nhanh nhạy' },
@@ -385,7 +420,7 @@ catalogGroups.forEach(group => {
   });
 });
 
-console.log(`Prepared ${allProducts.length} new products across all 11 categories.`);
+console.log(`Prepared ${allProducts.length} new products across all ${catalogGroups.length} categories.`);
 
 async function run() {
   const connection = await mysql.createConnection({
@@ -396,6 +431,19 @@ async function run() {
   });
 
   console.log('Inserting/Upserting products into MySQL...');
+
+  const addedCategories = [
+    ['apple', 'Apple', 3, '🍎'],
+    ['case', 'Vỏ Case', 3, '🖥️'],
+    ['cooling', 'Tản nhiệt', 3, '❄️'],
+    ['mainboard', 'Bo mạch chủ', 3, '⚙️'],
+    ['psu', 'Nguồn (PSU)', 3, '🔌'],
+  ];
+  await connection.query(
+    `INSERT INTO categories (id, name, count, icon) VALUES ?
+     ON DUPLICATE KEY UPDATE name = VALUES(name), icon = VALUES(icon)`,
+    [addedCategories]
+  );
 
   const query = `
     INSERT INTO products (
