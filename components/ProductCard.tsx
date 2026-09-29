@@ -36,27 +36,7 @@ export function ProductCard({ product }: { product: any }) {
             onError={() => setImageUri(DEFAULT_IMAGE)}
             {...({ dataSet: { productImg: 'true' } } as any)}
           />
-          {badge.text ? (
-            <View style={[styles.badge, { backgroundColor: badge.bg }]}>
-              <Text style={[styles.badgeText, isMobile && { fontSize: 10 }]}>{badge.text}</Text>
-            </View>
-          ) : null}
-          <Pressable
-            style={[styles.favorite, isFav && styles.favoriteActive]}
-            {...({ dataSet: { productFav: 'true' } } as any)}
-            onPress={(e) => {
-              e?.stopPropagation?.();
-              if (!user) {
-                router.push('/login' as any);
-                return;
-              }
-              toggleWishlist(product.id);
-            }}
-          >
-            <Text style={[styles.favoriteIcon, isFav && { color: '#e11d48' }]}>
-              {isFav ? '♥' : '♡'}
-            </Text>
-          </Pressable>
+
         </View>
         <Text
           style={[styles.name, isMobile && styles.nameMobile]}
@@ -70,9 +50,18 @@ export function ProductCard({ product }: { product: any }) {
           <Text style={styles.ratingNum}>{product.rating}</Text>
           <Text style={styles.reviewCount}>({product.reviewCount})</Text>
         </View>
-        <View style={styles.priceRow}>
+        <View style={styles.priceBlock}>
+          {product.oldPrice ? (
+            <View style={styles.priceTopRow}>
+              <Text style={[styles.oldPrice, isMobile && { fontSize: 11 }]}>{formatPrice(product.oldPrice)}</Text>
+              {product.discount ? (
+                <View style={styles.discountPill}>
+                  <Text style={styles.discountPillText}>−{product.discount}%</Text>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
           <Text style={[styles.price, isMobile && styles.priceMobile]}>{formatPrice(product.price)}</Text>
-          {product.oldPrice ? <Text style={[styles.oldPrice, isMobile && { fontSize: 11 }]}>{formatPrice(product.oldPrice)}</Text> : null}
         </View>
         <View style={styles.stockRow}>
           <View
@@ -204,12 +193,14 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     fontSize: 11,
   },
-  priceRow: {
+  priceBlock: {
     marginTop: 10,
+    gap: 2,
+  },
+  priceTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    flexWrap: 'wrap',
+    gap: 6,
   },
   price: {
     color: '#dc2626',
@@ -223,6 +214,20 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     textDecorationLine: 'line-through',
     fontSize: 12,
+  },
+  discountPill: {
+    backgroundColor: '#fff1e6',
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: '#fed7aa',
+  },
+  discountPillText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#ea580c',
+    letterSpacing: 0.2,
   },
   stockRow: {
     flexDirection: 'row',

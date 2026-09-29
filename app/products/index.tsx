@@ -135,11 +135,20 @@ function ProductGridItem({
               </Text>
             )}
 
-            <View style={styles.cardPriceRow}>
-              <Text style={styles.cardPrice}>{formatPrice(item.price)}</Text>
+            <View style={styles.cardPriceBlock}>
               {item.oldPrice ? (
-                <Text style={styles.cardOldPrice}>{formatPrice(item.oldPrice)}</Text>
+                <View style={styles.cardPriceTopRow}>
+                  <Text style={styles.cardOldPrice}>{formatPrice(item.oldPrice)}</Text>
+                  {item.discount ? (
+                    <View style={styles.discountPill}>
+                      <Text style={styles.discountPillText}>−{item.discount}%</Text>
+                    </View>
+                  ) : null}
+                </View>
               ) : null}
+              <Text style={[styles.cardPrice, item.oldPrice ? styles.cardPriceSale : null]}>
+                {formatPrice(item.price)}
+              </Text>
             </View>
 
             {/* ADD TO CART BUTTON */}
@@ -987,21 +996,42 @@ const styles = StyleSheet.create({
     color: '#64748b',
     marginTop: 6,
   },
-  cardPriceRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 8,
+  cardPriceBlock: {
     marginTop: 10,
+    gap: 2,
+  },
+  cardPriceTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   cardPrice: {
     fontSize: 17,
     fontWeight: '800',
     color: '#0f172a',
   },
+  cardPriceSale: {
+    color: '#dc2626',
+    fontSize: 18,
+  },
   cardOldPrice: {
     fontSize: 12,
     color: '#94a3b8',
     textDecorationLine: 'line-through',
+  },
+  discountPill: {
+    backgroundColor: '#fff1e6',
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: '#fed7aa',
+  },
+  discountPillText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#ea580c',
+    letterSpacing: 0.2,
   },
   cardCartBtn: {
     marginTop: 12,

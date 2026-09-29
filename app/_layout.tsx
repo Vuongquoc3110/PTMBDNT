@@ -8,11 +8,26 @@ import { AppProvider, useAppContext } from '@/context/AppContext';
 import { Platform } from 'react-native';
 
 if (Platform.OS === 'web' && typeof document !== 'undefined') {
+  // Inject Be Vietnam Pro font from Google Fonts
+  const fontLinkId = 'be-vietnam-pro-font';
+  if (!document.getElementById(fontLinkId)) {
+    const link = document.createElement('link');
+    link.id = fontLinkId;
+    link.rel = 'stylesheet';
+    link.href = 'https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800;900&display=swap';
+    document.head.appendChild(link);
+  }
+
   const styleId = 'product-card-hover-styles';
   if (!document.getElementById(styleId)) {
     const style = document.createElement('style');
     style.id = styleId;
     style.textContent = `
+      /* Apply Be Vietnam Pro to text elements — no !important so icon inline styles win */
+      body, p, div, h1, h2, h3, h4, h5, h6, a, button, input, textarea, select, label, li, td, th {
+        font-family: 'Be Vietnam Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      }
+
       [data-product-card] {
         transition: transform 0.35s cubic-bezier(0.25, 1, 0.5, 1), box-shadow 0.35s ease, border-color 0.35s ease !important;
         cursor: pointer !important;
