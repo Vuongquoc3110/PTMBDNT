@@ -26,6 +26,79 @@ export type Product = {
   };
 };
 
+function getImageIdentity(imageUrl: string) {
+  try {
+    const parsedUrl = new URL(imageUrl);
+    if (parsedUrl.hostname === 'loremflickr.com') {
+      return `${parsedUrl.origin}${parsedUrl.pathname}?lock=${parsedUrl.searchParams.get('lock') ?? ''}`;
+    }
+    return `${parsedUrl.origin}${parsedUrl.pathname}`;
+  } catch {
+    return imageUrl;
+  }
+}
+
+const PRODUCT_IMAGE_OVERRIDES: Record<string, string> = {
+  'pc-game-005': 'https://media.karousell.com/media/photos/products/2024/2/16/intel_i5_14400f__rtx_4060_cust_1708075653_7e88426d_progressive.jpg',
+  'pc-game-009': 'https://media.karousell.com/media/photos/products/2023/4/14/rog_gaming_desktop_i913900_wit_1681461530_963df001_progressive.jpg',
+  'pc-game-010': 'https://down-sg.img.susercontent.com/file/sg-11134207-7reqf-m26wgnqgf8sj06',
+  'pc-game-013': 'https://os-jo.com/image/cache/catalog/GAMING-PCS/2024/101-1200x630.jpg',
+  'pc-game-017': 'https://m.media-amazon.com/images/I/81Uq5wTC1qL._AC_SL1500_.jpg',
+  'acc-001': 'https://assets.corsair.com/image/upload/c_pad,q_auto,h_1024,w_1024,f_auto/products/Liquid-Cooling/icue-link-lcd-aio/CW-9061010/iCUE_LINK_H150i_LCD_WHT_01.webp',
+  'acc-002': 'https://anphat.com.vn/media/product/45140_gi_________2_m__n_h__nh_human_motion_t9_pro_ii_dual__23___43inch__m__u_tr___ng__3_.jpg',
+  'acc-005': 'https://res.cloudinary.com/elgato-pwa/image/upload/q_auto,f_auto/v1679913984/Products/10MAB9901/above-the-fold/desktop/wave-3-black-01_zz5vyc.jpg',
+  'acc-010': 'https://bizweb.dktcdn.net/100/329/122/products/gia-do-2-man-hinh-human-motion-monitor-arm-t9-pro-ii-dual-grey-23-43-inch-t9proii-dual-gry-3ba0bef5-074d-45db-877a-bcb540c0779b.jpg?v=1728375286553',
+  'acc-014': 'https://image.benq.com/is/image/benqco/together-dark%20brown-1?$ResponsivePreset$',
+  'acc-015': 'https://res.cloudinary.com/elgato-pwa/image/upload/q_auto,f_auto/v1679475550/Products/10GBA9901/above-the-fold/desktop/mk.2-black-01_seyirh.jpg',
+  'acc-016': 'https://m.media-amazon.com/images/I/61UxqckXwAL._AC_SL1500_.jpg',
+  'acc-017': 'https://edge.rode.com/images/page/77/modules/3685/RODE_NT-USB_Mini_FRONT_DEEP_ETCHED-2000x2000-ecf456c.png',
+  'acc-018': 'https://assets.corsair.com/image/upload/c_pad,q_auto,h_1024,w_1024,f_auto/products/Gaming-Headsets/CA-9011167-NA/Gallery/ST100RGB_01.webp',
+  'acc-019': 'https://www.tomtoc.com/cdn/shop/products/A13_57ecf537-ca98-4649-81b3-792605211d87_750x.jpg?v=1772171619',
+  'acc-020': 'https://m.media-amazon.com/images/I/616FCJCE4ZL._AC_SL1083_.jpg',
+  'acc-021': 'https://nl.ugreen.com/cdn/shop/files/ugreen-revodok-pro-9-in-1-usb-c-hub-4k-hdmi-10gbps-pd-100w-4974881.png?v=1756398747&width=1024',
+  'acc-022': 'https://awessories.com/wp-content/uploads/2023/02/36253-qgperb.jpg',
+  'ram-008': 'https://images.teamgroupinc.com/products/memory/u-dimm/ddr5/delta-rgb/white/05.jpg',
+};
+
+export function getProductFallbackImage(product: { id?: string; name?: string; category?: string; category_id?: string }) {
+  const seed = `${product.id ?? ''}-${product.name ?? ''}-${product.category ?? product.category_id ?? ''}`;
+  let hash = 0;
+  for (let index = 0; index < seed.length; index += 1) {
+    hash = (hash * 31 + seed.charCodeAt(index)) >>> 0;
+  }
+  return `https://picsum.photos/seed/product-${hash.toString(36)}/1200/900`;
+}
+
+export function assignUniqueProductImages<T extends { id: string; name: string; category?: string; category_id?: string; image?: string; images?: string[] }>(items: T[]): T[] {
+  const usedImages = new Set<string>();
+
+  return items.map((item, index) => {
+    const originalImage = PRODUCT_IMAGE_OVERRIDES[item.id] || item.image || item.images?.[0];
+    const originalIdentity = originalImage ? getImageIdentity(originalImage) : '';
+    const image = originalImage && !usedImages.has(originalIdentity)
+      ? originalImage
+      : getProductFallbackImage({ ...item, id: item.id || String(index) });
+    const imageIdentity = getImageIdentity(image);
+    usedImages.add(imageIdentity);
+
+    return {
+      ...item,
+      image,
+      images: [image],
+    } as T;
+  });
+}
+
+export function normalizeProductImages<T extends { id: string; name: string; category?: string; category_id?: string; image?: string; images?: string[] }>(items: T[]): T[] {
+  const localImagesById = new Map(products.map((product) => [product.id, product.image]));
+  const productsWithCatalogImages = items.map((item) => ({
+    ...item,
+    image: localImagesById.get(item.id) ?? item.image ?? item.images?.[0],
+  }));
+
+  return assignUniqueProductImages(productsWithCatalogImages);
+}
+
 export const formatPrice = (value: number) => `${value.toLocaleString('vi-VN')} ₫`;
 
 export const categories = [
@@ -168,7 +241,7 @@ const additionalCategoryProducts: Product[] = [
   { id: 'apple-003', name: 'Apple iMac 24 inch M4 16GB 256GB', category_id: 'apple', price: 34990000, image: 'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=1000&q=80', specifications: { 'Chip': 'Apple M4', 'Màn hình': '24 inch Retina 4.5K', 'Bộ nhớ': '16GB unified memory' } },
 ].map((product, index): Product => ({
   ...product,
-  category: product.category_id,
+  category: product.category_id ?? '',
   oldPrice: Math.round((product.price * 1.1) / 10000) * 10000,
   discount: 10,
   rating: 4.8,
@@ -179,11 +252,14 @@ const additionalCategoryProducts: Product[] = [
   isSale: true,
   isHot: index % 5 === 0,
   images: [product.image],
+  specifications: Object.fromEntries(
+    Object.entries(product.specifications ?? {}).map(([key, value]) => [key, String(value ?? '')])
+  ) as Record<string, string>,
   description: `${product.name} chính hãng, phù hợp nâng cấp dàn máy và góc làm việc. Sản phẩm được kiểm tra trước khi giao và hỗ trợ bảo hành theo chính sách cửa hàng.`,
   features: ['Sản phẩm chính hãng', 'Kiểm tra kỹ trước khi giao', 'Hỗ trợ tư vấn tương thích cấu hình'],
 }));
 
-export const products: Product[] = [
+export const products: Product[] = assignUniqueProductImages([
   {
     "id": "l360-dell-001",
     "name": "[Like New] Dell G3 3500 (Core i5-10300H, 8GB, 512GB, GTX 1650 4GB, 15.6 FHD 120Hz)",
@@ -11339,7 +11415,7 @@ export const products: Product[] = [
     }
   },
   ...additionalCategoryProducts
-];
+]);
 
 export const featuredProducts = products.filter((p) => p.isFeatured || p.isHot || p.isSale);
 export const flashSaleProducts = products.filter((p) => p.isSale);

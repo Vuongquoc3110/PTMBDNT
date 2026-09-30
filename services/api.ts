@@ -1,4 +1,4 @@
-import { categories as fallbackCategories, products as fallbackProducts } from '@/data/products';
+import { categories as fallbackCategories, products as fallbackProducts, normalizeProductImages } from '@/data/products';
 
 // API configuration - MySQL backend on port 5000 (or json-server on 3000)
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000';
@@ -226,7 +226,9 @@ class ApiService {
       }
       const queryString = query.toString() ? `?${query.toString()}` : '';
       const list = await this.request<Product[]>(`/products${queryString}`);
-      return list && list.length > 0 ? list : (fallbackProducts as any);
+      return list && list.length > 0
+        ? normalizeProductImages(list)
+        : normalizeProductImages(fallbackProducts as any);
     } catch {
       // Graceful fallback with local filtering
       let result = [...(fallbackProducts as any)];
@@ -261,13 +263,14 @@ class ApiService {
       } else if (params?.sortBy === 'rating') {
         result.sort((a, b) => b.rating - a.rating);
       }
-      return result;
+      return normalizeProductImages(result);
     }
   }
 
   async getProductById(id: string): Promise<Product | null> {
     try {
-      return await this.request<Product>(`/products/${id}`);
+      const product = await this.request<Product>(`/products/${id}`);
+      return product ? normalizeProductImages([product])[0] : null;
     } catch {
       const found = fallbackProducts.find((p) => p.id === id);
       return (found as any) || (fallbackProducts[0] as any);

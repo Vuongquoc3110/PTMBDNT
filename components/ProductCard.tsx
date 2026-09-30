@@ -3,9 +3,12 @@ import React, { useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
 import { useAppContext } from '@/context/AppContext';
-import { formatPrice } from '@/data/products';
+import { formatPrice, getProductFallbackImage } from '@/data/products';
 
-const DEFAULT_IMAGE = 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=600&q=80';
+function getProductImageUri(product: any) {
+  const directImage = product?.image || product?.images?.[0];
+  return directImage || getProductFallbackImage(product);
+}
 
 function getBadgeInfo(product: any) {
   if (product.isSale) return { text: `−${product.discount}%`, bg: '#dc2626', color: '#fff' };
@@ -18,10 +21,14 @@ export function ProductCard({ product }: { product: any }) {
   const router = useRouter();
   const { toggleWishlist, isWishlisted, user } = useAppContext();
   const badge = getBadgeInfo(product);
-  const [imageUri, setImageUri] = useState(product.image || DEFAULT_IMAGE);
+  const [imageUri, setImageUri] = useState(() => getProductImageUri(product));
   const isFav = isWishlisted(product.id);
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
+
+  React.useEffect(() => {
+    setImageUri(getProductImageUri(product));
+  }, [product?.id, product?.name, product?.category, product?.image, product?.images?.[0]]);
 
   return (
     <Link href={{ pathname: '/products/[id]', params: { id: product.id } }} asChild>
@@ -33,7 +40,7 @@ export function ProductCard({ product }: { product: any }) {
           <Image
             source={{ uri: imageUri }}
             style={[styles.image, isMobile && styles.imageMobile]}
-            onError={() => setImageUri(DEFAULT_IMAGE)}
+            onError={() => setImageUri(getProductFallbackImage(product))}
             {...({ dataSet: { productImg: 'true' } } as any)}
           />
 
