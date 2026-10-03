@@ -8,7 +8,7 @@ export type Product = {
   discount?: number;
   rating: number;
   reviewCount: number;
-  stock: number;
+  stock?: number;
   isFeatured?: boolean;
   isNew?: boolean;
   isSale?: boolean;
@@ -26,28 +26,214 @@ export type Product = {
   };
 };
 
-function getImageIdentity(imageUrl: string) {
-  try {
-    const parsedUrl = new URL(imageUrl);
-    if (parsedUrl.hostname === 'loremflickr.com') {
-      return `${parsedUrl.origin}${parsedUrl.pathname}?lock=${parsedUrl.searchParams.get('lock') ?? ''}`;
-    }
-    return `${parsedUrl.origin}${parsedUrl.pathname}`;
-  } catch {
-    return imageUrl;
-  }
-}
-
 const PRODUCT_IMAGE_OVERRIDES: Record<string, string> = {
+  // ===== CPU =====
+  'cpu-001': 'https://product.hstatic.net/200000722513/product/13900k_tray_02e9fc5b99cc4b0ba925d8e3d1e90c75_grande.png',
+  'cpu-006': 'https://product.hstatic.net/200000722513/product/i5-14400f_8a2e4a4e5b8c4f8e9b2c3d4e5f6a7b8c.jpg',
+  'cpu-007': 'https://m.media-amazon.com/images/I/51-r3FqAPEL._AC_SL1500_.jpg',
+  'cpu-008': 'https://m.media-amazon.com/images/I/51grM1zcXsL._AC_SL1500_.jpg',
+  'cpu-009': 'https://m.media-amazon.com/images/I/51f2hNSr-YL._AC_SL1500_.jpg',
+  'cpu-010': 'https://m.media-amazon.com/images/I/51D4kFBrl9L._AC_SL1200_.jpg',
+  'cpu-011': 'https://m.media-amazon.com/images/I/51qnHiRUo4L._AC_SL1500_.jpg',
+  'cpu-012': 'https://m.media-amazon.com/images/I/51pW75kQ8HL._AC_SL1500_.jpg',
+  'cpu-013': 'https://m.media-amazon.com/images/I/51fsd8mMYmL._AC_SL1200_.jpg',
+  'cpu-014': 'https://m.media-amazon.com/images/I/51wGOJDxR5L._AC_SL1200_.jpg',
+  'cpu-015': 'https://m.media-amazon.com/images/I/51hLXBfnr4L._AC_SL1200_.jpg',
+  'cpu-016': 'https://m.media-amazon.com/images/I/51cS8yO-JFL._AC_SL1200_.jpg',
+  'cpu-017': 'https://m.media-amazon.com/images/I/51bvDsfeURL._AC_SL1200_.jpg',
+  'cpu-018': 'https://m.media-amazon.com/images/I/51KhB1mRF5L._AC_SL1000_.jpg',
+  'cpu-019': 'https://m.media-amazon.com/images/I/51IrOD9fLIL._AC_SL1200_.jpg',
+  'cpu-020': 'https://m.media-amazon.com/images/I/51grM1zcXsL._AC_SL1500_.jpg',
+  'cpu-021': 'https://m.media-amazon.com/images/I/41lgxJxqsqL._AC_SL1200_.jpg',
+
+  // ===== GPU =====
+  'gpu-001': 'https://m.media-amazon.com/images/I/81aUr0j4RkL._AC_SL1500_.jpg',
+  'gpu-006': 'https://dlcdnwebimgs.asus.com/gain/BA019F2B-A30B-4489-B2F3-B0CE30E0516D/w1000/h732',
+  'gpu-007': 'https://asset.msi.com/resize/image/global/product/product_173082523830ae56e27a91b3f8d81af0c36e0e7f2a_1024.png',
+  'gpu-008': 'https://m.media-amazon.com/images/I/81VBIjazMYL._AC_SL1500_.jpg',
+  'gpu-009': 'https://dlcdnwebimgs.asus.com/gain/3FAF2D64-3D9A-4A5F-9B7B-1E3DC25F31F2/w1000/h732',
+  'gpu-010': 'https://asset.msi.com/resize/image/global/product/product_167879825556febc59f90b0c9dcf9e4f6d92f37e4a_1024.png',
+  'gpu-011': 'https://m.media-amazon.com/images/I/81r3pNAyl2L._AC_SL1500_.jpg',
+  'gpu-012': 'https://m.media-amazon.com/images/I/71BcumfWKDL._AC_SL1500_.jpg',
+  'gpu-013': 'https://dlcdnwebimgs.asus.com/gain/C7B5DAA5-9A44-4BAA-9AA1-1E7896C59E8D/w1000/h732',
+  'gpu-014': 'https://m.media-amazon.com/images/I/71Mk8BR8GPL._AC_SL1500_.jpg',
+  'gpu-015': 'https://m.media-amazon.com/images/I/81SnZXjnURL._AC_SL1500_.jpg',
+  'gpu-016': 'https://m.media-amazon.com/images/I/71b5OdTO7NL._AC_SL1500_.jpg',
+  'gpu-017': 'https://m.media-amazon.com/images/I/71R-TDQ6AvL._AC_SL1500_.jpg',
+  'gpu-018': 'https://m.media-amazon.com/images/I/71a0J1DPFNL._AC_SL1500_.jpg',
+  'gpu-019': 'https://m.media-amazon.com/images/I/71sEuvJYf8L._AC_SL1500_.jpg',
+  'gpu-020': 'https://m.media-amazon.com/images/I/71uQmQo2URL._AC_SL1500_.jpg',
+  'gpu-021': 'https://asset.msi.com/resize/image/global/product/product_167879844860a5ed5e19b0d3f93d55ce01cc22ee3b_1024.png',
+
+  // ===== PC Gaming =====
   'pc-game-005': 'https://media.karousell.com/media/photos/products/2024/2/16/intel_i5_14400f__rtx_4060_cust_1708075653_7e88426d_progressive.jpg',
+  'pc-game-006': 'https://m.media-amazon.com/images/I/71EDXZ8qJ9L._AC_SL1500_.jpg',
+  'pc-game-007': 'https://m.media-amazon.com/images/I/71fRGH36u1L._AC_SL1500_.jpg',
+  'pc-game-008': 'https://m.media-amazon.com/images/I/71vFKBpKakL._AC_SL1500_.jpg',
   'pc-game-009': 'https://media.karousell.com/media/photos/products/2023/4/14/rog_gaming_desktop_i913900_wit_1681461530_963df001_progressive.jpg',
   'pc-game-010': 'https://down-sg.img.susercontent.com/file/sg-11134207-7reqf-m26wgnqgf8sj06',
+  'pc-game-011': 'https://m.media-amazon.com/images/I/71JLgo7cNwL._AC_SL1500_.jpg',
+  'pc-game-012': 'https://m.media-amazon.com/images/I/71GnGMjfURL._AC_SL1500_.jpg',
   'pc-game-013': 'https://os-jo.com/image/cache/catalog/GAMING-PCS/2024/101-1200x630.jpg',
+  'pc-game-014': 'https://m.media-amazon.com/images/I/61aFfHFiYSL._AC_SL1500_.jpg',
+  'pc-game-015': 'https://m.media-amazon.com/images/I/81c56LXZFPL._AC_SL1500_.jpg',
+  'pc-game-016': 'https://m.media-amazon.com/images/I/71pT1aoLWvL._AC_SL1500_.jpg',
   'pc-game-017': 'https://m.media-amazon.com/images/I/81Uq5wTC1qL._AC_SL1500_.jpg',
+  'pc-game-018': 'https://m.media-amazon.com/images/I/71ySV0CMJJL._AC_SL1500_.jpg',
+  'pc-game-019': 'https://m.media-amazon.com/images/I/81sESJbMVUL._AC_SL1500_.jpg',
+  'pc-game-020': 'https://m.media-amazon.com/images/I/618KFfH4LnL._AC_SL1500_.jpg',
+  'pc-game-021': 'https://m.media-amazon.com/images/I/81+J4t3CGGL._AC_SL1500_.jpg',
+
+  // ===== PC Văn Phòng =====
+  'pc-off-003': 'https://m.media-amazon.com/images/I/71CJZa0iMCL._AC_SL1500_.jpg',
+  'pc-off-004': 'https://m.media-amazon.com/images/I/61YFO1F9Y9L._AC_SL1500_.jpg',
+  'pc-off-005': 'https://m.media-amazon.com/images/I/61yq1BmN1HL._AC_SL1500_.jpg',
+  'pc-off-006': 'https://m.media-amazon.com/images/I/61DP+VvVUCL._AC_SL1500_.jpg',
+  'pc-off-007': 'https://m.media-amazon.com/images/I/71nEBRyGURL._AC_SL1500_.jpg',
+  'pc-off-008': 'https://m.media-amazon.com/images/I/71XTKFOKdoL._AC_SL1500_.jpg',
+  'pc-off-009': 'https://store.storeimages.cdn-apple.com/4982/as-images.apple.com/is/mac-mini-hero-202301?wid=904&hei=840&fmt=jpeg&qlt=90',
+  'pc-off-010': 'https://m.media-amazon.com/images/I/71Vf-AiNOwL._AC_SL1500_.jpg',
+  'pc-off-011': 'https://m.media-amazon.com/images/I/71nqe7+nVKL._AC_SL1500_.jpg',
+  'pc-off-012': 'https://m.media-amazon.com/images/I/71J+CvxPAdL._AC_SL1500_.jpg',
+  'pc-off-013': 'https://m.media-amazon.com/images/I/71HB4fUTq3L._AC_SL1500_.jpg',
+  'pc-off-014': 'https://m.media-amazon.com/images/I/71i3JCpDP5L._AC_SL1500_.jpg',
+  'pc-off-015': 'https://m.media-amazon.com/images/I/61J7EyAhGWL._AC_SL1500_.jpg',
+  'pc-off-016': 'https://m.media-amazon.com/images/I/51q1G4TuLyL._AC_SL1500_.jpg',
+  'pc-off-017': 'https://m.media-amazon.com/images/I/51QR4bUwbeL._AC_SL1500_.jpg',
+  'pc-off-018': 'https://m.media-amazon.com/images/I/71CJZa0iMCL._AC_SL1500_.jpg',
+  'pc-off-019': 'https://m.media-amazon.com/images/I/61RLmo6t5kL._AC_SL1500_.jpg',
+  'pc-off-020': 'https://m.media-amazon.com/images/I/51lNwffYt5L._AC_SL1500_.jpg',
+  'pc-off-021': 'https://store.storeimages.cdn-apple.com/4982/as-images.apple.com/is/mac-mini-hero-202301?wid=904&hei=840&fmt=jpeg&qlt=90',
+
+  // ===== Màn Hình =====
+  'mon-005': 'https://dlcdnwebimgs.asus.com/gain/EACF3E1E-1F0D-45AB-BEFE-E9C09E8E8D6A/w1000/h732',
+  'mon-006': 'https://m.media-amazon.com/images/I/81jC0sQj5dL._AC_SL1500_.jpg',
+  'mon-007': 'https://m.media-amazon.com/images/I/71JN0FYwUrl._AC_SL1500_.jpg',
+  'mon-008': 'https://m.media-amazon.com/images/I/71c3MiE4SQL._AC_SL1500_.jpg',
+  'mon-009': 'https://m.media-amazon.com/images/I/71Gfhk4ZUwL._AC_SL1500_.jpg',
+  'mon-010': 'https://m.media-amazon.com/images/I/71Lv32cWh-L._AC_SL1500_.jpg',
+  'mon-011': 'https://m.media-amazon.com/images/I/71c3MiE4SQL._AC_SL1500_.jpg',
+  'mon-012': 'https://asset.msi.com/resize/image/global/product/product_1701251287b6f81fcc61e18f86ddaf0a1f64dbb70e_1024.png',
+  'mon-013': 'https://m.media-amazon.com/images/I/81t2uhSt-RL._AC_SL1500_.jpg',
+  'mon-014': 'https://dlcdnwebimgs.asus.com/gain/FFA4D3A5-C4A4-4BA5-94C6-B2D07B1DE7F2/w1000/h732',
+  'mon-015': 'https://m.media-amazon.com/images/I/71T4SSTdVHL._AC_SL1500_.jpg',
+  'mon-016': 'https://m.media-amazon.com/images/I/71xxQm2hFbL._AC_SL1500_.jpg',
+  'mon-017': 'https://dlcdnwebimgs.asus.com/gain/08FE993B-0C4E-4B89-B3E2-B6E16B19E8CE/w1000/h732',
+  'mon-018': 'https://dlcdnwebimgs.asus.com/gain/C01D0EC0-6EE3-4CCB-8C95-4D0F57B3D3E0/w1000/h732',
+  'mon-019': 'https://m.media-amazon.com/images/I/71UVrBpHqKL._AC_SL1500_.jpg',
+  'mon-020': 'https://m.media-amazon.com/images/I/71Uix7CdWXL._AC_SL1500_.jpg',
+  'mon-021': 'https://m.media-amazon.com/images/I/71pMLkJHNQL._AC_SL1500_.jpg',
+
+  // ===== Bàn Phím =====
+  'kb-004': 'https://m.media-amazon.com/images/I/71RUm0i6ZjL._AC_SL1500_.jpg',
+  'kb-005': 'https://m.media-amazon.com/images/I/71P5bGJDm1L._AC_SL1500_.jpg',
+  'kb-006': 'https://m.media-amazon.com/images/I/71ZwVK6kSeL._AC_SL1500_.jpg',
+  'kb-007': 'https://assets.corsair.com/image/upload/c_pad,q_auto,h_1024,w_1024,f_auto/products/Gaming-Keyboards/CH-912A01A-NA/Gallery/K100_01.webp',
+  'kb-008': 'https://m.media-amazon.com/images/I/71ysN9XjFOL._AC_SL1500_.jpg',
+  'kb-009': 'https://m.media-amazon.com/images/I/71XAE3H-3OL._AC_SL1500_.jpg',
+  'kb-010': 'https://m.media-amazon.com/images/I/71B0YJHBsKL._AC_SL1500_.jpg',
+  'kb-011': 'https://m.media-amazon.com/images/I/61Zt4vF7JmL._AC_SL1500_.jpg',
+  'kb-012': 'https://m.media-amazon.com/images/I/61j-0-BZOBL._AC_SL1500_.jpg',
+  'kb-013': 'https://m.media-amazon.com/images/I/71xChy84HbL._AC_SL1500_.jpg',
+  'kb-014': 'https://m.media-amazon.com/images/I/61GNLP1JDHL._AC_SL1500_.jpg',
+  'kb-015': 'https://m.media-amazon.com/images/I/71kGy3TRm3L._AC_SL1500_.jpg',
+  'kb-016': 'https://m.media-amazon.com/images/I/71oSn7S3SQL._AC_SL1500_.jpg',
+  'kb-017': 'https://m.media-amazon.com/images/I/71rQ4HQSTRL._AC_SL1500_.jpg',
+  'kb-018': 'https://m.media-amazon.com/images/I/61mRPWQzZ3L._AC_SL1500_.jpg',
+  'kb-019': 'https://m.media-amazon.com/images/I/51u8dM+p0kL._AC_SL1500_.jpg',
+  'kb-020': 'https://dlcdnwebimgs.asus.com/gain/0D95E0B3-2B6E-4C5A-96A6-6E5ECF26D5A0/w1000/h732',
+  'kb-021': 'https://store.storeimages.cdn-apple.com/4982/as-images.apple.com/is/MK2C3?wid=1144&hei=1144&fmt=jpeg&qlt=90',
+
+  // ===== Chuột =====
+  'mouse-004': 'https://m.media-amazon.com/images/I/61mpMH5TzkL._AC_SL1500_.jpg',
+  'mouse-005': 'https://m.media-amazon.com/images/I/61BtCjJcHdL._AC_SL1500_.jpg',
+  'mouse-006': 'https://m.media-amazon.com/images/I/61MR-aq0EUL._AC_SL1500_.jpg',
+  'mouse-007': 'https://m.media-amazon.com/images/I/61ni3t1ryQL._AC_SL1500_.jpg',
+  'mouse-008': 'https://m.media-amazon.com/images/I/51Bj8G7FQnL._AC_SL1500_.jpg',
+  'mouse-009': 'https://m.media-amazon.com/images/I/61a0Lkx1pHL._AC_SL1500_.jpg',
+  'mouse-010': 'https://m.media-amazon.com/images/I/61oqD-jLz4L._AC_SL1500_.jpg',
+  'mouse-011': 'https://m.media-amazon.com/images/I/41k5IQfg3cL._AC_SL1500_.jpg',
+  'mouse-012': 'https://dlcdnwebimgs.asus.com/gain/DF08A5E3-1E3A-46C0-B60D-D2F60A1A4C66/w1000/h732',
+  'mouse-013': 'https://m.media-amazon.com/images/I/61UKTnxPiLL._AC_SL1500_.jpg',
+  'mouse-014': 'https://m.media-amazon.com/images/I/61CqXHfN8YL._AC_SL1500_.jpg',
+  'mouse-015': 'https://m.media-amazon.com/images/I/51ApmJXV6RL._AC_SL1500_.jpg',
+  'mouse-016': 'https://m.media-amazon.com/images/I/51sJb7pq+oL._AC_SL1500_.jpg',
+  'mouse-017': 'https://m.media-amazon.com/images/I/71pNCVXuIBL._AC_SL1500_.jpg',
+  'mouse-018': 'https://m.media-amazon.com/images/I/61DACB-IVSL._AC_SL1500_.jpg',
+  'mouse-019': 'https://store.storeimages.cdn-apple.com/4982/as-images.apple.com/is/MK2C3?wid=1144&hei=1144&fmt=jpeg&qlt=90',
+  'mouse-020': 'https://m.media-amazon.com/images/I/61lqVfDSr7L._AC_SL1500_.jpg',
+  'mouse-021': 'https://m.media-amazon.com/images/I/61N1fOqdc7L._AC_SL1500_.jpg',
+
+  // ===== Tai Nghe =====
+  'hs-004': 'https://m.media-amazon.com/images/I/71bsoe+VLqL._AC_SL1500_.jpg',
+  'hs-005': 'https://m.media-amazon.com/images/I/71NVKzLt5rL._AC_SL1500_.jpg',
+  'hs-006': 'https://m.media-amazon.com/images/I/71-+rFBzP7L._AC_SL1500_.jpg',
+  'hs-007': 'https://m.media-amazon.com/images/I/71Q3LRiGbNL._AC_SL1500_.jpg',
+  'hs-008': 'https://assets.corsair.com/image/upload/c_pad,q_auto,h_1024,w_1024,f_auto/products/Gaming-Headsets/CA-9011235-NA/Gallery/VIRTUOSO_RGB_XT_01.webp',
+  'hs-009': 'https://m.media-amazon.com/images/I/71g7ZWUU+BL._AC_SL1500_.jpg',
+  'hs-010': 'https://m.media-amazon.com/images/I/71B1xgZ53nL._AC_SL1500_.jpg',
+  'hs-011': 'https://m.media-amazon.com/images/I/61HWfP1GstL._AC_SL1500_.jpg',
+  'hs-012': 'https://dlcdnwebimgs.asus.com/gain/0D695C70-8C5A-4B91-A69B-7B03F4F56D8C/w1000/h732',
+  'hs-013': 'https://m.media-amazon.com/images/I/71E1vd4bVQL._AC_SL1500_.jpg',
+  'hs-014': 'https://m.media-amazon.com/images/I/71CMDaaJRWL._AC_SL1500_.jpg',
+  'hs-015': 'https://m.media-amazon.com/images/I/61EhxQT18qL._AC_SL1500_.jpg',
+  'hs-016': 'https://m.media-amazon.com/images/I/71uT6bJaYyL._AC_SL1500_.jpg',
+  'hs-017': 'https://m.media-amazon.com/images/I/61CGLp6eDzL._AC_SL1500_.jpg',
+  'hs-018': 'https://m.media-amazon.com/images/I/71TLpoYW3yL._AC_SL1500_.jpg',
+  'hs-019': 'https://store.storeimages.cdn-apple.com/4982/as-images.apple.com/is/airpods-max-hero-select-202011?wid=940&hei=1112&fmt=jpeg&qlt=90',
+  'hs-020': 'https://m.media-amazon.com/images/I/51aXvjzcukL._AC_SL1500_.jpg',
+  'hs-021': 'https://m.media-amazon.com/images/I/51vGnhajV0L._AC_SL1500_.jpg',
+
+  // ===== RAM =====
+  'ram-004': 'https://assets.corsair.com/image/upload/c_pad,q_auto,h_1024,w_1024,f_auto/products/Memory/CMT32GX5M2X6000C30/Gallery/DOM_TITANIUM_WHITE_01.webp',
+  'ram-005': 'https://m.media-amazon.com/images/I/71pTbVr0URL._AC_SL1500_.jpg',
+  'ram-006': 'https://m.media-amazon.com/images/I/71xHdFuPFxL._AC_SL1500_.jpg',
+  'ram-007': 'https://m.media-amazon.com/images/I/71LkPdIBMdL._AC_SL1500_.jpg',
+  'ram-008': 'https://images.teamgroupinc.com/products/memory/u-dimm/ddr5/delta-rgb/white/05.jpg',
+  'ram-009': 'https://assets.corsair.com/image/upload/c_pad,q_auto,h_1024,w_1024,f_auto/products/Memory/CMH32GX5M2E5200C40/Gallery/VENGEANCE_RGB_DDR5_BLK_01.webp',
+  'ram-010': 'https://m.media-amazon.com/images/I/71JpfbPpNuL._AC_SL1500_.jpg',
+  'ram-011': 'https://m.media-amazon.com/images/I/71A6qPO0SIL._AC_SL1500_.jpg',
+  'ram-012': 'https://assets.corsair.com/image/upload/c_pad,q_auto,h_1024,w_1024,f_auto/products/Memory/CMK16GX4M2B3200C16/Gallery/VENGEANCE_LPX_BLK_01.webp',
+  'ram-013': 'https://m.media-amazon.com/images/I/71LFxZXLJdL._AC_SL1500_.jpg',
+  'ram-014': 'https://assets.corsair.com/image/upload/c_pad,q_auto,h_1024,w_1024,f_auto/products/Memory/CMW16GX4M2C3200C16/Gallery/VENGEANCE_RGB_PRO_BLK_01.webp',
+  'ram-015': 'https://m.media-amazon.com/images/I/81lhpYvhJ1L._AC_SL1500_.jpg',
+  'ram-016': 'https://assets.corsair.com/image/upload/c_pad,q_auto,h_1024,w_1024,f_auto/products/Memory/CMT64GX5M2B5600C36/Gallery/DOM_PLATINUM_RGB_DDR5_BLK_01.webp',
+  'ram-017': 'https://m.media-amazon.com/images/I/61rGf2WKMDL._AC_SL1500_.jpg',
+  'ram-018': 'https://m.media-amazon.com/images/I/71GiPD+LMxL._AC_SL1500_.jpg',
+  'ram-019': 'https://m.media-amazon.com/images/I/71sOQf5BKZL._AC_SL1500_.jpg',
+  'ram-020': 'https://m.media-amazon.com/images/I/71-+rFBzP7L._AC_SL1500_.jpg',
+  'ram-021': 'https://m.media-amazon.com/images/I/71uy+X4YSEL._AC_SL1500_.jpg',
+
+  // ===== SSD =====
+  'ssd-004': 'https://m.media-amazon.com/images/I/71MbMLMnxBL._AC_SL1500_.jpg',
+  'ssd-005': 'https://m.media-amazon.com/images/I/71qhSGGlLjL._AC_SL1500_.jpg',
+  'ssd-006': 'https://m.media-amazon.com/images/I/71gt0PKnkvL._AC_SL1500_.jpg',
+  'ssd-007': 'https://m.media-amazon.com/images/I/71gt0PKnkvL._AC_SL1500_.jpg',
+  'ssd-008': 'https://m.media-amazon.com/images/I/71pOEJDul3L._AC_SL1500_.jpg',
+  'ssd-009': 'https://m.media-amazon.com/images/I/71k8B7ZGrVL._AC_SL1500_.jpg',
+  'ssd-010': 'https://m.media-amazon.com/images/I/71QLCBwWaHL._AC_SL1500_.jpg',
+  'ssd-011': 'https://m.media-amazon.com/images/I/71QLCBwWaHL._AC_SL1500_.jpg',
+  'ssd-012': 'https://m.media-amazon.com/images/I/71f6AWGBjGL._AC_SL1500_.jpg',
+  'ssd-013': 'https://m.media-amazon.com/images/I/71v8m3OVRTL._AC_SL1500_.jpg',
+  'ssd-014': 'https://m.media-amazon.com/images/I/71RnbSp5OzL._AC_SL1500_.jpg',
+  'ssd-015': 'https://m.media-amazon.com/images/I/71RnbSp5OzL._AC_SL1500_.jpg',
+  'ssd-016': 'https://m.media-amazon.com/images/I/71RJR50MBVL._AC_SL1500_.jpg',
+  'ssd-017': 'https://m.media-amazon.com/images/I/71DGrr58SGL._AC_SL1500_.jpg',
+  'ssd-018': 'https://m.media-amazon.com/images/I/71DGrr58SGL._AC_SL1500_.jpg',
+  'ssd-019': 'https://m.media-amazon.com/images/I/71CAS9Ce3bL._AC_SL1500_.jpg',
+  'ssd-020': 'https://m.media-amazon.com/images/I/71e-gNjhJNL._AC_SL1500_.jpg',
+  'ssd-021': 'https://assets.corsair.com/image/upload/c_pad,q_auto,h_1024,w_1024,f_auto/products/Storage/CSSD-F1000GBMP600PLP/Gallery/MP600PRO_LPX_01.webp',
+
+  // ===== Phụ Kiện =====
   'acc-001': 'https://assets.corsair.com/image/upload/c_pad,q_auto,h_1024,w_1024,f_auto/products/Liquid-Cooling/icue-link-lcd-aio/CW-9061010/iCUE_LINK_H150i_LCD_WHT_01.webp',
   'acc-002': 'https://anphat.com.vn/media/product/45140_gi_________2_m__n_h__nh_human_motion_t9_pro_ii_dual__23___43inch__m__u_tr___ng__3_.jpg',
+  'acc-003': 'https://www.sihoo.com/cdn/shop/files/C300-b.webp?crop=center&height=1200&v=1744277516&width=1200',
+  'acc-004': 'https://product.hstatic.net/200000722513/product/ing-ghe-corsair-t3-rush-charcoal-6666_06d6e0d13f64400cbdca9939fafe1acd_df1e20ad6e3c45c18e2e2d8ff3ce2dc1.jpg',
   'acc-005': 'https://res.cloudinary.com/elgato-pwa/image/upload/q_auto,f_auto/v1679913984/Products/10MAB9901/above-the-fold/desktop/wave-3-black-01_zz5vyc.jpg',
   'acc-010': 'https://bizweb.dktcdn.net/100/329/122/products/gia-do-2-man-hinh-human-motion-monitor-arm-t9-pro-ii-dual-grey-23-43-inch-t9proii-dual-gry-3ba0bef5-074d-45db-877a-bcb540c0779b.jpg?v=1728375286553',
+  'acc-011': 'https://m.media-amazon.com/images/I/61k-FNOGzFL._AC_SL1500_.jpg',
+  'acc-012': 'https://product.hstatic.net/200000722513/product/_q100_crop-fit_optimize_subsampling-2_2ef1b8fbb6e74381b1329502470db19b_85d69bcef1664de3a6852008a87d5ef5.png',
+  'acc-013': 'https://m.media-amazon.com/images/I/71Lq7x+N5cL._AC_SL1500_.jpg',
   'acc-014': 'https://image.benq.com/is/image/benqco/together-dark%20brown-1?$ResponsivePreset$',
   'acc-015': 'https://res.cloudinary.com/elgato-pwa/image/upload/q_auto,f_auto/v1679475550/Products/10GBA9901/above-the-fold/desktop/mk.2-black-01_seyirh.jpg',
   'acc-016': 'https://m.media-amazon.com/images/I/61UxqckXwAL._AC_SL1500_.jpg',
@@ -57,46 +243,442 @@ const PRODUCT_IMAGE_OVERRIDES: Record<string, string> = {
   'acc-020': 'https://m.media-amazon.com/images/I/616FCJCE4ZL._AC_SL1083_.jpg',
   'acc-021': 'https://nl.ugreen.com/cdn/shop/files/ugreen-revodok-pro-9-in-1-usb-c-hub-4k-hdmi-10gbps-pd-100w-4974881.png?v=1756398747&width=1024',
   'acc-022': 'https://awessories.com/wp-content/uploads/2023/02/36253-qgperb.jpg',
-  'ram-008': 'https://images.teamgroupinc.com/products/memory/u-dimm/ddr5/delta-rgb/white/05.jpg',
+
+  // ===== Mainboard =====
+  'mainboard-001': 'https://product.hstatic.net/200000722513/product/w800__1__285a1e0af5884ca2a8082411c34057f4.png',
+  'mainboard-002': 'https://anphat.com.vn/media/lib/23-11-2023/46992_mainboard_msi_pro_b650m_a_wifi_ddr5__2_.jpg',
+  'mainboard-003': 'https://static.gigabyte.com/StaticFile/Image/Global/2e0808b0ad314b6b2319ac3fc1858e8f/ProductRemoveBg/34198/webp/900',
+
+  // ===== Nguồn (PSU) =====
+  'psu-001': 'https://assets.corsair.com/image/upload/c_pad,q_auto,h_1024,w_1024,f_auto/v1680126577/products/Power-Supply-Units/base-rme-series-2023-psu-config/Gallery/750W/RM750e_01.webp',
+  'psu-002': 'https://hanoicomputercdn.com/media/product/55275_cooler_master_mwe_650_bronze_v2__1_.jpg',
+  'psu-003': 'https://dlcdnwebimgs.asus.com/gain/469D42A6-4F0A-470F-BE7C-F5F68E3E7799',
+
+  // ===== Vỏ Case =====
+  'case-001': 'https://assets.corsair.com/image/upload/c_pad,q_auto,h_1024,w_1024,f_auto/products/Cases/CC-9011200-WW/Gallery/4000D_AF_BLK_01.webp',
+  'case-002': 'https://m.media-amazon.com/images/I/71jMUlT5SQL._AC_SL1500_.jpg',
+  'case-003': 'https://m.media-amazon.com/images/I/71ydEf0CEML._AC_SL1500_.jpg',
+
+  // ===== Tản Nhiệt =====
+  'cooling-001': 'https://www.deepcool.com/public/ProductFile/DEEPCOOL/Cooling/CPUAirCoolers/AK620_DIGITAL/Gallery/4000X4000/03.png',
+  'cooling-002': 'https://anphat.com.vn/media/product/40061_e.jpg',
+  'cooling-003': 'https://assets.corsair.com/image/upload/c_pad,q_auto,h_1024,w_1024,f_auto/products/Liquid-Cooling/icue-link-lcd-aio/CW-9061010/iCUE_LINK_H150i_LCD_WHT_01.webp',
+
+  // ===== Apple =====
+  'apple-001': 'https://store.storeimages.cdn-apple.com/4982/as-images.apple.com/is/mba13-m4-midnight-select-202502?wid=904&hei=840&fmt=jpeg&qlt=90',
+  'apple-002': 'https://cdsassets.apple.com/live/7WUAS350/images/tech-specs/mac-mini-2024.png',
+  'apple-003': 'https://www.apple.com/v/imac/w/images/overview/welcome/welcome_hero__f23bdvt2rzam_medium_2x.jpg',
 };
 
+const CATEGORY_PRODUCT_IMAGES: Record<string, string[]> = {
+  laptop: [
+    'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1525547719571-a2d4ac8945e2?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1541807084-5c52b6b3adef?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1588872657578-7efd1f1555ed?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1593642632823-8f785ba67e45?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1593642632559-0c6d3fc62b89?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1602080858428-57174f9431cf?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1611186871348-b1ce696e52c9?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1603302576837-37561b2e2302?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1531297484001-80022131f5a1?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1484788984921-03950022c9ef?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1542393545-10f5cde2c810?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1629131726692-1accd0c53ce0?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1587614382346-4ec70e388b28?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1504707748692-419802cf939d?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1585004216568-7910f84e39e8?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1580522154071-c6ca47a859ad?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1618410320928-25228d811631?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1640955014216-75201056c829?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1624823183493-ed5832f48f18?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1609921212029-bb5a28e60960?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1515343480029-43cdfe6b6aae?auto=format&fit=crop&w=800&q=85',
+  ],
+  'gaming-pc': [
+    'https://images.unsplash.com/photo-1587202372583-49330a15584d?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1593640408182-31c70c8268f5?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1587202372775-e229f172b9d7?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1547082299-de196ea013d6?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1616588589676-62b3bd4ff6d2?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1593642702821-c8da6771f0c6?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1600861194942-f883de0dfe96?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1587831990711-23ca6441447b?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1624705002806-5d72df19c3ad?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1603481588273-2f908a9a7a1b?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1625842268584-8f3296236761?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1591488320449-011701bb6704?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1607853202273-797f1c22a38e?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1612287230202-1ff1d85d1bdf?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1598550476439-6847785fdd52?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1626508035297-5afabf3bbdf0?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1591290621835-1d04d7e66efc?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1622979135225-d2ba269cf1ac?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1609921205586-7e8a57516512?auto=format&fit=crop&w=800&q=85',
+  ],
+  'office-pc': [
+    'https://images.unsplash.com/photo-1593640408182-31c70c8268f5?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1517059224940-d4af9eec41b7?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1527443224154-c4a3942d3acf?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1497215728101-856f4ea42174?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1593642634315-48f5414c3ad9?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1587829741301-dc798b83add3?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1499951360447-b19be8fe80f5?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1542744173-8e7e53415bb0?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1524758631624-e2822e304c36?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1565106430482-8f6e74349ca1?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1547082299-de196ea013d6?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1600880292089-90a7e086ee0c?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1587614382346-4ec70e388b28?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1518455027359-f3f8164ba6bd?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1527689368864-3a821dbccc34?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1537498425277-c283d32ef9db?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1585256469700-2d48e0b2cb40?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1605152276897-4f618f831968?auto=format&fit=crop&w=800&q=85',
+  ],
+  cpu: [
+    'https://images.unsplash.com/photo-1555680202-c86f0e12f086?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1591799264318-7e6ef8ddb7ea?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1587202372775-e229f172b9d7?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1629654297299-c8506221ca97?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1587202372634-32705e3bf49c?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1597872200969-2b65d56bd16b?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1563013544-824ae1b704d3?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1562976540-1502c2145186?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1601737487795-dab272f52420?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1640955014216-75201056c829?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1592664474505-51c549ad15c5?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1555617778-02518510b9fa?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1598550476439-6847785fdd52?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1541140532154-b024d705b909?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1588508065123-287b28e013da?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1600861194942-f883de0dfe96?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1625842268584-8f3296236761?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1531297484001-80022131f5a1?auto=format&fit=crop&w=800&q=85',
+  ],
+  gpu: [
+    'https://images.unsplash.com/photo-1591488320449-011701bb6704?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1587202372616-b43abea06c2a?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1591290621835-1d04d7e66efc?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1624705002806-5d72df19c3ad?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1603481588273-2f908a9a7a1b?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1587202372583-49330a15584d?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1587202372775-e229f172b9d7?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1616588589676-62b3bd4ff6d2?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1593640408182-31c70c8268f5?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1555680202-c86f0e12f086?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1598550476439-6847785fdd52?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1600861194942-f883de0dfe96?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1625842268584-8f3296236761?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1593642702821-c8da6771f0c6?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1612287230202-1ff1d85d1bdf?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1622979135225-d2ba269cf1ac?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1587831990711-23ca6441447b?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1609921205586-7e8a57516512?auto=format&fit=crop&w=800&q=85',
+  ],
+  ram: [
+    'https://images.unsplash.com/photo-1562976540-1502c2145186?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1555680202-c86f0e12f086?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1541140532154-b024d705b909?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1591799264318-7e6ef8ddb7ea?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1597872200969-2b65d56bd16b?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1629654297299-c8506221ca97?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1587202372634-32705e3bf49c?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1587202372775-e229f172b9d7?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1563013544-824ae1b704d3?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1588508065123-287b28e013da?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1601737487795-dab272f52420?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1592664474505-51c549ad15c5?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1555617778-02518510b9fa?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1598550476439-6847785fdd52?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1600861194942-f883de0dfe96?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1625842268584-8f3296236761?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1531297484001-80022131f5a1?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1640955014216-75201056c829?auto=format&fit=crop&w=800&q=85',
+  ],
+  ssd: [
+    'https://images.unsplash.com/photo-1563013544-824ae1b704d3?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1597872200969-2b65d56bd16b?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1555680202-c86f0e12f086?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1591799264318-7e6ef8ddb7ea?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1587202372775-e229f172b9d7?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1588508065123-287b28e013da?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1562976540-1502c2145186?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1629654297299-c8506221ca97?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1587202372634-32705e3bf49c?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1541140532154-b024d705b909?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1601737487795-dab272f52420?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1555617778-02518510b9fa?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1592664474505-51c549ad15c5?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1598550476439-6847785fdd52?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1600861194942-f883de0dfe96?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1531297484001-80022131f5a1?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1625842268584-8f3296236761?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1640955014216-75201056c829?auto=format&fit=crop&w=800&q=85',
+  ],
+  monitor: [
+    'https://images.unsplash.com/photo-1527443224154-c4a3942d3acf?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1547658719-da2b51169166?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1585792180666-f7347c490ee2?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1551645120-d70bfe84c826?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1593642532744-d377ab507dc8?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1527443224154-c4a3942d3acf?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1605773527852-c546a8584ea3?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1593642634443-44adaa06623a?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1615663245857-ac93bb7c39e7?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1593642702821-c8da6771f0c6?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1616588589676-62b3bd4ff6d2?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1600861194942-f883de0dfe96?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1531297484001-80022131f5a1?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1499951360447-b19be8fe80f5?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1542744173-8e7e53415bb0?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1587831990711-23ca6441447b?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1609921205586-7e8a57516512?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1622979135225-d2ba269cf1ac?auto=format&fit=crop&w=800&q=85',
+  ],
+  keyboard: [
+    'https://images.unsplash.com/photo-1587829741301-dc798b83add3?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1618384887929-16ec33fab9ef?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1595225476474-87563907a212?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1511467687858-23d96c32e4ae?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1563191911-e65f8655ebf9?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1541140532154-b024d705b909?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1587202372634-32705e3bf49c?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1600861194942-f883de0dfe96?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1609921212029-bb5a28e60960?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1625842268584-8f3296236761?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1612287230202-1ff1d85d1bdf?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1580522154071-c6ca47a859ad?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1531297484001-80022131f5a1?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1587831990711-23ca6441447b?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1640955014216-75201056c829?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1622979135225-d2ba269cf1ac?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1555680202-c86f0e12f086?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1601737487795-dab272f52420?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1609921205586-7e8a57516512?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1592664474505-51c549ad15c5?auto=format&fit=crop&w=800&q=85',
+  ],
+  mouse: [
+    'https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1615663245857-ac93bb7c39e7?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1605773527852-c546a8584ea3?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1593642634443-44adaa06623a?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1527443224154-c4a3942d3acf?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1625842268584-8f3296236761?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1587831990711-23ca6441447b?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1600861194942-f883de0dfe96?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1612287230202-1ff1d85d1bdf?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1609921205586-7e8a57516512?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1622979135225-d2ba269cf1ac?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1640955014216-75201056c829?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1531297484001-80022131f5a1?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1580522154071-c6ca47a859ad?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1601737487795-dab272f52420?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1593642702821-c8da6771f0c6?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1587202372634-32705e3bf49c?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1555680202-c86f0e12f086?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1592664474505-51c549ad15c5?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1609921212029-bb5a28e60960?auto=format&fit=crop&w=800&q=85',
+  ],
+  headset: [
+    'https://images.unsplash.com/photo-1583394838336-acd977736f90?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1546435770-a3e426bf472b?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1484704849700-f032a568e944?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1524678606370-a47ad25cb82a?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1545127398-14699f92334b?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1600861194942-f883de0dfe96?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1612287230202-1ff1d85d1bdf?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1609921212029-bb5a28e60960?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1625842268584-8f3296236761?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1587831990711-23ca6441447b?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1531297484001-80022131f5a1?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1622979135225-d2ba269cf1ac?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1609921205586-7e8a57516512?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1640955014216-75201056c829?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1555680202-c86f0e12f086?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1580522154071-c6ca47a859ad?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1601737487795-dab272f52420?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1592664474505-51c549ad15c5?auto=format&fit=crop&w=800&q=85',
+  ],
+  mainboard: [
+    'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1591799264318-7e6ef8ddb7ea?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1587202372634-32705e3bf49c?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1555680202-c86f0e12f086?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1562976540-1502c2145186?auto=format&fit=crop&w=800&q=85',
+  ],
+  psu: [
+    'https://images.unsplash.com/photo-1593640408182-31c70c8268f5?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1587202372583-49330a15584d?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1587202372775-e229f172b9d7?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1547082299-de196ea013d6?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1555680202-c86f0e12f086?auto=format&fit=crop&w=800&q=85',
+  ],
+  case: [
+    'https://images.unsplash.com/photo-1587202372583-49330a15584d?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1593640408182-31c70c8268f5?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1616588589676-62b3bd4ff6d2?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1593642702821-c8da6771f0c6?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1587831990711-23ca6441447b?auto=format&fit=crop&w=800&q=85',
+  ],
+  cooling: [
+    'https://images.unsplash.com/photo-1587202372583-49330a15584d?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1587202372775-e229f172b9d7?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1591799264318-7e6ef8ddb7ea?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1555680202-c86f0e12f086?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1593640408182-31c70c8268f5?auto=format&fit=crop&w=800&q=85',
+  ],
+  apple: [
+    'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1611186871348-b1ce696e52c9?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1541807084-5c52b6b3adef?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1602080858428-57174f9431cf?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=800&q=85',
+  ],
+  accessories: [
+    'https://images.unsplash.com/photo-1593305841991-05c297ba4575?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1588508065123-287b28e013da?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1593642702821-c8da6771f0c6?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1587829741301-dc798b83add3?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1600861194942-f883de0dfe96?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1612287230202-1ff1d85d1bdf?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1609921212029-bb5a28e60960?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1625842268584-8f3296236761?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1587831990711-23ca6441447b?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1531297484001-80022131f5a1?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1622979135225-d2ba269cf1ac?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1609921205586-7e8a57516512?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1640955014216-75201056c829?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1555680202-c86f0e12f086?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1580522154071-c6ca47a859ad?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1601737487795-dab272f52420?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1592664474505-51c549ad15c5?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1555617778-02518510b9fa?auto=format&fit=crop&w=800&q=85',
+  ],
+  chair: [
+    'https://www.sihoo.com/cdn/shop/files/C300-b.webp?crop=center&height=1200&v=1744277516&width=1200',
+    'https://product.hstatic.net/200000722513/product/ing-ghe-corsair-t3-rush-charcoal-6666_06d6e0d13f64400cbdca9939fafe1acd_df1e20ad6e3c45c18e2e2d8ff3ce2dc1.jpg',
+  ],
+  mousepad: ['https://product.hstatic.net/200000722513/product/_q100_crop-fit_optimize_subsampling-2_2ef1b8fbb6e74381b1329502470db19b_85d69bcef1664de3a6852008a87d5ef5.png'],
+  webcam: ['https://m.media-amazon.com/images/I/61UxqckXwAL._AC_SL1500_.jpg'],
+  microphone: ['https://edge.rode.com/images/page/77/modules/3685/RODE_NT-USB_Mini_FRONT_DEEP_ETCHED-2000x2000-ecf456c.png'],
+  default: [
+    'https://images.unsplash.com/photo-1593640408182-31c70c8268f5?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1531297484001-80022131f5a1?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1600861194942-f883de0dfe96?auto=format&fit=crop&w=800&q=85',
+  ],
+};
+
+function getProductImageCategory(product: { name?: string; category?: string; category_id?: string }) {
+  const category = (product.category_id || product.category || '').toLowerCase().trim();
+  if (category && category !== 'accessories') return category;
+
+  const name = (product.name || '').toLowerCase();
+  if (/ghế|chair/.test(name)) return 'chair';
+  if (/lót chuột|bàn di chuột|mouse ?pad/.test(name)) return 'mousepad';
+  if (/màn hình|monitor|screenbar|giá treo màn/.test(name)) return 'monitor';
+  if (/bàn phím|keyboard|stream deck/.test(name)) return 'keyboard';
+  if (/chuột|mouse/.test(name)) return 'mouse';
+  if (/tai nghe|headset|headphone/.test(name)) return 'headset';
+  if (/tản nhiệt|cooler|heatsink/.test(name)) return 'cooling';
+  if (/webcam|camera/.test(name)) return 'webcam';
+  if (/micro|microphone/.test(name)) return 'microphone';
+  if (/laptop|sạc|adapter|balo|túi chống sốc/.test(name)) return 'laptop';
+  return category || 'default';
+}
+
 export function getProductFallbackImage(product: { id?: string; name?: string; category?: string; category_id?: string }) {
-  const seed = `${product.id ?? ''}-${product.name ?? ''}-${product.category ?? product.category_id ?? ''}`;
+  const category = getProductImageCategory(product);
+  const imagePool = CATEGORY_PRODUCT_IMAGES[category] ?? CATEGORY_PRODUCT_IMAGES.default;
+  const seed = `${product.id ?? ''}-${product.name ?? ''}`;
   let hash = 0;
   for (let index = 0; index < seed.length; index += 1) {
     hash = (hash * 31 + seed.charCodeAt(index)) >>> 0;
   }
-  return `https://picsum.photos/seed/product-${hash.toString(36)}/1200/900`;
+  return imagePool[hash % imagePool.length];
 }
 
 export function assignUniqueProductImages<T extends { id: string; name: string; category?: string; category_id?: string; image?: string; images?: string[] }>(items: T[]): T[] {
-  const usedImages = new Set<string>();
+  // Track which image index has been assigned per category to guarantee uniqueness
+  const categoryCounters: Record<string, number> = {};
 
-  return items.map((item, index) => {
-    const originalImage = PRODUCT_IMAGE_OVERRIDES[item.id] || item.image || item.images?.[0];
-    const originalIdentity = originalImage ? getImageIdentity(originalImage) : '';
-    const image = originalImage && !usedImages.has(originalIdentity)
-      ? originalImage
-      : getProductFallbackImage({ ...item, id: item.id || String(index) });
-    const imageIdentity = getImageIdentity(image);
-    usedImages.add(imageIdentity);
+  return items.map((item) => {
+    // 1. Products with explicit overrides keep their own image
+    if (PRODUCT_IMAGE_OVERRIDES[item.id]) {
+      const image = PRODUCT_IMAGE_OVERRIDES[item.id];
+      return { ...item, image, images: [image] } as T;
+    }
 
-    return {
-      ...item,
-      image,
-      images: [image],
-    } as T;
+    // 2. Products that already have a unique non-unsplash image (e.g. laptop360.net) keep it
+    if (
+      item.image &&
+      !item.image.includes('unsplash.com') &&
+      item.image.startsWith('http')
+    ) {
+      return { ...item, image: item.image, images: [item.image] } as T;
+    }
+
+    // 3. Assign from the pool sequentially to guarantee unique images per category
+    const category = getProductImageCategory(item);
+    const imagePool = CATEGORY_PRODUCT_IMAGES[category] ?? CATEGORY_PRODUCT_IMAGES.default;
+
+    if (!categoryCounters[category]) {
+      categoryCounters[category] = 0;
+    }
+    const idx = categoryCounters[category];
+    categoryCounters[category] += 1;
+
+    const image = imagePool[idx % imagePool.length];
+    return { ...item, image, images: [image] } as T;
   });
 }
 
 export function normalizeProductImages<T extends { id: string; name: string; category?: string; category_id?: string; image?: string; images?: string[] }>(items: T[]): T[] {
-  const localImagesById = new Map(products.map((product) => [product.id, product.image]));
-  const productsWithCatalogImages = items.map((item) => ({
-    ...item,
-    image: localImagesById.get(item.id) ?? item.image ?? item.images?.[0],
-  }));
-
-  return assignUniqueProductImages(productsWithCatalogImages);
+  return assignUniqueProductImages(items);
 }
 
 export const formatPrice = (value: number) => `${value.toLocaleString('vi-VN')} ₫`;
@@ -239,24 +821,21 @@ const additionalCategoryProducts: Product[] = [
   { id: 'apple-001', name: 'Apple MacBook Air 13 inch M4 16GB 256GB', category_id: 'apple', price: 26990000, image: 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=1000&q=80', specifications: { 'Chip': 'Apple M4', 'Bộ nhớ': '16GB unified memory', 'Lưu trữ': '256GB SSD' } },
   { id: 'apple-002', name: 'Apple Mac mini M4 16GB 256GB', category_id: 'apple', price: 14990000, image: 'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1000&q=80', specifications: { 'Chip': 'Apple M4', 'Bộ nhớ': '16GB unified memory', 'Lưu trữ': '256GB SSD' } },
   { id: 'apple-003', name: 'Apple iMac 24 inch M4 16GB 256GB', category_id: 'apple', price: 34990000, image: 'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=1000&q=80', specifications: { 'Chip': 'Apple M4', 'Màn hình': '24 inch Retina 4.5K', 'Bộ nhớ': '16GB unified memory' } },
-].map((product, index): Product => ({
+].map((product): Product => ({
   ...product,
   category: product.category_id ?? '',
-  oldPrice: Math.round((product.price * 1.1) / 10000) * 10000,
-  discount: 10,
-  rating: 4.8,
-  reviewCount: 24 + index * 7,
-  stock: 8 + index * 2,
-  isFeatured: index % 4 === 0,
-  isNew: index % 2 === 0,
-  isSale: true,
-  isHot: index % 5 === 0,
+  rating: 0,
+  reviewCount: 0,
+  isFeatured: false,
+  isNew: false,
+  isSale: false,
+  isHot: false,
   images: [product.image],
   specifications: Object.fromEntries(
     Object.entries(product.specifications ?? {}).map(([key, value]) => [key, String(value ?? '')])
   ) as Record<string, string>,
-  description: `${product.name} chính hãng, phù hợp nâng cấp dàn máy và góc làm việc. Sản phẩm được kiểm tra trước khi giao và hỗ trợ bảo hành theo chính sách cửa hàng.`,
-  features: ['Sản phẩm chính hãng', 'Kiểm tra kỹ trước khi giao', 'Hỗ trợ tư vấn tương thích cấu hình'],
+  description: '',
+  features: [],
 }));
 
 export const products: Product[] = assignUniqueProductImages([
