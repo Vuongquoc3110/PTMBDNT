@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Link, useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Image, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
 import { Header } from '@/components/Header';
@@ -73,6 +73,23 @@ const SERVICE_PROMISES = [
 	{ icon: 'chatbubbles-outline', title: 'Tư vấn tận tâm', detail: 'Hỗ trợ chọn cấu hình' },
 ];
 
+function getDailySeed(): number {
+	const d = new Date();
+	return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+}
+
+function seededShuffle<T>(array: T[], seed: number): T[] {
+	const result = [...array];
+	let s = seed;
+	for (let i = result.length - 1; i > 0; i--) {
+		s = (s * 9301 + 49297) % 233280;
+		const rnd = s / 233280;
+		const j = Math.floor(rnd * (i + 1));
+		[result[i], result[j]] = [result[j], result[i]];
+	}
+	return result;
+}
+
 export default function HomeScreen() {
 	const { width } = useWindowDimensions();
 	const isDesktop = width >= 768;
@@ -85,9 +102,43 @@ export default function HomeScreen() {
 	const { products } = useProducts();
 	const { categories } = useCategories();
 
-	const flashSaleProducts = products.filter((p: any) => p.isSale || (p.discount && p.discount > 0)).slice(0, 8);
-	const featuredProducts = products.filter((p: any) => p.isFeatured).slice(0, 8);
-	const newArrivals = products.filter((p: any) => p.isNew).slice(0, 8);
+	const { flashSaleProducts, featuredProducts, newArrivals } = useMemo(() => {
+		if (!products || products.length === 0) {
+			return { flashSaleProducts: [], featuredProducts: [], newArrivals: [] };
+		}
+
+		const todaySeed = getDailySeed();
+
+		// 1. Flash Sale: Lọc hàng giảm giá, xoay vòng theo ngày
+		const saleCandidates = products.filter((p: any) => p.isSale || (p.discount && p.discount > 0));
+		const flashSale = seededShuffle(saleCandidates, todaySeed).slice(0, 8);
+		const flashSaleIds = new Set(flashSale.map((p: any) => p.id));
+
+		// 2. Sản phẩm nổi bật: Tuyệt đối KHÔNG TRÙNG với Flash Sale, xoay vòng ngẫu nhiên mỗi ngày
+		const featuredCandidates = products.filter(
+			(p: any) => !flashSaleIds.has(p.id) && (p.isFeatured || (p.rating && p.rating >= 4.7))
+		);
+		const featuredPool = featuredCandidates.length >= 8
+			? featuredCandidates
+			: products.filter((p: any) => !flashSaleIds.has(p.id));
+		const featured = seededShuffle(featuredPool, todaySeed + 101).slice(0, 8);
+		const featuredIds = new Set(featured.map((p: any) => p.id));
+
+		// 3. Sản phẩm mới: Tuyệt đối KHÔNG TRÙNG với Flash Sale VÀ Nổi Bật!
+		const newCandidates = products.filter(
+			(p: any) => !flashSaleIds.has(p.id) && !featuredIds.has(p.id) && p.isNew
+		);
+		const newPool = newCandidates.length >= 8
+			? newCandidates
+			: products.filter((p: any) => !flashSaleIds.has(p.id) && !featuredIds.has(p.id));
+		const arrivals = seededShuffle(newPool, todaySeed + 202).slice(0, 8);
+
+		return {
+			flashSaleProducts: flashSale,
+			featuredProducts: featured,
+			newArrivals: arrivals,
+		};
+	}, [products]);
 
 	useEffect(() => {
 		Animated.parallel([

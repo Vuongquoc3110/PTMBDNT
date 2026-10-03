@@ -8,6 +8,16 @@ import { AppProvider, useAppContext } from '@/context/AppContext';
 import { Platform } from 'react-native';
 
 if (Platform.OS === 'web' && typeof document !== 'undefined') {
+  // Inject no-referrer policy so CDNs don't block image hotlinking
+  const metaReferrerId = 'no-referrer-meta';
+  if (!document.getElementById(metaReferrerId)) {
+    const meta = document.createElement('meta');
+    meta.id = metaReferrerId;
+    meta.name = 'referrer';
+    meta.content = 'no-referrer';
+    document.head.prepend(meta);
+  }
+
   // Inject Be Vietnam Pro font from Google Fonts
   const fontLinkId = 'be-vietnam-pro-font';
   if (!document.getElementById(fontLinkId)) {

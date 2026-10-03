@@ -37,8 +37,6 @@ type ModalType =
   | 'notifications'
   | 'language'
   | 'support'
-  | 'warranty'
-  | 'terms'
   | 'logoutConfirm';
 
 import { useAppContext } from '@/context/AppContext';
@@ -209,7 +207,11 @@ export default function UserTabScreen() {
   };
 
   const setDefaultAddress = (id: string) => {
+    const selected = addresses.find((a) => a.id === id);
     setAddresses((prev) => prev.map((a) => ({ ...a, isDefault: a.id === id })));
+    if (selected) {
+      updateUserProfile({ address: selected.address }).catch(() => {});
+    }
     showToast('Đã đổi địa chỉ giao hàng mặc định!');
   };
 
@@ -238,8 +240,8 @@ export default function UserTabScreen() {
           iconBg: '#e0f2fe',
           iconColor: '#0284c7',
           title: 'Đơn hàng của tôi',
-          subtitle: 'Tra cứu hành trình và lịch sử 24 đơn hàng',
-          badge: '2 Đang giao',
+          subtitle: 'Tra cứu hành trình và lịch sử đơn hàng',
+          badge: 'Đơn hàng',
           action: () => router.push('/(tabs)/explore' as any),
         },
         {
@@ -255,7 +257,7 @@ export default function UserTabScreen() {
           icon: 'location-outline',
           iconBg: '#dcfce7',
           iconColor: '#16a34a',
-          title: 'Sổ địa chỉ nhận hàng',
+          title: 'Địa chỉ nhận hàng',
           subtitle: addresses.find((a) => a.isDefault)?.address || profile.city,
           badge: `${addresses.length} địa chỉ`,
           action: () => setActiveModal('address'),
@@ -268,36 +270,14 @@ export default function UserTabScreen() {
           subtitle: paymentMethods.find((p) => p.isDefault)?.name || 'Visa, MoMo',
           action: () => setActiveModal('payment'),
         },
-      ],
-    },
-    {
-      title: 'Bảo hành & Kỹ thuật Hi-End',
-      items: [
-        {
-          icon: 'shield-checkmark-outline',
-          iconBg: '#e0e7ff',
-          iconColor: '#4338ca',
-          title: 'Tra cứu bảo hành Serial/IMEI',
-          subtitle: 'Bảo hành chính hãng 24-36 tháng, 1 đổi 1',
-          badge: 'Bảo hành VIP',
-          action: () => setActiveModal('warranty'),
-        },
         {
           icon: 'headset-outline',
           iconBg: '#ccfbf1',
           iconColor: '#0f766e',
           title: 'Kỹ thuật viên tư vấn 24/7',
           subtitle: 'Hotline 1800 6868 & hỗ trợ cấu hình máy',
-          badge: 'Hỗ trợ kỹ thuật',
+          badge: 'Hỗ trợ 24/7',
           action: () => setActiveModal('support'),
-        },
-        {
-          icon: 'document-text-outline',
-          iconBg: '#f1f5f9',
-          iconColor: '#475569',
-          title: 'Chính sách đổi trả & Quyền riêng tư',
-          subtitle: 'Cam kết 100% linh kiện chính hãng',
-          action: () => setActiveModal('terms'),
         },
       ],
     },
@@ -399,20 +379,17 @@ export default function UserTabScreen() {
           <View style={[styles.mainLayout, isWideScreen && styles.mainLayoutWide]}>
             {/* LEFT COLUMN: Profile info, stats, order tracker, VIP perks */}
             <View style={[styles.leftColumn, isWideScreen && styles.columnHalf]}>
-              {/* 1. VIP GAMER & PRO MEMBER PASS */}
+              {/* 1. VIP PRIVILEGE MEMBER PASS */}
               <View style={styles.vipPassCard}>
-                {/* Decorative Cyber Glow */}
-                <View style={styles.vipPassGlow} />
-
                 {/* Card Header Row: Brand & Tier */}
                 <View style={styles.vipPassTopRow}>
                   <View style={styles.vipBrandBadge}>
-                    <Ionicons name="hardware-chip" size={15} color="#38bdf8" />
-                    <Text style={styles.vipBrandText}>DANGVINHPC • PRO PASS</Text>
+                    <Ionicons name="shield-checkmark" size={14} color="#2563eb" />
+                    <Text style={styles.vipBrandText}>DANGVINHPC MEMBER</Text>
                   </View>
 
                   <Pressable style={styles.vipTierPill} onPress={() => setActiveModal('tier')}>
-                    <Ionicons name="sparkles" size={12} color="#f59e0b" />
+                    <Ionicons name="sparkles" size={12} color="#b45309" />
                     <Text style={styles.vipTierText}>VIP PLATINUM</Text>
                   </Pressable>
                 </View>
@@ -429,12 +406,16 @@ export default function UserTabScreen() {
                       setActiveModal('editProfile');
                     }}
                   >
-                    <Image
-                      source={{
-                        uri: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
-                      }}
-                      style={styles.avatar}
-                    />
+                    {user?.avatar && !user.avatar.includes('photo-1534528741775') ? (
+                      <Image
+                        source={{ uri: user.avatar }}
+                        style={styles.avatar}
+                      />
+                    ) : (
+                      <View style={styles.avatarDefault}>
+                        <Ionicons name="person" size={38} color="#64748b" />
+                      </View>
+                    )}
                     <View style={styles.onlinePulse} />
                     <View style={styles.avatarCameraBadge}>
                       <Ionicons name="camera" size={11} color="#ffffff" />
@@ -456,7 +437,7 @@ export default function UserTabScreen() {
                       {isLoggedOut ? 'Chưa đăng nhập' : profile.email}
                     </Text>
                     <Text style={styles.vipUserSub}>
-                      <Ionicons name="location-sharp" size={12} color="#64748b" />{' '}
+                      <Ionicons name="location-sharp" size={12} color="#94a3b8" />{' '}
                       {isLoggedOut ? 'Đăng nhập để nhận ưu đãi' : `${profile.phone} • ${profile.city || 'TP. Hồ Chí Minh'}`}
                     </Text>
                   </View>
@@ -472,7 +453,7 @@ export default function UserTabScreen() {
                         setActiveModal('editProfile');
                       }}
                     >
-                      <Ionicons name="create-outline" size={18} color="#38bdf8" />
+                      <Ionicons name="create-outline" size={18} color="#475569" />
                     </Pressable>
                   )}
                 </View>
@@ -495,7 +476,7 @@ export default function UserTabScreen() {
                 <View style={styles.vipWalletHub}>
                   <View style={styles.walletHubCol}>
                     <View style={styles.walletHubTitleRow}>
-                      <Ionicons name="wallet" size={14} color="#38bdf8" />
+                      <Ionicons name="wallet-outline" size={14} color="#2563eb" />
                       <Text style={styles.walletHubTitle}>Số dư ví DPC</Text>
                     </View>
                     <Text style={styles.walletHubAmount}>{walletBalance.toLocaleString('vi-VN')} ₫</Text>
@@ -505,7 +486,7 @@ export default function UserTabScreen() {
 
                   <View style={styles.walletHubCol}>
                     <View style={styles.walletHubTitleRow}>
-                      <Ionicons name="star" size={14} color="#f59e0b" />
+                      <Ionicons name="star" size={14} color="#d97706" />
                       <Text style={styles.walletHubTitle}>Điểm thưởng</Text>
                     </View>
                     <Text style={styles.walletHubCoins}>{rewardPoints.toLocaleString('vi-VN')} xu</Text>
@@ -520,7 +501,7 @@ export default function UserTabScreen() {
                         setActiveModal('deposit');
                       }}
                     >
-                      <Ionicons name="add-circle" size={16} color="#ffffff" />
+                      <Ionicons name="add" size={16} color="#ffffff" />
                       <Text style={styles.depositGlassBtnText}>Nạp ví</Text>
                     </Pressable>
                   </View>
@@ -694,56 +675,6 @@ export default function UserTabScreen() {
                   </View>
                   <Ionicons name="arrow-forward" size={16} color="#0284c7" />
                 </Pressable>
-              </View>
-
-              {/* 4. EXCLUSIVE HI-END STORE PRIVILEGES */}
-              <View style={styles.perksCard}>
-                <View style={styles.perksHeader}>
-                  <Ionicons name="diamond" size={18} color="#0ea5e9" />
-                  <Text style={styles.perksTitle}>Đặc Quyền DPC VIP Club</Text>
-                </View>
-
-                <View style={styles.perksGrid}>
-                  <View style={styles.perkItem}>
-                    <View style={[styles.perkIcon, { backgroundColor: '#eff6ff' }]}>
-                      <Ionicons name="shield-checkmark" size={18} color="#2563eb" />
-                    </View>
-                    <View style={styles.perkTextGroup}>
-                      <Text style={styles.perkName}>Bảo hành 1 đổi 1</Text>
-                      <Text style={styles.perkDesc}>36 tháng tận nơi, đổi mới 30 ngày</Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.perkItem}>
-                    <View style={[styles.perkIcon, { backgroundColor: '#ecfeff' }]}>
-                      <Ionicons name="snow" size={18} color="#0891b2" />
-                    </View>
-                    <View style={styles.perkTextGroup}>
-                      <Text style={styles.perkName}>Vệ sinh PC trọn đời</Text>
-                      <Text style={styles.perkDesc}>Tra keo Thermal Grizzly miễn phí</Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.perkItem}>
-                    <View style={[styles.perkIcon, { backgroundColor: '#f0fdf4' }]}>
-                      <Ionicons name="rocket" size={18} color="#16a34a" />
-                    </View>
-                    <View style={styles.perkTextGroup}>
-                      <Text style={styles.perkName}>Freeship hỏa tốc 2H</Text>
-                      <Text style={styles.perkDesc}>Áp dụng mọi linh kiện & PC Case</Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.perkItem}>
-                    <View style={[styles.perkIcon, { backgroundColor: '#faf5ff' }]}>
-                      <Ionicons name="color-wand" size={18} color="#9333ea" />
-                    </View>
-                    <View style={styles.perkTextGroup}>
-                      <Text style={styles.perkName}>Cân màu & Ép xung</Text>
-                      <Text style={styles.perkDesc}>Kỹ thuật viên căn chỉnh màn hình</Text>
-                    </View>
-                  </View>
-                </View>
               </View>
             </View>
 
@@ -1004,7 +935,7 @@ export default function UserTabScreen() {
         <View style={styles.modalBackdrop}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Sổ địa chỉ nhận hàng</Text>
+              <Text style={styles.modalTitle}>Địa chỉ nhận hàng</Text>
               <Pressable onPress={() => setActiveModal('none')}>
                 <Ionicons name="close" size={24} color="#64748b" />
               </Pressable>
@@ -1465,109 +1396,110 @@ const styles = StyleSheet.create({
   },
 
   /* 1. VIP GAMER & PRO MEMBER PASS CARD */
+  /* 1. VIP PRIVILEGE MEMBER PASS CARD - PRO MAX LUXURY */
   vipPassCard: {
-    backgroundColor: '#0b1120',
-    borderRadius: 24,
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#1e293b',
+    borderColor: '#e2e8f0',
     overflow: 'hidden',
-    padding: 22,
-    position: 'relative',
-    shadowColor: '#0284c7',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.16,
-    shadowRadius: 20,
-    elevation: 6,
-  },
-  vipPassGlow: {
-    position: 'absolute',
-    top: -50,
-    right: -50,
-    width: 170,
-    height: 170,
-    borderRadius: 85,
-    backgroundColor: 'rgba(14, 165, 233, 0.12)',
+    padding: 20,
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 16,
+    elevation: 2,
   },
   vipPassTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 18,
+    marginBottom: 16,
   },
   vipBrandBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(56, 189, 248, 0.1)',
+    backgroundColor: '#eff6ff',
     paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingVertical: 4,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(56, 189, 248, 0.25)',
+    borderColor: '#dbeafe',
   },
   vipBrandText: {
-    color: '#38bdf8',
+    color: '#1d4ed8',
     fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.8,
+    fontWeight: '700',
+    letterSpacing: 0.4,
   },
   vipTierPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: 'rgba(245, 158, 11, 0.14)',
+    backgroundColor: '#fffbeb',
     paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingVertical: 4,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.35)',
+    borderColor: '#fef3c7',
   },
   vipTierText: {
-    color: '#fbbf24',
+    color: '#b45309',
     fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.5,
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
   vipUserRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 18,
+    marginBottom: 16,
   },
   avatarWrapper: {
     position: 'relative',
-    marginRight: 16,
+    marginRight: 14,
   },
   avatar: {
-    width: 74,
-    height: 74,
-    borderRadius: 37,
-    borderWidth: 2.5,
-    borderColor: '#0284c7',
-    backgroundColor: '#1e293b',
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
+    backgroundColor: '#f8fafc',
+  },
+  avatarDefault: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
+    backgroundColor: '#e2e8f0',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   onlinePulse: {
     position: 'absolute',
     bottom: 2,
     right: 2,
-    width: 14,
-    height: 14,
-    borderRadius: 7,
+    width: 13,
+    height: 13,
+    borderRadius: 6.5,
     backgroundColor: '#10b981',
     borderWidth: 2,
-    borderColor: '#0b1120',
+    borderColor: '#ffffff',
   },
   avatarCameraBadge: {
     position: 'absolute',
     top: -2,
     right: -2,
-    backgroundColor: '#0284c7',
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    backgroundColor: '#2563eb',
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: '#0b1120',
+    borderColor: '#ffffff',
   },
   vipUserInfo: {
     flex: 1,
@@ -1579,48 +1511,49 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   vipUserName: {
-    fontSize: 19,
+    fontSize: 18,
     fontWeight: '800',
-    color: '#ffffff',
-    letterSpacing: -0.3,
+    color: '#0f172a',
+    letterSpacing: -0.4,
   },
   adminMiniTag: {
-    backgroundColor: 'rgba(239, 68, 68, 0.18)',
+    backgroundColor: '#fef2f2',
     paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.35)',
+    borderColor: '#fecaca',
   },
   adminMiniTagText: {
-    color: '#f87171',
+    color: '#dc2626',
     fontSize: 10,
-    fontWeight: '800',
+    fontWeight: '700',
   },
   vipUserEmail: {
     fontSize: 13,
-    color: '#94a3b8',
-    marginTop: 3,
+    color: '#64748b',
+    marginTop: 2,
+    fontWeight: '500',
   },
   vipUserSub: {
     fontSize: 12,
-    color: '#64748b',
+    color: '#94a3b8',
     marginTop: 3,
   },
   editProfileGlassBtn: {
-    padding: 10,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    padding: 9,
+    borderRadius: 10,
+    backgroundColor: '#f8fafc',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
+    borderColor: '#e2e8f0',
   },
   vipLevelBlock: {
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-    borderRadius: 14,
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
     padding: 12,
-    marginBottom: 16,
+    marginBottom: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderColor: '#f1f5f9',
   },
   vipLevelHeader: {
     flexDirection: 'row',
@@ -1629,41 +1562,41 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   vipLevelLabel: {
-    color: '#e2e8f0',
+    color: '#334155',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  vipLevelExp: {
+    color: '#2563eb',
     fontSize: 12,
     fontWeight: '700',
   },
-  vipLevelExp: {
-    color: '#38bdf8',
-    fontSize: 12,
-    fontWeight: '800',
-  },
   vipProgressBarBg: {
-    height: 7,
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
-    borderRadius: 4,
+    height: 6,
+    backgroundColor: '#e2e8f0',
+    borderRadius: 999,
     overflow: 'hidden',
     marginBottom: 6,
   },
   vipProgressBarFill: {
     width: '65%',
     height: '100%',
-    backgroundColor: '#0284c7',
-    borderRadius: 4,
+    backgroundColor: '#2563eb',
+    borderRadius: 999,
   },
   vipNextTierNote: {
     fontSize: 11,
-    color: '#94a3b8',
+    color: '#64748b',
   },
   vipWalletHub: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
+    backgroundColor: '#f8fafc',
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: '#e2e8f0',
   },
   walletHubCol: {
     flex: 1,
@@ -1672,49 +1605,49 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    marginBottom: 3,
+    marginBottom: 2,
   },
   walletHubTitle: {
     fontSize: 11,
-    color: '#94a3b8',
+    color: '#64748b',
     fontWeight: '600',
   },
   walletHubAmount: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '800',
-    color: '#ffffff',
+    color: '#0f172a',
   },
   walletHubCoins: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '800',
-    color: '#fbbf24',
+    color: '#d97706',
   },
   walletHubSubNote: {
     fontSize: 10,
-    color: '#64748b',
+    color: '#94a3b8',
     marginTop: 1,
   },
   walletHubDivider: {
     width: 1,
-    height: 34,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    marginHorizontal: 12,
+    height: 32,
+    backgroundColor: '#e2e8f0',
+    marginHorizontal: 10,
   },
   walletHubActionCol: {
-    marginLeft: 8,
+    marginLeft: 6,
   },
   depositGlassBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#0284c7',
-    paddingVertical: 9,
-    paddingHorizontal: 15,
-    borderRadius: 12,
-    gap: 6,
-    shadowColor: '#0284c7',
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 3,
+    backgroundColor: '#2563eb',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    gap: 4,
+    shadowColor: '#2563eb',
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    elevation: 2,
   },
   depositGlassBtnText: {
     color: '#ffffff',
@@ -1903,69 +1836,6 @@ const styles = StyleSheet.create({
     color: '#0369a1',
   },
   liveDeliverySubtitle: {
-    fontSize: 11,
-    color: '#64748b',
-    marginTop: 1,
-  },
-
-  /* 4. EXCLUSIVE HI-END STORE PRIVILEGES */
-  perksCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 22,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    shadowColor: '#0f172a',
-    shadowOpacity: 0.03,
-    shadowRadius: 12,
-    elevation: 2,
-  },
-  perksHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 16,
-  },
-  perksTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#0f172a',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  perksGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  perkItem: {
-    flex: 1,
-    minWidth: '45%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f8fafc',
-    borderRadius: 14,
-    padding: 12,
-    gap: 10,
-    borderWidth: 1,
-    borderColor: '#f1f5f9',
-  },
-  perkIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  perkTextGroup: {
-    flex: 1,
-  },
-  perkName: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0f172a',
-  },
-  perkDesc: {
     fontSize: 11,
     color: '#64748b',
     marginTop: 1,

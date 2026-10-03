@@ -8,6 +8,8 @@ const app = express();
 // Middleware
 app.use(cors());
 app.use(express.json());
+const path = require('path');
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // MySQL Connection Pool
 const pool = mysql.createPool({
@@ -93,6 +95,18 @@ async function initTables() {
       VALUES ('admin@promart.vn', 'admin123', 'Quản Trị Viên DANGVINHPC', '0900 000 000', 'admin')
       ON DUPLICATE KEY UPDATE password=VALUES(password), name=VALUES(name), phone=VALUES(phone), role='admin'
     `);
+
+    // Clean up any blocked hotlink URLs from MySQL database
+    try {
+      await connection.query(`
+        UPDATE products
+        SET image = 'https://images.unsplash.com/photo-1603302576837-37561b2e2302?auto=format&fit=crop&w=1200&q=80'
+        WHERE id = 'lap-004' OR image LIKE '%cdn.tgdd.vn%' OR image LIKE '%photo-1563013544-824ae1b704d3%'
+      `);
+      console.log('✅ Cleaned up broken/blocked image URLs in MySQL database');
+    } catch (e) {
+      // Ignore if table/column does not exist
+    }
 
     connection.release();
     console.log('✅ Database tables initialized (wishlist, reviews, vouchers)');
@@ -240,12 +254,23 @@ app.get('/products', async (req, res) => {
     const [rows] = await connection.query(query, params);
     connection.release();
 
-    // Parse JSON fields
-    const products = rows.map(product => ({
-      ...product,
-      specifications: product.specifications ? (typeof product.specifications === 'string' ? JSON.parse(product.specifications) : product.specifications) : {},
-      features: product.features ? (typeof product.features === 'string' ? JSON.parse(product.features) : product.features) : [],
-    }));
+    // Parse JSON fields and sanitize images
+    const products = rows.map(product => {
+      let image = product.image;
+      if (image && (
+        image.includes('cdn.tgdd.vn') ||
+        image.includes('laptop360.net') ||
+        image.includes('photo-1563013544-824ae1b704d3')
+      )) {
+        image = 'https://images.unsplash.com/photo-1603302576837-37561b2e2302?auto=format&fit=crop&w=1200&q=80';
+      }
+      return {
+        ...product,
+        image,
+        specifications: product.specifications ? (typeof product.specifications === 'string' ? JSON.parse(product.specifications) : product.specifications) : {},
+        features: product.features ? (typeof product.features === 'string' ? JSON.parse(product.features) : product.features) : [],
+      };
+    });
 
     res.json(products);
   } catch (error) {
@@ -264,8 +289,18 @@ app.get('/products/:id', async (req, res) => {
       return res.status(404).json({ error: 'Product not found' });
     }
 
+    let image = rows[0].image;
+    if (image && (
+      image.includes('cdn.tgdd.vn') ||
+      image.includes('laptop360.net') ||
+      image.includes('photo-1563013544-824ae1b704d3')
+    )) {
+      image = 'https://images.unsplash.com/photo-1603302576837-37561b2e2302?auto=format&fit=crop&w=1200&q=80';
+    }
+
     const product = {
       ...rows[0],
+      image,
       specifications: rows[0].specifications ? JSON.parse(rows[0].specifications) : {},
       features: rows[0].features ? JSON.parse(rows[0].features) : [],
     };
@@ -561,7 +596,9 @@ app.get('/orders', async (req, res) => {
 
     const orders = rows.map(order => ({
       ...order,
-      items: order.items ? JSON.parse(order.items) : [],
+      items: order.items
+        ? (typeof order.items === 'string' ? JSON.parse(order.items) : order.items)
+        : [],
     }));
 
     res.json(orders);
@@ -583,7 +620,9 @@ app.get('/orders/:id', async (req, res) => {
 
     const order = {
       ...rows[0],
-      items: rows[0].items ? JSON.parse(rows[0].items) : [],
+      items: rows[0].items
+        ? (typeof rows[0].items === 'string' ? JSON.parse(rows[0].items) : rows[0].items)
+        : [],
     };
 
     res.json(order);

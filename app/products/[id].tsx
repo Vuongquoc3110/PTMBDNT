@@ -15,7 +15,7 @@ import {
 import { Header } from '@/components/Header';
 import { ProductCard } from '@/components/ProductCard';
 import { AuthRequiredModal } from '@/components/AuthRequiredModal';
-import { formatPrice, products, type Product } from '@/data/products';
+import { formatPrice, products, type Product, getProductFallbackImage, isInvalidOrBlockedImageUrl } from '@/data/products';
 import { useAppContext } from '@/context/AppContext';
 import { useProduct, useProductReviews } from '@/hooks/useApi';
 import { apiService } from '@/services/api';
@@ -44,9 +44,13 @@ export default function ProductDetailScreen() {
 
 
   const galleryImages = useMemo(() => {
-    if (product.images && product.images.length > 0) return product.images;
-    if (product.image) return [product.image];
-    return ['https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=1200&q=80'];
+    let rawList: string[] = [];
+    if (product.images && product.images.length > 0) rawList = product.images;
+    else if (product.image) rawList = [product.image];
+
+    const valid = rawList.filter((url) => !isInvalidOrBlockedImageUrl(url));
+    if (valid.length > 0) return valid;
+    return [getProductFallbackImage(product)];
   }, [product]);
 
   // States
@@ -161,6 +165,7 @@ export default function ProductDetailScreen() {
                   source={{ uri: galleryImages[selectedImageIndex] || galleryImages[0] }}
                   style={styles.heroImage}
                   resizeMode="contain"
+                  {...({ referrerPolicy: 'no-referrer' } as any)}
                 />
 
                 {discountPercent > 0 && (

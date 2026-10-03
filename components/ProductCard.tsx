@@ -3,11 +3,14 @@ import React, { useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
 import { useAppContext } from '@/context/AppContext';
-import { formatPrice, getProductFallbackImage } from '@/data/products';
+import { formatPrice, getProductFallbackImage, isInvalidOrBlockedImageUrl } from '@/data/products';
 
 function getProductImageUri(product: any) {
   const directImage = product?.image || product?.images?.[0];
-  return directImage || getProductFallbackImage(product);
+  if (!directImage || isInvalidOrBlockedImageUrl(directImage)) {
+    return getProductFallbackImage(product);
+  }
+  return directImage;
 }
 
 function getBadgeInfo(product: any) {
@@ -40,10 +43,15 @@ export function ProductCard({ product }: { product: any }) {
           <Image
             source={{ uri: imageUri }}
             style={[styles.image, isMobile && styles.imageMobile]}
-            onError={() => setImageUri(getProductFallbackImage(product))}
-            {...({ dataSet: { productImg: 'true' } } as any)}
+            resizeMode="contain"
+            onError={() => {
+              const fallback = getProductFallbackImage(product);
+              if (imageUri !== fallback) {
+                setImageUri(fallback);
+              }
+            }}
+            {...({ dataSet: { productImg: 'true' }, referrerPolicy: 'no-referrer' } as any)}
           />
-
         </View>
         <Text
           style={[styles.name, isMobile && styles.nameMobile]}
@@ -118,15 +126,17 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     overflow: 'hidden',
     backgroundColor: '#f8fafc',
+    padding: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   image: {
     width: '100%',
     height: 150,
-    borderRadius: 16,
+    resizeMode: 'contain',
   },
   imageMobile: {
     height: 125,
-    borderRadius: 12,
   },
   badge: {
     position: 'absolute',

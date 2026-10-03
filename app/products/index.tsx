@@ -14,8 +14,16 @@ import {
 
 import { Header } from '@/components/Header';
 import { useAppContext } from '@/context/AppContext';
-import { formatPrice } from '@/data/products';
+import { formatPrice, getProductFallbackImage, isInvalidOrBlockedImageUrl } from '@/data/products';
 import { useProducts } from '@/hooks/useApi';
+
+function getValidItemImage(item: any) {
+  const direct = item?.image || item?.images?.[0];
+  if (!direct || isInvalidOrBlockedImageUrl(direct)) {
+    return getProductFallbackImage(item);
+  }
+  return direct;
+}
 
 const categoryOptions = [
   { id: 'laptop', label: 'Laptop', icon: 'laptop-outline' },
@@ -57,6 +65,12 @@ function ProductGridItem({
     (category) => normalizeCategory(category.id) === normalizeCategory(item.category_id || item.category || ''),
   )?.label || item.category;
 
+  const [imageUri, setImageUri] = useState(() => getValidItemImage(item));
+
+  useEffect(() => {
+    setImageUri(getValidItemImage(item));
+  }, [item?.id, item?.image, item?.images?.[0]]);
+
   const badgeText = item.discount
     ? `−${item.discount}%`
     : item.isNew
@@ -75,9 +89,17 @@ function ProductGridItem({
           {/* PRODUCT IMAGE & BADGES */}
           <View style={[styles.cardImageWrapper, isMobile && styles.cardImageWrapperMobile]}>
             <Image
-              source={{ uri: item.image || DEFAULT_IMAGE }}
+              source={{ uri: imageUri || DEFAULT_IMAGE }}
               style={styles.cardImage}
-              {...({ dataSet: { productImg: 'true' } } as any)}
+              onError={() => {
+                const fallback = getProductFallbackImage(item);
+                if (imageUri !== fallback) {
+                  setImageUri(fallback);
+                } else if (imageUri !== DEFAULT_IMAGE) {
+                  setImageUri(DEFAULT_IMAGE);
+                }
+              }}
+              {...({ dataSet: { productImg: 'true' }, referrerPolicy: 'no-referrer' } as any)}
             />
             {badgeText ? (
               <View
@@ -905,8 +927,11 @@ const styles = StyleSheet.create({
     position: 'relative',
     width: '100%',
     height: 180,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: '#f8fafc',
     overflow: 'hidden',
+    padding: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   cardImageWrapperMobile: {
     height: 132,
@@ -920,7 +945,7 @@ const styles = StyleSheet.create({
   cardImage: {
     width: '100%',
     height: '100%',
-    resizeMode: 'cover',
+    resizeMode: 'contain',
   },
   cardBadge: {
     position: 'absolute',

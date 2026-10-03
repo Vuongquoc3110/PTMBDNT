@@ -57,7 +57,7 @@ const DEFAULT_USER: User = {
   phone: '0909 123 456',
   address: '123 Đường Lê Lợi, Phường Bến Nghé, Quận 1',
   city: 'TP. Hồ Chí Minh',
-  avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
+  avatar: '',
 };
 
 const INITIAL_CART: CartItem[] = [

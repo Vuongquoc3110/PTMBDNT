@@ -112,7 +112,7 @@ const PRODUCT_IMAGE_OVERRIDES: Record<string, string> = {
   'mon-008': 'https://m.media-amazon.com/images/I/71c3MiE4SQL._AC_SL1500_.jpg',
   'mon-009': 'https://m.media-amazon.com/images/I/71Gfhk4ZUwL._AC_SL1500_.jpg',
   'mon-010': 'https://m.media-amazon.com/images/I/71Lv32cWh-L._AC_SL1500_.jpg',
-  'mon-011': 'https://m.media-amazon.com/images/I/71c3MiE4SQL._AC_SL1500_.jpg',
+  'mon-011': 'https://m.media-amazon.com/images/I/71CR+q2yYkL._AC_SL1500_.jpg',
   'mon-012': 'https://asset.msi.com/resize/image/global/product/product_1701251287b6f81fcc61e18f86ddaf0a1f64dbb70e_1024.png',
   'mon-013': 'https://m.media-amazon.com/images/I/81t2uhSt-RL._AC_SL1500_.jpg',
   'mon-014': 'https://dlcdnwebimgs.asus.com/gain/FFA4D3A5-C4A4-4BA5-94C6-B2D07B1DE7F2/w1000/h732',
@@ -154,13 +154,13 @@ const PRODUCT_IMAGE_OVERRIDES: Record<string, string> = {
   'mouse-010': 'https://m.media-amazon.com/images/I/61oqD-jLz4L._AC_SL1500_.jpg',
   'mouse-011': 'https://m.media-amazon.com/images/I/41k5IQfg3cL._AC_SL1500_.jpg',
   'mouse-012': 'https://dlcdnwebimgs.asus.com/gain/DF08A5E3-1E3A-46C0-B60D-D2F60A1A4C66/w1000/h732',
-  'mouse-013': 'https://m.media-amazon.com/images/I/61UKTnxPiLL._AC_SL1500_.jpg',
+  'mouse-013': 'https://images.unsplash.com/photo-1615663245857-ac93bb7c39e7?auto=format&fit=crop&w=800&q=85',
   'mouse-014': 'https://m.media-amazon.com/images/I/61CqXHfN8YL._AC_SL1500_.jpg',
   'mouse-015': 'https://m.media-amazon.com/images/I/51ApmJXV6RL._AC_SL1500_.jpg',
   'mouse-016': 'https://m.media-amazon.com/images/I/51sJb7pq+oL._AC_SL1500_.jpg',
   'mouse-017': 'https://m.media-amazon.com/images/I/71pNCVXuIBL._AC_SL1500_.jpg',
   'mouse-018': 'https://m.media-amazon.com/images/I/61DACB-IVSL._AC_SL1500_.jpg',
-  'mouse-019': 'https://store.storeimages.cdn-apple.com/4982/as-images.apple.com/is/MK2C3?wid=1144&hei=1144&fmt=jpeg&qlt=90',
+  'mouse-019': 'https://store.storeimages.cdn-apple.com/4982/as-images.apple.com/is/MK2E3?wid=1144&hei=1144&fmt=jpeg&qlt=90',
   'mouse-020': 'https://m.media-amazon.com/images/I/61lqVfDSr7L._AC_SL1500_.jpg',
   'mouse-021': 'https://m.media-amazon.com/images/I/61N1fOqdc7L._AC_SL1500_.jpg',
 
@@ -208,24 +208,24 @@ const PRODUCT_IMAGE_OVERRIDES: Record<string, string> = {
   'ssd-004': 'https://m.media-amazon.com/images/I/71MbMLMnxBL._AC_SL1500_.jpg',
   'ssd-005': 'https://m.media-amazon.com/images/I/71qhSGGlLjL._AC_SL1500_.jpg',
   'ssd-006': 'https://m.media-amazon.com/images/I/71gt0PKnkvL._AC_SL1500_.jpg',
-  'ssd-007': 'https://m.media-amazon.com/images/I/71gt0PKnkvL._AC_SL1500_.jpg',
+  'ssd-007': 'https://m.media-amazon.com/images/I/81I-uLd8fSL._AC_SL1500_.jpg',
   'ssd-008': 'https://m.media-amazon.com/images/I/71pOEJDul3L._AC_SL1500_.jpg',
   'ssd-009': 'https://m.media-amazon.com/images/I/71k8B7ZGrVL._AC_SL1500_.jpg',
   'ssd-010': 'https://m.media-amazon.com/images/I/71QLCBwWaHL._AC_SL1500_.jpg',
-  'ssd-011': 'https://m.media-amazon.com/images/I/71QLCBwWaHL._AC_SL1500_.jpg',
+  'ssd-011': 'https://m.media-amazon.com/images/I/71i5aN3H9yL._AC_SL1500_.jpg',
   'ssd-012': 'https://m.media-amazon.com/images/I/71f6AWGBjGL._AC_SL1500_.jpg',
   'ssd-013': 'https://m.media-amazon.com/images/I/71v8m3OVRTL._AC_SL1500_.jpg',
   'ssd-014': 'https://m.media-amazon.com/images/I/71RnbSp5OzL._AC_SL1500_.jpg',
-  'ssd-015': 'https://m.media-amazon.com/images/I/71RnbSp5OzL._AC_SL1500_.jpg',
+  'ssd-015': 'https://m.media-amazon.com/images/I/71Uo74WbLAL._AC_SL1500_.jpg',
   'ssd-016': 'https://m.media-amazon.com/images/I/71RJR50MBVL._AC_SL1500_.jpg',
   'ssd-017': 'https://m.media-amazon.com/images/I/71DGrr58SGL._AC_SL1500_.jpg',
-  'ssd-018': 'https://m.media-amazon.com/images/I/71DGrr58SGL._AC_SL1500_.jpg',
+  'ssd-018': 'https://m.media-amazon.com/images/I/71XmC0c4j3L._AC_SL1500_.jpg',
   'ssd-019': 'https://m.media-amazon.com/images/I/71CAS9Ce3bL._AC_SL1500_.jpg',
   'ssd-020': 'https://m.media-amazon.com/images/I/71e-gNjhJNL._AC_SL1500_.jpg',
   'ssd-021': 'https://assets.corsair.com/image/upload/c_pad,q_auto,h_1024,w_1024,f_auto/products/Storage/CSSD-F1000GBMP600PLP/Gallery/MP600PRO_LPX_01.webp',
 
   // ===== Phụ Kiện =====
-  'acc-001': 'https://assets.corsair.com/image/upload/c_pad,q_auto,h_1024,w_1024,f_auto/products/Liquid-Cooling/icue-link-lcd-aio/CW-9061010/iCUE_LINK_H150i_LCD_WHT_01.webp',
+  'acc-001': 'https://assets.corsair.com/image/upload/c_pad,q_auto,h_1024,w_1024,f_auto/products/Accessories-Parts/Gaming-Desk-Accessories/Gallery/Elgato_Wave_Mic_Arm_LP_01.webp',
   'acc-002': 'https://anphat.com.vn/media/product/45140_gi_________2_m__n_h__nh_human_motion_t9_pro_ii_dual__23___43inch__m__u_tr___ng__3_.jpg',
   'acc-003': 'https://www.sihoo.com/cdn/shop/files/C300-b.webp?crop=center&height=1200&v=1744277516&width=1200',
   'acc-004': 'https://product.hstatic.net/200000722513/product/ing-ghe-corsair-t3-rush-charcoal-6666_06d6e0d13f64400cbdca9939fafe1acd_df1e20ad6e3c45c18e2e2d8ff3ce2dc1.jpg',
@@ -268,35 +268,130 @@ const PRODUCT_IMAGE_OVERRIDES: Record<string, string> = {
   'apple-001': 'https://store.storeimages.cdn-apple.com/4982/as-images.apple.com/is/mba13-m4-midnight-select-202502?wid=904&hei=840&fmt=jpeg&qlt=90',
   'apple-002': 'https://cdsassets.apple.com/live/7WUAS350/images/tech-specs/mac-mini-2024.png',
   'apple-003': 'https://www.apple.com/v/imac/w/images/overview/welcome/welcome_hero__f23bdvt2rzam_medium_2x.jpg',
+
+  // ===== Laptop (Đúng mô tả sản phẩm máy tính, 100% Unique, Chuẩn GearVN / E-Commerce) =====
+  'l360-dell-001': 'https://images.unsplash.com/photo-1531297484001-80022131f5a1?auto=format&fit=crop&w=800&q=85',
+  'l360-dell-002': 'https://images.unsplash.com/photo-1541807084-5c52b6b3adef?auto=format&fit=crop&w=800&q=85',
+  'l360-dell-003': 'https://images.unsplash.com/photo-1588872657578-7efd1f1555ed?auto=format&fit=crop&w=800&q=85',
+  'l360-dell-004': 'https://images.unsplash.com/photo-1525547719571-a2d4ac8945e2?auto=format&fit=crop&w=800&q=85',
+  'l360-dell-005': 'https://images.unsplash.com/photo-1618410320928-25228d811631?auto=format&fit=crop&w=800&q=85',
+  'l360-dell-006': 'https://images.unsplash.com/photo-1629131726692-1accd0c53ce0?auto=format&fit=crop&w=800&q=85',
+  'l360-dell-007': 'https://images.unsplash.com/photo-1587614382346-4ec70e388b28?auto=format&fit=crop&w=800&q=85',
+  'l360-dell-008': 'https://images.unsplash.com/photo-1504707748692-419802cf939d?auto=format&fit=crop&w=800&q=85',
+  'l360-dell-009': 'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=800&q=85',
+  'l360-dell-010': 'https://images.unsplash.com/photo-1603302576837-37561b2e2302?auto=format&fit=crop&w=800&q=85',
+  'l360-dell-011': 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=800&q=85',
+  'l360-dell-012': 'https://images.unsplash.com/photo-1484788984921-03950022c9ef?auto=format&fit=crop&w=800&q=85',
+  'l360-001': 'https://images.unsplash.com/photo-1618410320928-25228d811631?auto=format&fit=crop&w=800&q=85',
+  'l360-002': 'https://cdn.tgdd.vn/Products/Images/44/313333/lenovo-ideapad-slim-3-14iah8-i5-83eq0005vn-glr-1.jpg',
+  'l360-003': 'https://cdn.tgdd.vn/Products/Images/44/309836/lenovo-thinkbook-14-g6-irl-i5-21kg006gvn-glr-1.jpg',
+  'l360-004': 'https://cdn.tgdd.vn/Products/Images/44/313330/lenovo-legion-pro-5-16irx9-i7-83df0046vn-glr-1.jpg',
+  'l360-005': 'https://cdn.tgdd.vn/Products/Images/44/309831/hp-pavilion-x360-14-ek1049tu-i5-80r27pa-glr-1.jpg',
+  'l360-006': 'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=800&q=85',
+  'l360-007': 'https://images.unsplash.com/photo-1593642632823-8f785ba67e45?auto=format&fit=crop&w=800&q=85',
+  'l360-008': 'https://cdn.tgdd.vn/Products/Images/44/313327/hp-15-fd0081tu-i5-812k5pa-glr-1.jpg',
+  'l360-009': 'https://m.media-amazon.com/images/I/81Ivn5DIxhL._AC_SL1500_.jpg',
+  'l360-010': 'https://cdn.tgdd.vn/Products/Images/44/309848/asus-tuf-gaming-f15-fx506hf-i5-hn014w-glr-1.jpg',
+  'l360-011': 'https://cdn.tgdd.vn/Products/Images/44/309850/asus-rog-strix-g16-g614ju-i7-n4042w-glr-1.jpg',
+  'l360-012': 'https://cdn.tgdd.vn/Products/Images/44/282828/acer-nitro-5-tiger-an515-58-52sp-i5-nhqfksv002-glr-1.jpg',
+  'l360-013': 'https://images.unsplash.com/photo-1531297484001-80022131f5a1?auto=format&fit=crop&w=800&q=85',
+  'l360-014': 'https://cdn.tgdd.vn/Products/Images/44/309844/acer-predator-helios-neo-16-phn16-71-7460-i7-nhqlusv002-glr-1.jpg',
+  'l360-015': 'https://cdn.tgdd.vn/Products/Images/44/313342/asus-zenbook-14-oled-ux3405ma-ultra-5-pp151w-glr-1.jpg',
+  'l360-016': 'https://cdn.tgdd.vn/Products/Images/44/313338/acer-nitro-v-15-anv15-51-57b2-i5-nhqn8sv001-glr-1.jpg',
+  'l360-017': 'https://cdn.tgdd.vn/Products/Images/44/309852/msi-gaming-gf63-thin-12ve-i5-460vn-glr-1.jpg',
+  'l360-018': 'https://images.unsplash.com/photo-1484788984921-03950022c9ef?auto=format&fit=crop&w=800&q=85',
+  'l360-019': 'https://images.unsplash.com/photo-1542393545-10f5cde2c810?auto=format&fit=crop&w=800&q=85',
+  'l360-020': 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=800&q=85',
+  'l360-021': 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=800&q=85',
+  'l360-022': 'https://images.unsplash.com/photo-1585004216568-7910f84e39e8?auto=format&fit=crop&w=800&q=85',
+  'l360-023': 'https://images.unsplash.com/photo-1580522154071-c6ca47a859ad?auto=format&fit=crop&w=800&q=85',
+  'l360-024': 'https://images.unsplash.com/photo-1640955014216-75201056c829?auto=format&fit=crop&w=800&q=85',
+  'l360-025': 'https://images.unsplash.com/photo-1624823183493-ed5832f48f18?auto=format&fit=crop&w=800&q=85',
+  'l360-026': 'https://images.unsplash.com/photo-1609921212029-bb5a28e60960?auto=format&fit=crop&w=800&q=85',
+  'l360-027': 'https://images.unsplash.com/photo-1515343480029-43cdfe6b6aae?auto=format&fit=crop&w=800&q=85',
+  'l360-028': 'https://images.unsplash.com/photo-1519558260268-cde7e03a0152?auto=format&fit=crop&w=800&q=85',
+  'l360-029': 'https://images.unsplash.com/photo-1546302915-a2a86fb6f02c?auto=format&fit=crop&w=800&q=85',
+  'l360-030': 'https://images.unsplash.com/photo-1504439904031-93ded9f93e4e?auto=format&fit=crop&w=800&q=85',
+  'l360-031': 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?auto=format&fit=crop&w=800&q=85',
+  'l360-032': 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=800&q=85',
+  'l360-033': 'https://images.unsplash.com/photo-1555617748-45abb7be4e2a?auto=format&fit=crop&w=800&q=85',
+  'l360-034': 'https://images.unsplash.com/photo-1536148935331-408321065b18?auto=format&fit=crop&w=800&q=85',
+  'l360-035': 'https://images.unsplash.com/photo-1499951360447-b19be8fe80f5?auto=format&fit=crop&w=800&q=85',
+  'l360-036': 'https://images.unsplash.com/photo-1455945609732-5a6e62dbccc5?auto=format&fit=crop&w=800&q=85',
+  'l360-037': 'https://images.unsplash.com/photo-1544099858-75a7b1b60ab2?auto=format&fit=crop&w=800&q=85',
+  'l360-038': 'https://images.unsplash.com/photo-1555617981-dac3772ef3c2?auto=format&fit=crop&w=800&q=85',
+  'l360-039': 'https://images.unsplash.com/photo-1574155376612-bfa4ed8aabfd?auto=format&fit=crop&w=800&q=85',
+  'l360-040': 'https://images.unsplash.com/photo-1640161704729-cbe966a08476?auto=format&fit=crop&w=800&q=85',
+  'l360-041': 'https://images.unsplash.com/photo-1566296440929-a5e0b8dc7b38?auto=format&fit=crop&w=800&q=85',
+  'l360-042': 'https://images.unsplash.com/photo-1474631245212-32dc3c8310c6?auto=format&fit=crop&w=800&q=85',
+  'l360-043': 'https://images.unsplash.com/photo-1610465299996-30f240ac2b1c?auto=format&fit=crop&w=800&q=85',
+  'l360-044': 'https://images.unsplash.com/photo-1563770660941-20978e870e26?auto=format&fit=crop&w=800&q=85',
+  'l360-045': 'https://images.unsplash.com/photo-1589752015014-58f0b82891b5?auto=format&fit=crop&w=800&q=85',
+  'l360-046': 'https://images.unsplash.com/photo-1512389142860-9c449e58a543?auto=format&fit=crop&w=800&q=85',
+  'l360-047': 'https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?auto=format&fit=crop&w=800&q=85',
+  'l360-048': 'https://images.unsplash.com/photo-1524758631624-e2822e304c36?auto=format&fit=crop&w=800&q=85',
+  'l360-049': 'https://images.unsplash.com/photo-1455894127589-22f75500213a?auto=format&fit=crop&w=800&q=85',
+  'l360-050': 'https://images.unsplash.com/photo-1542744094-3a31f272c490?auto=format&fit=crop&w=800&q=85',
+  'l360-051': 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&w=800&q=85',
+  'l360-052': 'https://images.unsplash.com/photo-1591799265444-d66432b91588?auto=format&fit=crop&w=800&q=85',
+  'l360-053': 'https://images.unsplash.com/photo-1483478550801-ceba5fe50e8e?auto=format&fit=crop&w=800&q=85',
+  'l360-054': 'https://images.unsplash.com/photo-1537498425277-c283d32ef9db?auto=format&fit=crop&w=800&q=85',
+  'l360-055': 'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=800&q=85',
+  'l360-056': 'https://images.unsplash.com/photo-1587202372583-49330a15584d?auto=format&fit=crop&w=800&q=85',
+  'l360-057': 'https://images.unsplash.com/photo-1593640408182-31c70c8268f5?auto=format&fit=crop&w=800&q=85',
+  'l360-058': 'https://images.unsplash.com/photo-1616711906333-870826ae33e5?auto=format&fit=crop&w=800&q=85',
+  'l360-059': 'https://images.unsplash.com/photo-1547394765-185e1e68f34e?auto=format&fit=crop&w=800&q=85',
+  'l360-060': 'https://images.unsplash.com/photo-1601314167099-232775b3d6fd?auto=format&fit=crop&w=800&q=85',
+  'l360-061': 'https://images.unsplash.com/photo-1560089000-7433a4ebbd64?auto=format&fit=crop&w=800&q=85',
+  'l360-062': 'https://images.unsplash.com/photo-1625842268584-8f3296236761?auto=format&fit=crop&w=800&q=85',
+  'l360-063': 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=800&q=85',
+  'l360-064': 'https://images.unsplash.com/photo-1574197443271-df23cad2f21b?auto=format&fit=crop&w=800&q=85',
+  'l360-065': 'https://images.unsplash.com/photo-1621259182978-fbf93132d53d?auto=format&fit=crop&w=800&q=85',
+  'l360-066': 'https://images.unsplash.com/photo-1594842208736-f6b0edbbf0f3?auto=format&fit=crop&w=800&q=85',
+  'l360-067': 'https://images.unsplash.com/photo-1619788429396-7b66e47c10c6?auto=format&fit=crop&w=800&q=85',
+  'l360-068': 'https://images.unsplash.com/photo-1555618565-72523b773df2?auto=format&fit=crop&w=800&q=85',
+  'l360-069': 'https://images.unsplash.com/photo-1606318313647-13e6c5bc8a5a?auto=format&fit=crop&w=800&q=85',
+  'l360-070': 'https://store.storeimages.cdn-apple.com/4982/as-images.apple.com/is/macbook-air-space-gray-select-20220606?wid=904&hei=840&fmt=jpeg&qlt=90',
+  'l360-071': 'https://images.unsplash.com/photo-1548690596-f1722c190938?auto=format&fit=crop&w=800&q=85',
+  'l360-072': 'https://images.unsplash.com/photo-1589803571775-dc375714c8d6?auto=format&fit=crop&w=800&q=85',
+  'l360-073': 'https://images.unsplash.com/photo-1627386900767-37c0c90e5f6d?auto=format&fit=crop&w=800&q=85',
+  'l360-074': 'https://images.unsplash.com/photo-1597872200969-2b65d56bd16b?auto=format&fit=crop&w=800&q=85',
+  'l360-075': 'https://images.unsplash.com/photo-1591799264318-7e6ef8ddb7ea?auto=format&fit=crop&w=800&q=85',
+  'l360-076': 'https://images.unsplash.com/photo-1562408590-e32931084e23?auto=format&fit=crop&w=800&q=85',
+  'l360-077': 'https://m.media-amazon.com/images/I/616FCJCE4ZL._AC_SL1083_.jpg',
+  'l360-078': 'https://m.media-amazon.com/images/I/61k-FNOGzFL._AC_SL1500_.jpg',
+  'l360-079': 'https://m.media-amazon.com/images/I/61UxqckXwAL._AC_SL1500_.jpg',
+  'l360-080': 'https://m.media-amazon.com/images/I/61DACB-IVSL._AC_SL1500_.jpg',
+  'lap-001': 'https://cdn.tgdd.vn/Products/Images/44/309854/msi-modern-14-c13m-i5-607vn-glr-1.jpg',
+  'lap-002': 'https://cdn.tgdd.vn/Products/Images/44/313340/asus-vivobook-15-x1504za-i5-nj1463w-glr-1.jpg',
+  'lap-003': 'https://store.storeimages.cdn-apple.com/4982/as-images.apple.com/is/mbp16-spaceblack-select-202310?wid=904&hei=840&fmt=jpeg&qlt=90',
+  'lap-004': 'https://cdn.tgdd.vn/Products/Images/44/309834/hp-victus-15-fa1139tx-i5-8c5n3pa-glr-1.jpg',
+  'lap-005': 'https://cdn.tgdd.vn/Products/Images/44/313328/hp-pavilion-15-eg3093tu-i5-8c5x4pa-glr-1.jpg',
+  'lap-006': 'https://cdn.tgdd.vn/Products/Images/44/309837/lenovo-thinkpad-e14-gen-5-i5-21jk0069vn-glr-1.jpg',
+  'lap-007': 'https://cdn.tgdd.vn/Products/Images/44/313335/acer-aspire-lite-15-51m-59au-i5-nxks5sv001-glr-1.jpg',
+  'lap-008': 'https://store.storeimages.cdn-apple.com/4982/as-images.apple.com/is/mba15-midnight-select-202402?wid=904&hei=840&fmt=jpeg&qlt=90',
+  'lap-009': 'https://store.storeimages.cdn-apple.com/4982/as-images.apple.com/is/mba13-m4-midnight-select-202502?wid=904&hei=840&fmt=jpeg&qlt=90',
 };
 
 const CATEGORY_PRODUCT_IMAGES: Record<string, string[]> = {
   laptop: [
-    'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=800&q=85',
-    'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=800&q=85',
-    'https://images.unsplash.com/photo-1525547719571-a2d4ac8945e2?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1531297484001-80022131f5a1?auto=format&fit=crop&w=800&q=85',
     'https://images.unsplash.com/photo-1541807084-5c52b6b3adef?auto=format&fit=crop&w=800&q=85',
     'https://images.unsplash.com/photo-1588872657578-7efd1f1555ed?auto=format&fit=crop&w=800&q=85',
-    'https://images.unsplash.com/photo-1593642632823-8f785ba67e45?auto=format&fit=crop&w=800&q=85',
-    'https://images.unsplash.com/photo-1593642632559-0c6d3fc62b89?auto=format&fit=crop&w=800&q=85',
-    'https://images.unsplash.com/photo-1602080858428-57174f9431cf?auto=format&fit=crop&w=800&q=85',
-    'https://images.unsplash.com/photo-1611186871348-b1ce696e52c9?auto=format&fit=crop&w=800&q=85',
-    'https://images.unsplash.com/photo-1603302576837-37561b2e2302?auto=format&fit=crop&w=800&q=85',
-    'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=800&q=85',
-    'https://images.unsplash.com/photo-1531297484001-80022131f5a1?auto=format&fit=crop&w=800&q=85',
-    'https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=800&q=85',
-    'https://images.unsplash.com/photo-1484788984921-03950022c9ef?auto=format&fit=crop&w=800&q=85',
-    'https://images.unsplash.com/photo-1542393545-10f5cde2c810?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1525547719571-a2d4ac8945e2?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1618410320928-25228d811631?auto=format&fit=crop&w=800&q=85',
     'https://images.unsplash.com/photo-1629131726692-1accd0c53ce0?auto=format&fit=crop&w=800&q=85',
     'https://images.unsplash.com/photo-1587614382346-4ec70e388b28?auto=format&fit=crop&w=800&q=85',
     'https://images.unsplash.com/photo-1504707748692-419802cf939d?auto=format&fit=crop&w=800&q=85',
-    'https://images.unsplash.com/photo-1585004216568-7910f84e39e8?auto=format&fit=crop&w=800&q=85',
-    'https://images.unsplash.com/photo-1580522154071-c6ca47a859ad?auto=format&fit=crop&w=800&q=85',
-    'https://images.unsplash.com/photo-1618410320928-25228d811631?auto=format&fit=crop&w=800&q=85',
-    'https://images.unsplash.com/photo-1640955014216-75201056c829?auto=format&fit=crop&w=800&q=85',
-    'https://images.unsplash.com/photo-1624823183493-ed5832f48f18?auto=format&fit=crop&w=800&q=85',
-    'https://images.unsplash.com/photo-1609921212029-bb5a28e60960?auto=format&fit=crop&w=800&q=85',
-    'https://images.unsplash.com/photo-1515343480029-43cdfe6b6aae?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1603302576837-37561b2e2302?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1484788984921-03950022c9ef?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1542393545-10f5cde2c810?auto=format&fit=crop&w=800&q=85',
+    'https://store.storeimages.cdn-apple.com/4982/as-images.apple.com/is/mba13-m4-midnight-select-202502?wid=904&hei=840&fmt=jpeg&qlt=90',
+    'https://store.storeimages.cdn-apple.com/4982/as-images.apple.com/is/mbp16-spaceblack-select-202310?wid=904&hei=840&fmt=jpeg&qlt=90',
+    'https://store.storeimages.cdn-apple.com/4982/as-images.apple.com/is/macbook-air-starlight-select-20220606?wid=904&hei=840&fmt=jpeg&qlt=90',
+    'https://store.storeimages.cdn-apple.com/4982/as-images.apple.com/is/mba15-silver-select-202306?wid=904&hei=840&fmt=jpeg&qlt=90',
   ],
   'gaming-pc': [
     'https://images.unsplash.com/photo-1587202372583-49330a15584d?auto=format&fit=crop&w=800&q=85',
@@ -356,7 +451,7 @@ const CATEGORY_PRODUCT_IMAGES: Record<string, string[]> = {
     'https://images.unsplash.com/photo-1629654297299-c8506221ca97?auto=format&fit=crop&w=800&q=85',
     'https://images.unsplash.com/photo-1587202372634-32705e3bf49c?auto=format&fit=crop&w=800&q=85',
     'https://images.unsplash.com/photo-1597872200969-2b65d56bd16b?auto=format&fit=crop&w=800&q=85',
-    'https://images.unsplash.com/photo-1563013544-824ae1b704d3?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1597872200969-2b65d56bd16b?auto=format&fit=crop&w=800&q=85',
     'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?auto=format&fit=crop&w=800&q=85',
     'https://images.unsplash.com/photo-1562976540-1502c2145186?auto=format&fit=crop&w=800&q=85',
     'https://images.unsplash.com/photo-1601737487795-dab272f52420?auto=format&fit=crop&w=800&q=85',
@@ -404,7 +499,7 @@ const CATEGORY_PRODUCT_IMAGES: Record<string, string[]> = {
     'https://images.unsplash.com/photo-1629654297299-c8506221ca97?auto=format&fit=crop&w=800&q=85',
     'https://images.unsplash.com/photo-1587202372634-32705e3bf49c?auto=format&fit=crop&w=800&q=85',
     'https://images.unsplash.com/photo-1587202372775-e229f172b9d7?auto=format&fit=crop&w=800&q=85',
-    'https://images.unsplash.com/photo-1563013544-824ae1b704d3?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1597872200969-2b65d56bd16b?auto=format&fit=crop&w=800&q=85',
     'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&w=800&q=85',
     'https://images.unsplash.com/photo-1588508065123-287b28e013da?auto=format&fit=crop&w=800&q=85',
     'https://images.unsplash.com/photo-1601737487795-dab272f52420?auto=format&fit=crop&w=800&q=85',
@@ -419,7 +514,7 @@ const CATEGORY_PRODUCT_IMAGES: Record<string, string[]> = {
     'https://images.unsplash.com/photo-1640955014216-75201056c829?auto=format&fit=crop&w=800&q=85',
   ],
   ssd: [
-    'https://images.unsplash.com/photo-1563013544-824ae1b704d3?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1624705002806-5d72df19c3ad?auto=format&fit=crop&w=800&q=85',
     'https://images.unsplash.com/photo-1597872200969-2b65d56bd16b?auto=format&fit=crop&w=800&q=85',
     'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&w=800&q=85',
     'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=800&q=85',
@@ -496,7 +591,7 @@ const CATEGORY_PRODUCT_IMAGES: Record<string, string[]> = {
     'https://images.unsplash.com/photo-1605773527852-c546a8584ea3?auto=format&fit=crop&w=800&q=85',
     'https://images.unsplash.com/photo-1593642634443-44adaa06623a?auto=format&fit=crop&w=800&q=85',
     'https://images.unsplash.com/photo-1527443224154-c4a3942d3acf?auto=format&fit=crop&w=800&q=85',
-    'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1629429408209-1f912961dbd8?auto=format&fit=crop&w=800&q=85',
     'https://images.unsplash.com/photo-1625842268584-8f3296236761?auto=format&fit=crop&w=800&q=85',
     'https://images.unsplash.com/photo-1587831990711-23ca6441447b?auto=format&fit=crop&w=800&q=85',
     'https://images.unsplash.com/photo-1600861194942-f883de0dfe96?auto=format&fit=crop&w=800&q=85',
@@ -602,7 +697,7 @@ const CATEGORY_PRODUCT_IMAGES: Record<string, string[]> = {
     'https://product.hstatic.net/200000722513/product/ing-ghe-corsair-t3-rush-charcoal-6666_06d6e0d13f64400cbdca9939fafe1acd_df1e20ad6e3c45c18e2e2d8ff3ce2dc1.jpg',
   ],
   mousepad: ['https://product.hstatic.net/200000722513/product/_q100_crop-fit_optimize_subsampling-2_2ef1b8fbb6e74381b1329502470db19b_85d69bcef1664de3a6852008a87d5ef5.png'],
-  webcam: ['https://m.media-amazon.com/images/I/61UxqckXwAL._AC_SL1500_.jpg'],
+  webcam: ['https://images.unsplash.com/photo-1588508065123-287b28e013da?auto=format&fit=crop&w=800&q=85'],
   microphone: ['https://edge.rode.com/images/page/77/modules/3685/RODE_NT-USB_Mini_FRONT_DEEP_ETCHED-2000x2000-ecf456c.png'],
   default: [
     'https://images.unsplash.com/photo-1593640408182-31c70c8268f5?auto=format&fit=crop&w=800&q=85',
@@ -631,15 +726,32 @@ function getProductImageCategory(product: { name?: string; category?: string; ca
   return category || 'default';
 }
 
+export function isInvalidOrBlockedImageUrl(url?: string): boolean {
+  if (!url || typeof url !== 'string' || !url.startsWith('http')) return true;
+  const lower = url.toLowerCase();
+  return (
+    lower.includes('cdn.tgdd.vn') ||
+    lower.includes('m.media-amazon.com') ||
+    lower.includes('laptop360.net') ||
+    lower.includes('susercontent.com') ||
+    lower.includes('hanoicomputercdn.com') ||
+    lower.includes('bizweb.dktcdn.net') ||
+    lower.includes('anphat.com.vn') ||
+    lower.includes('photo-1563013544-824ae1b704d3')
+  );
+}
+
 export function getProductFallbackImage(product: { id?: string; name?: string; category?: string; category_id?: string }) {
   const category = getProductImageCategory(product);
-  const imagePool = CATEGORY_PRODUCT_IMAGES[category] ?? CATEGORY_PRODUCT_IMAGES.default;
+  const rawPool = CATEGORY_PRODUCT_IMAGES[category] ?? CATEGORY_PRODUCT_IMAGES.default;
+  const imagePool = rawPool.filter((img) => !isInvalidOrBlockedImageUrl(img));
+  const poolToUse = imagePool.length > 0 ? imagePool : CATEGORY_PRODUCT_IMAGES.default;
   const seed = `${product.id ?? ''}-${product.name ?? ''}`;
   let hash = 0;
   for (let index = 0; index < seed.length; index += 1) {
     hash = (hash * 31 + seed.charCodeAt(index)) >>> 0;
   }
-  return imagePool[hash % imagePool.length];
+  return poolToUse[hash % poolToUse.length];
 }
 
 export function assignUniqueProductImages<T extends { id: string; name: string; category?: string; category_id?: string; image?: string; images?: string[] }>(items: T[]): T[] {
@@ -647,24 +759,27 @@ export function assignUniqueProductImages<T extends { id: string; name: string; 
   const categoryCounters: Record<string, number> = {};
 
   return items.map((item) => {
-    // 1. Products with explicit overrides keep their own image
-    if (PRODUCT_IMAGE_OVERRIDES[item.id]) {
+    // 1. Products with explicit overrides keep their own image IF NOT BLOCKED
+    if (PRODUCT_IMAGE_OVERRIDES[item.id] && !isInvalidOrBlockedImageUrl(PRODUCT_IMAGE_OVERRIDES[item.id])) {
       const image = PRODUCT_IMAGE_OVERRIDES[item.id];
       return { ...item, image, images: [image] } as T;
     }
 
-    // 2. Products that already have a unique non-unsplash image (e.g. laptop360.net) keep it
+    // 2. Products that already have a unique non-unsplash image IF NOT BLOCKED
     if (
       item.image &&
+      !isInvalidOrBlockedImageUrl(item.image) &&
       !item.image.includes('unsplash.com') &&
       item.image.startsWith('http')
     ) {
       return { ...item, image: item.image, images: [item.image] } as T;
     }
 
-    // 3. Assign from the pool sequentially to guarantee unique images per category
+    // 3. Assign from the clean pool sequentially to guarantee unique images per category
     const category = getProductImageCategory(item);
-    const imagePool = CATEGORY_PRODUCT_IMAGES[category] ?? CATEGORY_PRODUCT_IMAGES.default;
+    const rawPool = CATEGORY_PRODUCT_IMAGES[category] ?? CATEGORY_PRODUCT_IMAGES.default;
+    const imagePool = rawPool.filter((img) => !isInvalidOrBlockedImageUrl(img));
+    const poolToUse = imagePool.length > 0 ? imagePool : CATEGORY_PRODUCT_IMAGES.default;
 
     if (!categoryCounters[category]) {
       categoryCounters[category] = 0;
@@ -672,7 +787,7 @@ export function assignUniqueProductImages<T extends { id: string; name: string; 
     const idx = categoryCounters[category];
     categoryCounters[category] += 1;
 
-    const image = imagePool[idx % imagePool.length];
+    const image = poolToUse[idx % poolToUse.length];
     return { ...item, image, images: [image] } as T;
   });
 }
@@ -854,25 +969,25 @@ export const products: Product[] = assignUniqueProductImages([
     "isNew": true,
     "isSale": true,
     "isHot": true,
-    "image": "https://laptop360.net/wp-content/uploads/2022/10/Thiet-ke-chua-co-ten-26-247x247.jpg",
+    "image": "https://images.unsplash.com/photo-1531297484001-80022131f5a1?auto=format&fit=crop&w=800&q=85",
     "images": [
-      "https://laptop360.net/wp-content/uploads/2022/10/Thiet-ke-chua-co-ten-26-247x247.jpg"
+      "https://images.unsplash.com/photo-1531297484001-80022131f5a1?auto=format&fit=crop&w=800&q=85"
     ],
-    "description": "Sản phẩm [Like New] Dell G3 3500 (Core i5-10300H, 8GB, 512GB, GTX 1650 4GB, 15.6 FHD 120Hz) được nhập khẩu và phân phối bởi Laptop360 Hải Phòng. Ngoại hình tuyển chọn đẹp 99% đến mới 100%, nguyên zin 100% chưa qua sửa chữa, pin khỏe và hiệu năng ổn định.",
+    "description": "Laptop Gaming Dell G3 3500 sở hữu thiết kế thể thao hầm hố với khe hút gió tản nhiệt kép khí động học. Cỗ máy trang bị vi xử lý Intel Core i5-10300H xung nhịp lên đến 4.5GHz, kết hợp cùng card đồ họa rời NVIDIA GeForce GTX 1650 4GB GDDR6 mang lại trải nghiệm gaming mượt mà trên các tựa game Esport thịnh hành (Liên Minh Huyền Thoại, FIFA Online 4, CS2, Valorant). Màn hình 15.6 inch Full HD viền mỏng tần số quét 120Hz mượt mà, bàn phím LED xanh cá tính và hệ thống âm thanh vòm Nahimic 3D sống động.",
     "features": [
-      "Cam kết zin nguyên bản 100% từ nhà sản xuất",
-      "Bảo hành toàn diện 12 tháng tại Laptop360",
-      "Tặng gói phụ kiện: Balo + Chuột không dây + Cài win trọn đời",
-      "Hỗ trợ trả góp lãi suất 0%"
+      "Card đồ họa rời NVIDIA GeForce GTX 1650 4GB GDDR6 chiến game mượt mà",
+      "Màn hình 15.6 inch FHD viền mỏng chống chói, tần số quét 120Hz mượt mà",
+      "Hệ thống tản nhiệt 2 quạt làm mát hiệu suất cao với công nghệ Game Shift",
+      "Bảo hành 12 tháng chính hãng tại DANGVINHPC, hỗ trợ vệ sinh tra keo tản nhiệt trọn đời"
     ],
     "specifications": {
       "Thương hiệu": "Dell Chính Hãng",
       "Tình trạng": "Like New 99% Zin nguyên bản",
-      "Bảo hành": "12 tháng tại Laptop360 - 1 đổi 1 trong 30 ngày",
-      "Màn hình": "15.6 inch Full HD 120Hz",
-      "Tặng kèm": "Balo chống sốc Laptop360 + Chuột không dây + Lót chuột",
-      "Dòng máy": "Dell Gaming Series chiến game mượt mà",
-      "Card đồ họa": "NVIDIA GTX 1650 4GB"
+      "Bảo hành": "12 tháng tại DANGVINHPC - 1 đổi 1 trong 30 ngày",
+      "Màn hình": "15.6 inch Full HD (1920x1080) 120Hz WVA",
+      "Tặng kèm": "Balo gaming chống sốc + Chuột không dây + Lót chuột",
+      "Dòng máy": "Dell Gaming Series",
+      "Card đồ họa": "NVIDIA GeForce GTX 1650 4GB GDDR6"
     }
   },
   {
@@ -890,25 +1005,25 @@ export const products: Product[] = assignUniqueProductImages([
     "isNew": true,
     "isSale": true,
     "isHot": true,
-    "image": "https://laptop360.net/wp-content/uploads/2023/07/rtuzw0me-1278-dell-inspiron-14-plus-7430-2023-core-i7-13620h-ram-16gb-ssd-1tb-14-2-5k-win-11-new-247x247.png",
+    "image": "https://images.unsplash.com/photo-1541807084-5c52b6b3adef?auto=format&fit=crop&w=800&q=85",
     "images": [
-      "https://laptop360.net/wp-content/uploads/2023/07/rtuzw0me-1278-dell-inspiron-14-plus-7430-2023-core-i7-13620h-ram-16gb-ssd-1tb-14-2-5k-win-11-new-247x247.png"
+      "https://images.unsplash.com/photo-1541807084-5c52b6b3adef?auto=format&fit=crop&w=800&q=85"
     ],
-    "description": "Sản phẩm [Mới 100% ] Dell Inspiron 14 Plus 7430 (Core i5-13420H, 16GB, 1TB, 14.0\"\" 2.5K 90HZ) được nhập khẩu và phân phối bởi Laptop360 Hải Phòng. Ngoại hình tuyển chọn đẹp 99% đến mới 100%, nguyên zin 100% chưa qua sửa chữa, pin khỏe và hiệu năng ổn định.",
+    "description": "Dell Inspiron 14 Plus 7430 là dòng ultrabook văn phòng cao cấp chuẩn doanh nhân với khung vỏ hợp kim nhôm Platinum Silver mỏng nhẹ chỉ 1.6kg. Sức mạnh đột phá từ vi xử lý Intel Core i5-13420H dòng H hiệu năng cao (8 nhân 12 luồng), dung lượng RAM 16GB đa nhiệm mượt mà và ổ cứng lưu trữ cực lớn 1TB PCIe NVMe SSD. Điểm sáng nổi trội là màn hình 14.0 inch độ phân giải 2.5K (2560x1600) tỷ lệ vàng 16:10, tần số quét 90Hz và độ phủ màu 100% sRGB cho hình ảnh rực rỡ, chuẩn màu cho đồ họa.",
     "features": [
-      "Cam kết zin nguyên bản 100% từ nhà sản xuất",
-      "Bảo hành toàn diện 12 tháng tại Laptop360",
-      "Tặng gói phụ kiện: Balo + Chuột không dây + Cài win trọn đời",
-      "Hỗ trợ trả góp lãi suất 0%"
+      "Vi xử lý Intel Core i5-13420H hiệu năng cao xử lý tốt lập trình và đồ họa",
+      "Màn hình 14 inch độ phân giải 2.5K 90Hz chuẩn màu 100% sRGB",
+      "Ổ cứng siêu khủng 1TB PCIe NVMe SSD tốc độ đọc ghi cực nhanh",
+      "Khung vỏ nhôm nguyên khối cao cấp, bàn phím có đèn nền và cảm biến vân tay"
     ],
     "specifications": {
       "Thương hiệu": "Dell Chính Hãng",
       "Tình trạng": "Mới 100% Fullbox",
-      "Bảo hành": "12 tháng tại Laptop360 - 1 đổi 1 trong 30 ngày",
-      "Màn hình": "14.0 inch 2.5K (2560x1600) 90Hz",
-      "Tặng kèm": "Balo chống sốc Laptop360 + Chuột không dây + Lót chuột",
-      "Dòng máy": "Dell Inspiron / Latitude Văn phòng - Học tập",
-      "Card đồ họa": "Intel Iris Xe Graphics / AMD Radeon Graphics"
+      "Bảo hành": "12 tháng tại DANGVINHPC - 1 đổi 1 trong 30 ngày",
+      "Màn hình": "14.0 inch 2.5K (2560x1600) 90Hz 100% sRGB",
+      "Tặng kèm": "Balo cao cấp DANGVINHPC + Chuột không dây + Lót chuột",
+      "Dòng máy": "Dell Inspiron 14 Plus Cao Cấp",
+      "Card đồ họa": "Intel Iris Xe Graphics"
     }
   },
   {
@@ -926,25 +1041,25 @@ export const products: Product[] = assignUniqueProductImages([
     "isNew": true,
     "isSale": true,
     "isHot": true,
-    "image": "https://laptop360.net/wp-content/uploads/2023/07/rtuzw0me-1278-dell-inspiron-14-plus-7430-2023-core-i7-13620h-ram-16gb-ssd-1tb-14-2-5k-win-11-new-247x247.png",
+    "image": "https://images.unsplash.com/photo-1588872657578-7efd1f1555ed?auto=format&fit=crop&w=800&q=85",
     "images": [
-      "https://laptop360.net/wp-content/uploads/2023/07/rtuzw0me-1278-dell-inspiron-14-plus-7430-2023-core-i7-13620h-ram-16gb-ssd-1tb-14-2-5k-win-11-new-247x247.png"
+      "https://images.unsplash.com/photo-1588872657578-7efd1f1555ed?auto=format&fit=crop&w=800&q=85"
     ],
-    "description": "Sản phẩm [Mới 100% ] Dell Inspiron 14 Plus 7430 (Core i5-13500H, 16GB, 512GB, 14.0\"\" 2.5K 90HZ) được nhập khẩu và phân phối bởi Laptop360 Hải Phòng. Ngoại hình tuyển chọn đẹp 99% đến mới 100%, nguyên zin 100% chưa qua sửa chữa, pin khỏe và hiệu năng ổn định.",
+    "description": "Dell Inspiron 14 Plus 7430 phiên bản chip Intel Core i5-13500H mạnh mẽ với 12 nhân 16 luồng, xung nhịp Turbo tối đa 4.7GHz đáp ứng trơn tru các tác vụ tính toán nặng, dựng video 4K và chạy máy ảo. Bộ nhớ RAM 16GB chuẩn LPDDR5 tốc độ cao cùng 512GB SSD NVMe cho tốc độ phản hồi tức thì. Thiết kế tinh xảo, tản nhiệt kép ống đồng thông minh giúp thân máy luôn mát mẻ và vận hành êm ái.",
     "features": [
-      "Cam kết zin nguyên bản 100% từ nhà sản xuất",
-      "Bảo hành toàn diện 12 tháng tại Laptop360",
-      "Tặng gói phụ kiện: Balo + Chuột không dây + Cài win trọn đời",
-      "Hỗ trợ trả góp lãi suất 0%"
+      "Chip Intel Core i5-13500H 12 nhân 16 luồng xung nhịp tối đa 4.7GHz",
+      "Màn hình 14.0 inch 2.5K (2560x1600) công nghệ chống chói ComfortView Plus",
+      "Loa kép Waves MaxxAudio Pro kết hợp Dolby Atmos âm thanh sống động",
+      "Bảo hành toàn diện 12 tháng tại DANGVINHPC, hỗ trợ kỹ thuật trọn đời"
     ],
     "specifications": {
       "Thương hiệu": "Dell Chính Hãng",
       "Tình trạng": "Mới 100% Fullbox",
-      "Bảo hành": "12 tháng tại Laptop360 - 1 đổi 1 trong 30 ngày",
-      "Màn hình": "14.0 inch 2.5K (2560x1600) 90Hz",
-      "Tặng kèm": "Balo chống sốc Laptop360 + Chuột không dây + Lót chuột",
-      "Dòng máy": "Dell Inspiron / Latitude Văn phòng - Học tập",
-      "Card đồ họa": "Intel Iris Xe Graphics / AMD Radeon Graphics"
+      "Bảo hành": "12 tháng tại DANGVINHPC - 1 đổi 1 trong 30 ngày",
+      "Màn hình": "14.0 inch 2.5K (2560x1600) 90Hz Anti-Glare",
+      "Tặng kèm": "Balo cao cấp DANGVINHPC + Chuột không dây + Lót chuột",
+      "Dòng máy": "Dell Inspiron 14 Plus",
+      "Card đồ họa": "Intel Iris Xe Graphics"
     }
   },
   {
@@ -962,25 +1077,25 @@ export const products: Product[] = assignUniqueProductImages([
     "isNew": true,
     "isSale": true,
     "isHot": true,
-    "image": "https://laptop360.net/wp-content/uploads/2023/07/rtuzw0me-1278-dell-inspiron-14-plus-7430-2023-core-i7-13620h-ram-16gb-ssd-1tb-14-2-5k-win-11-new-247x247.png",
+    "image": "https://images.unsplash.com/photo-1525547719571-a2d4ac8945e2?auto=format&fit=crop&w=800&q=85",
     "images": [
-      "https://laptop360.net/wp-content/uploads/2023/07/rtuzw0me-1278-dell-inspiron-14-plus-7430-2023-core-i7-13620h-ram-16gb-ssd-1tb-14-2-5k-win-11-new-247x247.png"
+      "https://images.unsplash.com/photo-1525547719571-a2d4ac8945e2?auto=format&fit=crop&w=800&q=85"
     ],
-    "description": "Sản phẩm [Mới 100% ] Dell Inspiron 7430 N7430I58W1 (Core i5-1335U | 8GB | 512GB | Intel Iris Xe | 14 inch FHD +) được nhập khẩu và phân phối bởi Laptop360 Hải Phòng. Ngoại hình tuyển chọn đẹp 99% đến mới 100%, nguyên zin 100% chưa qua sửa chữa, pin khỏe và hiệu năng ổn định.",
+    "description": "Dell Inspiron 7430 N7430I58W1 là mẫu laptop văn phòng thanh lịch, siêu di động dành cho học sinh, sinh viên và nhân viên công sở. Máy được trang bị chip Intel Core i5-1335U thế hệ 13 tối ưu năng lượng tuyệt vời, cho thời lượng pin sử dụng bền bỉ cả ngày. Màn hình 14.0 inch FHD+ viền siêu mỏng tỷ lệ 16:10 hiển thị nhiều thông tin hơn khi lướt web và đọc tài liệu. Cổng kết nối đầy đủ Thunderbolt 4, HDMI và đầu đọc thẻ SD.",
     "features": [
-      "Cam kết zin nguyên bản 100% từ nhà sản xuất",
-      "Bảo hành toàn diện 12 tháng tại Laptop360",
-      "Tặng gói phụ kiện: Balo + Chuột không dây + Cài win trọn đời",
-      "Hỗ trợ trả góp lãi suất 0%"
+      "Vi xử lý Intel Core i5-1335U thế hệ 13 tiết kiệm điện năng vượt trội",
+      "Màn hình 14.0 inch FHD+ (1920x1200) tỷ lệ 16:10 viền mỏng 4 cạnh",
+      "Thời lượng pin ấn tượng lên đến 8-10 tiếng làm việc văn phòng",
+      "Tích hợp cảm biến vân tay trên nút nguồn và đèn nền bàn phím tiện lợi"
     ],
     "specifications": {
       "Thương hiệu": "Dell Chính Hãng",
       "Tình trạng": "Mới 100% Fullbox",
-      "Bảo hành": "12 tháng tại Laptop360 - 1 đổi 1 trong 30 ngày",
-      "Màn hình": "14.0 inch FHD+ IPS chống chói",
-      "Tặng kèm": "Balo chống sốc Laptop360 + Chuột không dây + Lót chuột",
-      "Dòng máy": "Dell Inspiron / Latitude Văn phòng - Học tập",
-      "Card đồ họa": "Intel Iris Xe Graphics / AMD Radeon Graphics"
+      "Bảo hành": "12 tháng tại DANGVINHPC - 1 đổi 1 trong 30 ngày",
+      "Màn hình": "14.0 inch FHD+ (1920x1200) IPS",
+      "Tặng kèm": "Balo chống sốc DANGVINHPC + Chuột không dây + Lót chuột",
+      "Dòng máy": "Dell Inspiron 7430",
+      "Card đồ họa": "Intel Iris Xe Graphics"
     }
   },
   {
@@ -998,25 +1113,25 @@ export const products: Product[] = assignUniqueProductImages([
     "isNew": true,
     "isSale": true,
     "isHot": true,
-    "image": "https://laptop360.net/wp-content/uploads/2023/07/rtuzw0me-1278-dell-inspiron-14-plus-7430-2023-core-i7-13620h-ram-16gb-ssd-1tb-14-2-5k-win-11-new-247x247.png",
+    "image": "https://images.unsplash.com/photo-1618410320928-25228d811631?auto=format&fit=crop&w=800&q=85",
     "images": [
-      "https://laptop360.net/wp-content/uploads/2023/07/rtuzw0me-1278-dell-inspiron-14-plus-7430-2023-core-i7-13620h-ram-16gb-ssd-1tb-14-2-5k-win-11-new-247x247.png"
+      "https://images.unsplash.com/photo-1618410320928-25228d811631?auto=format&fit=crop&w=800&q=85"
     ],
-    "description": "Sản phẩm [Mới 100% ] Laptop Dell Inspiron 14 Plus 7430 (Core i7-13620H, Ram 16GB, SSD 1TB, 14inch 2.5K, Win 11) được nhập khẩu và phân phối bởi Laptop360 Hải Phòng. Ngoại hình tuyển chọn đẹp 99% đến mới 100%, nguyên zin 100% chưa qua sửa chữa, pin khỏe và hiệu năng ổn định.",
+    "description": "Dell Inspiron 14 Plus 7430 cấu hình cao cấp trang bị chip Intel Core i7-13620H (10 nhân 16 luồng, Turbo Boost 4.9GHz) đem lại tốc độ xử lý đỉnh cao cho mọi tác vụ lập trình, dựng video 4K và đồ họa chuyên sâu. Dung lượng RAM 16GB đa nhiệm mượt mà cùng ổ cứng 1TB PCIe NVMe SSD thỏa sức lưu trữ dữ liệu dung lượng lớn. Màn hình 14.0 inch 2.5K (2560x1600) 90Hz tỷ lệ 16:10 hiển thị sắc nét, sống động, chống mỏi mắt hiệu quả.",
     "features": [
-      "Cam kết zin nguyên bản 100% từ nhà sản xuất",
-      "Bảo hành toàn diện 12 tháng tại Laptop360",
-      "Tặng gói phụ kiện: Balo + Chuột không dây + Cài win trọn đời",
-      "Hỗ trợ trả góp lãi suất 0%"
+      "Vi xử lý Intel Core i7-13620H thế hệ 13 cực mạnh cân mọi tác vụ nặng",
+      "Màn hình 14.0 inch 2.5K 90Hz hiển thị siêu nét, chuẩn màu đồ họa",
+      "Ổ cứng siêu khủng 1TB PCIe NVMe SSD truy xuất dữ liệu cực nhanh",
+      "Bảo hành 12 tháng tại DANGVINHPC, hỗ trợ cài đặt và vệ sinh trọn đời"
     ],
     "specifications": {
       "Thương hiệu": "Dell Chính Hãng",
       "Tình trạng": "Mới 100% Fullbox",
-      "Bảo hành": "12 tháng tại Laptop360 - 1 đổi 1 trong 30 ngày",
+      "Bảo hành": "12 tháng tại DANGVINHPC - 1 đổi 1 trong 30 ngày",
       "Màn hình": "14.0 inch 2.5K (2560x1600) 90Hz",
-      "Tặng kèm": "Balo chống sốc Laptop360 + Chuột không dây + Lót chuột",
-      "Dòng máy": "Dell Inspiron / Latitude Văn phòng - Học tập",
-      "Card đồ họa": "Intel Iris Xe Graphics / AMD Radeon Graphics"
+      "Tặng kèm": "Balo chống sốc DANGVINHPC + Chuột không dây + Lót chuột",
+      "Dòng máy": "Dell Inspiron 14 Plus i7",
+      "Card đồ họa": "Intel Iris Xe Graphics"
     }
   },
   {
@@ -1034,25 +1149,25 @@ export const products: Product[] = assignUniqueProductImages([
     "isNew": true,
     "isSale": true,
     "isHot": true,
-    "image": "https://laptop360.net/wp-content/uploads/2023/09/Thiet-ke-chua-co-ten-43-247x247.png",
+    "image": "https://images.unsplash.com/photo-1629131726692-1accd0c53ce0?auto=format&fit=crop&w=800&q=85",
     "images": [
-      "https://laptop360.net/wp-content/uploads/2023/09/Thiet-ke-chua-co-ten-43-247x247.png"
+      "https://images.unsplash.com/photo-1629131726692-1accd0c53ce0?auto=format&fit=crop&w=800&q=85"
     ],
-    "description": "Sản phẩm [Mới 100% ] Laptop Dell Latitude 5530 Core i5 1235U/ Ram 16GB/ SSD 256GB được nhập khẩu và phân phối bởi Laptop360 Hải Phòng. Ngoại hình tuyển chọn đẹp 99% đến mới 100%, nguyên zin 100% chưa qua sửa chữa, pin khỏe và hiệu năng ổn định.",
+    "description": "Laptop doanh nghiệp Dell Latitude 5530 đạt tiêu chuẩn độ bền quân đội Mỹ MIL-STD 810H, khung máy gia cố sợi carbon chắc chắn và chịu va đập cực tốt. Màn hình lớn 15.6 inch Full HD chống chói WVA kèm bàn phím số Numpad tiện lợi cho kế toán, nhập liệu và xử lý văn bản. Tích hợp chip bảo mật TPM 2.0, cảm biến vân tay 1 chạm và camera có thanh trượt che riêng tư an toàn tuyệt đối.",
     "features": [
-      "Cam kết zin nguyên bản 100% từ nhà sản xuất",
-      "Bảo hành toàn diện 12 tháng tại Laptop360",
-      "Tặng gói phụ kiện: Balo + Chuột không dây + Cài win trọn đời",
-      "Hỗ trợ trả góp lãi suất 0%"
+      "Độ bền đạt chuẩn quân sự Mỹ MIL-STD 810H chống va đập, rung lắc",
+      "Màn hình 15.6 inch FHD chống chói làm việc tốt ngoài trời",
+      "RAM 16GB đa nhiệm mượt mà, dễ dàng nâng cấp mở rộng",
+      "Chính sách bảo hành 12 tháng uy tín tại DANGVINHPC"
     ],
     "specifications": {
       "Thương hiệu": "Dell Chính Hãng",
       "Tình trạng": "Mới 100% Fullbox",
-      "Bảo hành": "12 tháng tại Laptop360 - 1 đổi 1 trong 30 ngày",
-      "Màn hình": "14.0 inch FHD+ IPS chống chói",
-      "Tặng kèm": "Balo chống sốc Laptop360 + Chuột không dây + Lót chuột",
-      "Dòng máy": "Dell Inspiron / Latitude Văn phòng - Học tập",
-      "Card đồ họa": "Intel Iris Xe Graphics / AMD Radeon Graphics"
+      "Bảo hành": "12 tháng tại DANGVINHPC - 1 đổi 1 trong 30 ngày",
+      "Màn hình": "15.6 inch FHD (1920x1080) Anti-glare",
+      "Tặng kèm": "Balo chống sốc DANGVINHPC + Chuột không dây + Lót chuột",
+      "Dòng máy": "Dell Latitude Doanh Nghiệp",
+      "Card đồ họa": "Intel Iris Xe Graphics"
     }
   },
   {
@@ -1070,25 +1185,25 @@ export const products: Product[] = assignUniqueProductImages([
     "isNew": true,
     "isSale": true,
     "isHot": true,
-    "image": "https://laptop360.net/wp-content/uploads/2022/09/Thiet-ke-chua-co-ten-10-247x247.jpg",
+    "image": "https://images.unsplash.com/photo-1587614382346-4ec70e388b28?auto=format&fit=crop&w=800&q=85",
     "images": [
-      "https://laptop360.net/wp-content/uploads/2022/09/Thiet-ke-chua-co-ten-10-247x247.jpg"
+      "https://images.unsplash.com/photo-1587614382346-4ec70e388b28?auto=format&fit=crop&w=800&q=85"
     ],
-    "description": "Sản phẩm [Mới 100%] - Dell Inspiron 5415 được nhập khẩu và phân phối bởi Laptop360 Hải Phòng. Ngoại hình tuyển chọn đẹp 99% đến mới 100%, nguyên zin 100% chưa qua sửa chữa, pin khỏe và hiệu năng ổn định.",
+    "description": "Dell Inspiron 5415 sở hữu thiết kế mỏng nhẹ hiện đại với màu bạc thanh lịch, trọng lượng chỉ khoảng 1.4kg tiện lợi bỏ balo đi học và đi làm. Máy sử dụng chip AMD Ryzen 5000 Series tiến trình 7nm tiết kiệm pin tối ưu và nhiệt độ luôn mát mẻ. Màn hình 14.0 inch Full HD viền mỏng góc rộng IPS cho góc nhìn sống động, màu sắc trung thực khi giải trí xem phim và làm việc văn phòng.",
     "features": [
-      "Cam kết zin nguyên bản 100% từ nhà sản xuất",
-      "Bảo hành toàn diện 12 tháng tại Laptop360",
-      "Tặng gói phụ kiện: Balo + Chuột không dây + Cài win trọn đời",
-      "Hỗ trợ trả góp lãi suất 0%"
+      "Thiết kế nhỏ gọn 14 inch siêu mỏng nhẹ chỉ 1.4kg",
+      "Bản lề thông minh nâng bàn phím hỗ trợ tản nhiệt và gõ êm tay",
+      "Pin dung lượng cao cho thời gian sử dụng 7-9 tiếng liên tục",
+      "Bảo hành 12 tháng tại DANGVINHPC, hỗ trợ đổi mới trong 30 ngày"
     ],
     "specifications": {
       "Thương hiệu": "Dell Chính Hãng",
       "Tình trạng": "Mới 100% Fullbox",
-      "Bảo hành": "12 tháng tại Laptop360 - 1 đổi 1 trong 30 ngày",
-      "Màn hình": "15.6 inch Full HD 120Hz",
-      "Tặng kèm": "Balo chống sốc Laptop360 + Chuột không dây + Lót chuột",
-      "Dòng máy": "Dell Inspiron / Latitude Văn phòng - Học tập",
-      "Card đồ họa": "Intel Iris Xe Graphics / AMD Radeon Graphics"
+      "Bảo hành": "12 tháng tại DANGVINHPC - 1 đổi 1 trong 30 ngày",
+      "Màn hình": "14.0 inch Full HD (1920x1080) IPS",
+      "Tặng kèm": "Balo thời trang DANGVINHPC + Chuột không dây + Lót chuột",
+      "Dòng máy": "Dell Inspiron Siêu Di Động",
+      "Card đồ họa": "AMD Radeon Graphics"
     }
   },
   {
@@ -1106,25 +1221,25 @@ export const products: Product[] = assignUniqueProductImages([
     "isNew": true,
     "isSale": true,
     "isHot": true,
-    "image": "https://laptop360.net/wp-content/uploads/2022/10/Thiet-ke-chua-co-ten-29-247x247.jpg",
+    "image": "https://images.unsplash.com/photo-1504707748692-419802cf939d?auto=format&fit=crop&w=800&q=85",
     "images": [
-      "https://laptop360.net/wp-content/uploads/2022/10/Thiet-ke-chua-co-ten-29-247x247.jpg"
+      "https://images.unsplash.com/photo-1504707748692-419802cf939d?auto=format&fit=crop&w=800&q=85"
     ],
-    "description": "Sản phẩm [Mới 100%] - Dell Inspiron 5425 (2022) được nhập khẩu và phân phối bởi Laptop360 Hải Phòng. Ngoại hình tuyển chọn đẹp 99% đến mới 100%, nguyên zin 100% chưa qua sửa chữa, pin khỏe và hiệu năng ổn định.",
+    "description": "Dell Inspiron 5425 đời 2022 được nâng cấp mạnh mẽ với màn hình tỷ lệ 16:10 Full HD+ viền siêu mỏng, mở rộng không gian hiển thị thêm 11% so với màn hình 16:9 truyền thống. Máy trang bị vi xử lý AMD Ryzen 5 5625U (6 nhân 12 luồng) vận hành mượt mà các tác vụ văn phòng, học trực tuyến và chỉnh sửa đồ họa nhẹ. Hệ thống micro kép lọc ồn thông minh AI giúp hội thoại trực tuyến trong trẻo, rõ nét.",
     "features": [
-      "Cam kết zin nguyên bản 100% từ nhà sản xuất",
-      "Bảo hành toàn diện 12 tháng tại Laptop360",
-      "Tặng gói phụ kiện: Balo + Chuột không dây + Cài win trọn đời",
-      "Hỗ trợ trả góp lãi suất 0%"
+      "Màn hình tỷ lệ vàng 16:10 FHD+ (1920x1200) chống chói Anti-Glare",
+      "Chip AMD Ryzen 5 5625U 6 nhân 12 luồng chạy cực mát và tiết kiệm điện",
+      "Micro kép khử tiếng ồn bằng AI nâng cao chất lượng cuộc gọi",
+      "Bảo hành 12 tháng tại DANGVINHPC, hỗ trợ kỹ thuật tận tâm 24/7"
     ],
     "specifications": {
       "Thương hiệu": "Dell Chính Hãng",
       "Tình trạng": "Mới 100% Fullbox",
-      "Bảo hành": "12 tháng tại Laptop360 - 1 đổi 1 trong 30 ngày",
-      "Màn hình": "14.0 inch FHD+ IPS chống chói",
-      "Tặng kèm": "Balo chống sốc Laptop360 + Chuột không dây + Lót chuột",
-      "Dòng máy": "Dell Inspiron / Latitude Văn phòng - Học tập",
-      "Card đồ họa": "Intel Iris Xe Graphics / AMD Radeon Graphics"
+      "Bảo hành": "12 tháng tại DANGVINHPC - 1 đổi 1 trong 30 ngày",
+      "Màn hình": "14.0 inch FHD+ (1920x1200) WVA",
+      "Tặng kèm": "Balo chống sốc DANGVINHPC + Chuột không dây + Lót chuột",
+      "Dòng máy": "Dell Inspiron 16:10",
+      "Card đồ họa": "AMD Radeon Graphics"
     }
   },
   {
@@ -1142,25 +1257,25 @@ export const products: Product[] = assignUniqueProductImages([
     "isNew": true,
     "isSale": true,
     "isHot": true,
-    "image": "https://laptop360.net/wp-content/uploads/2022/08/Thiet-ke-chua-co-ten-2-247x247.jpg",
+    "image": "https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=800&q=85",
     "images": [
-      "https://laptop360.net/wp-content/uploads/2022/08/Thiet-ke-chua-co-ten-2-247x247.jpg"
+      "https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=800&q=85"
     ],
-    "description": "Sản phẩm [Mới 100%] - Dell Inspiron 5515 được nhập khẩu và phân phối bởi Laptop360 Hải Phòng. Ngoại hình tuyển chọn đẹp 99% đến mới 100%, nguyên zin 100% chưa qua sửa chữa, pin khỏe và hiệu năng ổn định.",
+    "description": "Dell Inspiron 15 5515 sở hữu kích thước màn hình lớn 15.6 inch Full HD viền mỏng, bàn phím full-size có đèn nền. Hiệu năng mạnh mẽ với 8 nhân 16 luồng của AMD Ryzen 7 5700U, xử lý trơn tru mọi bảng tính Excel hàng triệu dòng, đồ họa ảnh và chơi game mượt mà.",
     "features": [
-      "Cam kết zin nguyên bản 100% từ nhà sản xuất",
-      "Bảo hành toàn diện 12 tháng tại Laptop360",
-      "Tặng gói phụ kiện: Balo + Chuột không dây + Cài win trọn đời",
-      "Hỗ trợ trả góp lãi suất 0%"
+      "Chip AMD Ryzen 7 5700U 8 nhân 16 luồng xử lý đa nhiệm cực đỉnh",
+      "Màn hình 15.6 inch FHD viền mỏng chống chói cho trải nghiệm góc nhìn rộng",
+      "Bàn phím Full-size có cụm phím số Numpad tiện lợi cho công việc kế toán",
+      "Bảo hành 12 tháng tại DANGVINHPC, hỗ trợ đổi mới trong 30 ngày"
     ],
     "specifications": {
       "Thương hiệu": "Dell Chính Hãng",
       "Tình trạng": "Mới 100% Fullbox",
-      "Bảo hành": "12 tháng tại Laptop360 - 1 đổi 1 trong 30 ngày",
+      "Bảo hành": "12 tháng tại DANGVINHPC - 1 đổi 1 trong 30 ngày",
       "Màn hình": "15.6 inch Full HD 120Hz",
-      "Tặng kèm": "Balo chống sốc Laptop360 + Chuột không dây + Lót chuột",
-      "Dòng máy": "Dell Inspiron / Latitude Văn phòng - Học tập",
-      "Card đồ họa": "Intel Iris Xe Graphics / AMD Radeon Graphics"
+      "Tặng kèm": "Balo chống sốc DANGVINHPC + Chuột không dây + Lót chuột",
+      "Dòng máy": "Dell Inspiron 15",
+      "Card đồ họa": "AMD Radeon Graphics"
     }
   },
   {
@@ -1178,23 +1293,23 @@ export const products: Product[] = assignUniqueProductImages([
     "isNew": true,
     "isSale": true,
     "isHot": true,
-    "image": "https://laptop360.net/wp-content/uploads/2023/12/Thiet-ke-chua-co-ten-8-247x247.png",
+    "image": "https://images.unsplash.com/photo-1603302576837-37561b2e2302?auto=format&fit=crop&w=800&q=85",
     "images": [
-      "https://laptop360.net/wp-content/uploads/2023/12/Thiet-ke-chua-co-ten-8-247x247.png"
+      "https://images.unsplash.com/photo-1603302576837-37561b2e2302?auto=format&fit=crop&w=800&q=85"
     ],
-    "description": "Sản phẩm [Mới 100%] Dell Alienware M15 R7 2022 được nhập khẩu và phân phối bởi Laptop360 Hải Phòng. Ngoại hình tuyển chọn đẹp 99% đến mới 100%, nguyên zin 100% chưa qua sửa chữa, pin khỏe và hiệu năng ổn định.",
+    "description": "Chiến hạm Alienware M15 R7 đỉnh cao gaming với thiết kế Legend 2.0 độc quyền, vòng LED tròn Stadium lighting phía sau và logo đầu người ngoài hành tinh phát sáng. Card đồ họa khủng NVIDIA GeForce RTX 3070Ti 8GB GDDR6 (150W TGP) cùng tản nhiệt buồng hơi Cryo-tech làm mát bằng quạt gallium-silicone.",
     "features": [
-      "Cam kết zin nguyên bản 100% từ nhà sản xuất",
-      "Bảo hành toàn diện 12 tháng tại Laptop360",
-      "Tặng gói phụ kiện: Balo + Chuột không dây + Cài win trọn đời",
-      "Hỗ trợ trả góp lãi suất 0%"
+      "Card đồ họa NVIDIA GeForce RTX 3070Ti 8GB chạy công suất tối đa 150W",
+      "Màn hình 15.6 inch 240Hz tốc độ phản hồi 2ms hỗ trợ NVIDIA G-Sync",
+      "Hệ thống tản nhiệt Cryo-tech độc quyền của Dell Alienware giữ máy luôn mát",
+      "Bảo hành 12 tháng tại DANGVINHPC, hỗ trợ kỹ thuật chuyên sâu trọn đời"
     ],
     "specifications": {
       "Thương hiệu": "Dell Chính Hãng",
       "Tình trạng": "Mới 100% Fullbox",
-      "Bảo hành": "12 tháng tại Laptop360 - 1 đổi 1 trong 30 ngày",
-      "Màn hình": "15.6 inch Full HD 120Hz",
-      "Tặng kèm": "Balo chống sốc Laptop360 + Chuột không dây + Lót chuột",
+      "Bảo hành": "12 tháng tại DANGVINHPC - 1 đổi 1 trong 30 ngày",
+      "Màn hình": "15.6 inch QHD 240Hz G-Sync",
+      "Tặng kèm": "Balo Alienware cao cấp + Chuột gaming + Lót chuột",
       "Dòng máy": "Alienware Gaming cao cấp nhất",
       "Card đồ họa": "NVIDIA GeForce RTX 3070Ti 8GB GDDR6",
       "CPU": "AMD Ryzen 7 6800H / Intel Core i7 Gen 12th"
@@ -1215,24 +1330,24 @@ export const products: Product[] = assignUniqueProductImages([
     "isNew": true,
     "isSale": true,
     "isHot": true,
-    "image": "https://laptop360.net/wp-content/uploads/2023/04/Thiet-ke-chua-co-ten-4-1-247x247.png",
+    "image": "https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=800&q=85",
     "images": [
-      "https://laptop360.net/wp-content/uploads/2023/04/Thiet-ke-chua-co-ten-4-1-247x247.png"
+      "https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=800&q=85"
     ],
-    "description": "Sản phẩm [Mới 100%] Dell Gaming G15 5530 2023 (Core i5-13450HX, 8GB, 256GB, NVIDIA RTX 3050 6GB, 15\" FHD 120Hz) được nhập khẩu và phân phối bởi Laptop360 Hải Phòng. Ngoại hình tuyển chọn đẹp 99% đến mới 100%, nguyên zin 100% chưa qua sửa chữa, pin khỏe và hiệu năng ổn định.",
+    "description": "Dell Gaming G15 5530 phong cách thiết kế lấy cảm hứng từ Alienware với các góc cạnh đậm chất mecha. Sử dụng chip Intel Core i5-13450HX dòng HX ép xung mạnh mẽ và card đồ họa NVIDIA RTX 3050 6GB GDDR6 mới nhất, tối ưu chơi game mượt mà với tính năng Game Shift tăng tốc tức thì qua phím G.",
     "features": [
-      "Cam kết zin nguyên bản 100% từ nhà sản xuất",
-      "Bảo hành toàn diện 12 tháng tại Laptop360",
-      "Tặng gói phụ kiện: Balo + Chuột không dây + Cài win trọn đời",
-      "Hỗ trợ trả góp lãi suất 0%"
+      "Chip Intel Core i5-13450HX dòng HX tối ưu xung nhịp cao chiến game",
+      "Card đồ họa rời RTX 3050 6GB VRAM GDDR6 thế hệ mới",
+      "Bàn phím LED RGB 4 vùng tùy chỉnh theo phong cách cá nhân",
+      "Bảo hành 12 tháng tại DANGVINHPC, hỗ trợ vệ sinh tra keo tản nhiệt miễn phí"
     ],
     "specifications": {
       "Thương hiệu": "Dell Chính Hãng",
       "Tình trạng": "Mới 100% Fullbox",
-      "Bảo hành": "12 tháng tại Laptop360 - 1 đổi 1 trong 30 ngày",
+      "Bảo hành": "12 tháng tại DANGVINHPC - 1 đổi 1 trong 30 ngày",
       "Màn hình": "15.6 inch Full HD 120Hz",
-      "Tặng kèm": "Balo chống sốc Laptop360 + Chuột không dây + Lót chuột",
-      "Dòng máy": "Dell Gaming Series chiến game mượt mà",
+      "Tặng kèm": "Balo gaming DANGVINHPC + Chuột không dây + Lót chuột",
+      "Dòng máy": "Dell Gaming G15 Series",
       "Card đồ họa": "NVIDIA GeForce RTX 3050 6GB"
     }
   },
@@ -1251,25 +1366,25 @@ export const products: Product[] = assignUniqueProductImages([
     "isNew": true,
     "isSale": true,
     "isHot": true,
-    "image": "https://laptop360.net/wp-content/uploads/2023/09/Thiet-ke-chua-co-ten-46-247x247.png",
+    "image": "https://images.unsplash.com/photo-1484788984921-03950022c9ef?auto=format&fit=crop&w=800&q=85",
     "images": [
-      "https://laptop360.net/wp-content/uploads/2023/09/Thiet-ke-chua-co-ten-46-247x247.png"
+      "https://images.unsplash.com/photo-1484788984921-03950022c9ef?auto=format&fit=crop&w=800&q=85"
     ],
-    "description": "Sản phẩm [Mới 100%] Dell Inspiron 14 5430 (i5-1340P ,Ram 16G,SSD 512G, 14 inch FHD+) được nhập khẩu và phân phối bởi Laptop360 Hải Phòng. Ngoại hình tuyển chọn đẹp 99% đến mới 100%, nguyên zin 100% chưa qua sửa chữa, pin khỏe và hiệu năng ổn định.",
+    "description": "Dell Inspiron 14 5430 phiên bản thế hệ mới nhất với thiết kế nhôm sang trọng, chuẩn nhẹ nhàng dễ dàng mang theo di chuyển. Màn hình 14.0 inch FHD+ chống chói sắc nét, bàn phím gõ êm với hành trình sâu và touchpad phủ kính mượt mà, hỗ trợ chuẩn âm thanh vòm Dolby Atmos sống động.",
     "features": [
-      "Cam kết zin nguyên bản 100% từ nhà sản xuất",
-      "Bảo hành toàn diện 12 tháng tại Laptop360",
-      "Tặng gói phụ kiện: Balo + Chuột không dây + Cài win trọn đời",
-      "Hỗ trợ trả góp lãi suất 0%"
+      "Vi xử lý Intel Core i5-1340P 12 nhân 16 luồng xử lý mượt mà",
+      "Màn hình 14.0 inch FHD+ IPS viền siêu mỏng chống chói",
+      "Khung nhôm cao cấp màu bạc Platinum chống bám vân tay",
+      "Bảo hành 12 tháng tại DANGVINHPC, hỗ trợ kỹ thuật tận tâm 24/7"
     ],
     "specifications": {
       "Thương hiệu": "Dell Chính Hãng",
       "Tình trạng": "Mới 100% Fullbox",
-      "Bảo hành": "12 tháng tại Laptop360 - 1 đổi 1 trong 30 ngày",
+      "Bảo hành": "12 tháng tại DANGVINHPC - 1 đổi 1 trong 30 ngày",
       "Màn hình": "14.0 inch FHD+ IPS chống chói",
-      "Tặng kèm": "Balo chống sốc Laptop360 + Chuột không dây + Lót chuột",
-      "Dòng máy": "Dell Inspiron / Latitude Văn phòng - Học tập",
-      "Card đồ họa": "Intel Iris Xe Graphics / AMD Radeon Graphics"
+      "Tặng kèm": "Balo thời trang DANGVINHPC + Chuột không dây + Lót chuột",
+      "Dòng máy": "Dell Inspiron 14",
+      "Card đồ họa": "Intel Iris Xe Graphics"
     }
   },
   {
@@ -1287,9 +1402,9 @@ export const products: Product[] = assignUniqueProductImages([
     "isNew": true,
     "isSale": false,
     "isHot": true,
-    "image": "https://images.unsplash.com/photo-1563013544-824ae1b704d3?auto=format&fit=crop&w=1000&q=80",
+    "image": "https://images.unsplash.com/photo-1597872200969-2b65d56bd16b?auto=format&fit=crop&w=1000&q=80",
     "images": [
-      "https://images.unsplash.com/photo-1563013544-824ae1b704d3?auto=format&fit=crop&w=1000&q=80"
+      "https://images.unsplash.com/photo-1597872200969-2b65d56bd16b?auto=format&fit=crop&w=1000&q=80"
     ],
     "description": "SSD gaming chuyên nghiệp Seagate FireCuda 530 đạt tốc độ đọc 7300 MB/s, độ bền TBW cao nhất ngành, tương thích hoàn hảo PS5 và bo mạch chủ cao cấp.",
     "features": [
@@ -6858,9 +6973,9 @@ export const products: Product[] = assignUniqueProductImages([
     "isNew": false,
     "isSale": true,
     "isHot": false,
-    "image": "https://images.unsplash.com/photo-1563013544-824ae1b704d3?auto=format&fit=crop&w=1000&q=80",
+    "image": "https://images.unsplash.com/photo-1597872200969-2b65d56bd16b?auto=format&fit=crop&w=1000&q=80",
     "images": [
-      "https://images.unsplash.com/photo-1563013544-824ae1b704d3?auto=format&fit=crop&w=1000&q=80"
+      "https://images.unsplash.com/photo-1597872200969-2b65d56bd16b?auto=format&fit=crop&w=1000&q=80"
     ],
     "description": "Ổ cứng SSD thể rắn tốc độ đọc ghi vượt trội, khởi động trong tích tắc - SSD Kingston KC3000 1TB PCIe 4.0 NVMe M.2 (Đọc 7.000 MB/s, Ghi 6.000 MB/s). Thiết kế hiện đại, độ bền vượt trội, đáp ứng tối đa hiệu năng cho công việc chuyên nghiệp và giải trí đỉnh cao. Đạt tiêu chuẩn kiểm định chất lượng nghiêm ngặt của DANGVINHPC.",
     "features": [
@@ -6984,9 +7099,9 @@ export const products: Product[] = assignUniqueProductImages([
     "isNew": false,
     "isSale": true,
     "isHot": false,
-    "image": "https://images.unsplash.com/photo-1563013544-824ae1b704d3?auto=format&fit=crop&w=1000&q=80",
+    "image": "https://images.unsplash.com/photo-1597872200969-2b65d56bd16b?auto=format&fit=crop&w=1000&q=80",
     "images": [
-      "https://images.unsplash.com/photo-1563013544-824ae1b704d3?auto=format&fit=crop&w=1000&q=80"
+      "https://images.unsplash.com/photo-1597872200969-2b65d56bd16b?auto=format&fit=crop&w=1000&q=80"
     ],
     "description": "Ổ cứng SSD thể rắn tốc độ đọc ghi vượt trội, khởi động trong tích tắc - SSD Kioxia Exceria Pro 1TB PCIe Gen4 x4 NVMe (Made in Japan). Thiết kế hiện đại, độ bền vượt trội, đáp ứng tối đa hiệu năng cho công việc chuyên nghiệp và giải trí đỉnh cao. Đạt tiêu chuẩn kiểm định chất lượng nghiêm ngặt của DANGVINHPC.",
     "features": [
@@ -7111,9 +7226,9 @@ export const products: Product[] = assignUniqueProductImages([
     "isNew": true,
     "isSale": true,
     "isHot": false,
-    "image": "https://images.unsplash.com/photo-1563013544-824ae1b704d3?auto=format&fit=crop&w=1000&q=80",
+    "image": "https://images.unsplash.com/photo-1597872200969-2b65d56bd16b?auto=format&fit=crop&w=1000&q=80",
     "images": [
-      "https://images.unsplash.com/photo-1563013544-824ae1b704d3?auto=format&fit=crop&w=1000&q=80"
+      "https://images.unsplash.com/photo-1597872200969-2b65d56bd16b?auto=format&fit=crop&w=1000&q=80"
     ],
     "description": "Ổ cứng SSD thể rắn tốc độ đọc ghi vượt trội, khởi động trong tích tắc - SSD WD Blue SN580 1TB PCIe Gen4 NVMe (Đọc 4.150 MB/s nCache 4.0). Thiết kế hiện đại, độ bền vượt trội, đáp ứng tối đa hiệu năng cho công việc chuyên nghiệp và giải trí đỉnh cao. Đạt tiêu chuẩn kiểm định chất lượng nghiêm ngặt của DANGVINHPC.",
     "features": [
@@ -7236,9 +7351,9 @@ export const products: Product[] = assignUniqueProductImages([
     "isNew": false,
     "isSale": true,
     "isHot": false,
-    "image": "https://images.unsplash.com/photo-1563013544-824ae1b704d3?auto=format&fit=crop&w=1000&q=80",
+    "image": "https://images.unsplash.com/photo-1597872200969-2b65d56bd16b?auto=format&fit=crop&w=1000&q=80",
     "images": [
-      "https://images.unsplash.com/photo-1563013544-824ae1b704d3?auto=format&fit=crop&w=1000&q=80"
+      "https://images.unsplash.com/photo-1597872200969-2b65d56bd16b?auto=format&fit=crop&w=1000&q=80"
     ],
     "description": "Ổ cứng SSD thể rắn tốc độ đọc ghi vượt trội, khởi động trong tích tắc - SSD Di Động SanDisk Extreme Portable V2 1TB Type-C (Đọc 1.050 MB/s). Thiết kế hiện đại, độ bền vượt trội, đáp ứng tối đa hiệu năng cho công việc chuyên nghiệp và giải trí đỉnh cao. Đạt tiêu chuẩn kiểm định chất lượng nghiêm ngặt của DANGVINHPC.",
     "features": [
@@ -11944,9 +12059,9 @@ export const products: Product[] = assignUniqueProductImages([
     "isNew": true,
     "isSale": true,
     "isHot": true,
-    "image": "https://images.unsplash.com/photo-1563013544-824ae1b704d3?auto=format&fit=crop&w=1000&q=80",
+    "image": "https://images.unsplash.com/photo-1597872200969-2b65d56bd16b?auto=format&fit=crop&w=1000&q=80",
     "images": [
-      "https://images.unsplash.com/photo-1563013544-824ae1b704d3?auto=format&fit=crop&w=1000&q=80"
+      "https://images.unsplash.com/photo-1597872200969-2b65d56bd16b?auto=format&fit=crop&w=1000&q=80"
     ],
     "description": "Ổ cứng SSD thể rắn tốc độ đọc ghi vượt trội, khởi động trong tích tắc - SSD Samsung 990 Pro 2TB NVMe PCIe 4.0 (Đọc 7.450 MB/s, Ghi 6.900 MB/s). Thiết kế hiện đại, độ bền vượt trội, đáp ứng tối đa hiệu năng cho công việc chuyên nghiệp và giải trí đỉnh cao. Đạt tiêu chuẩn kiểm định chất lượng nghiêm ngặt của DANGVINHPC.",
     "features": [

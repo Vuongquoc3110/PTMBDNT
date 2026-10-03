@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Link, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import {
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -13,6 +14,7 @@ import {
 
 import { Header } from '@/components/Header';
 import { formatPrice } from '@/data/products';
+import { VIETNAM_PROVINCES } from '@/data/vietnamLocations';
 import { useAppContext } from '@/context/AppContext';
 import { apiService } from '@/services/api';
 
@@ -52,7 +54,7 @@ export default function CheckoutScreen() {
   const { width } = useWindowDimensions();
   const isDesktop = width >= 992;
 
-  const { cartItems, clearCart, user } = useAppContext();
+  const { cartItems, clearCart, user, updateUserProfile } = useAppContext();
 
   const checkoutItems = useMemo(() => {
     const selected = cartItems.filter((i) => i.selected);
@@ -61,7 +63,69 @@ export default function CheckoutScreen() {
 
   const [fullname, setFullname] = useState(user?.name || '');
   const [phone, setPhone] = useState(user?.phone || '');
-  const [address, setAddress] = useState(user?.address || '');
+
+  // Vietnam Location Selectors
+  const [selectedProvinceId, setSelectedProvinceId] = useState(() => {
+    if (user?.address || user?.city) {
+      const combined = `${user?.address || ''} ${user?.city || ''}`.toLowerCase();
+      const found = VIETNAM_PROVINCES.find((p) =>
+        combined.includes(p.name.toLowerCase().replace('tp. ', '')) ||
+        combined.includes(p.id)
+      );
+      if (found) return found.id;
+    }
+    return 'hcm';
+  });
+
+  const selectedProvince = useMemo(() => {
+    return VIETNAM_PROVINCES.find((p) => p.id === selectedProvinceId) || VIETNAM_PROVINCES[0];
+  }, [selectedProvinceId]);
+
+  const [selectedDistrict, setSelectedDistrict] = useState(() => {
+    if (user?.address) {
+      const foundD = selectedProvince.districts.find((d) =>
+        user.address.toLowerCase().includes(d.toLowerCase())
+      );
+      if (foundD) return foundD;
+    }
+    return selectedProvince.districts[0] || 'Quận 1';
+  });
+
+  const [streetAddress, setStreetAddress] = useState(() => {
+    if (user?.address) {
+      return user.address;
+    }
+    return '';
+  });
+
+  const [provinceModalVisible, setProvinceModalVisible] = useState(false);
+  const [districtModalVisible, setDistrictModalVisible] = useState(false);
+  const [provinceSearch, setProvinceSearch] = useState('');
+  const [districtSearch, setDistrictSearch] = useState('');
+
+  const fullAddress = useMemo(() => {
+    const parts = [];
+    if (streetAddress.trim()) parts.push(streetAddress.trim());
+    if (selectedDistrict) parts.push(selectedDistrict);
+    if (selectedProvince?.name) parts.push(selectedProvince.name);
+    return parts.join(', ');
+  }, [streetAddress, selectedDistrict, selectedProvince]);
+
+  const handleSelectProvince = (provId: string) => {
+    setSelectedProvinceId(provId);
+    const prov = VIETNAM_PROVINCES.find((p) => p.id === provId) || VIETNAM_PROVINCES[0];
+    setSelectedDistrict(prov.districts[0] || '');
+    setProvinceModalVisible(false);
+    setProvinceSearch('');
+  };
+
+  const handleSelectDistrict = (dist: string) => {
+    setSelectedDistrict(dist);
+    setDistrictModalVisible(false);
+    setDistrictSearch('');
+  };
+
+  const [saveAsDefault, setSaveAsDefault] = useState(true);
   const [note, setNote] = useState('Giao hàng giờ hành chính');
   const [paymentMethod, setPaymentMethod] = useState('cod');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -115,8 +179,8 @@ export default function CheckoutScreen() {
       alert('Giỏ hàng trống!');
       return;
     }
-    if (!fullname.trim() || !phone.trim() || !address.trim()) {
-      alert('Vui lòng điền đầy đủ thông tin giao hàng');
+    if (!fullname.trim() || !phone.trim() || !streetAddress.trim()) {
+      alert('Vui lòng điền đầy đủ họ tên, số điện thoại và địa chỉ nhận hàng');
       return;
     }
 
@@ -132,13 +196,24 @@ export default function CheckoutScreen() {
           image: it.image,
         })),
         totalAmount: total,
-        shippingAddress: `${fullname} - ${phone}, ${address} (Ghi chú: ${note})`,
+        shippingAddress: `${fullname.trim()} - ${phone.trim()}, ${fullAddress} (Ghi chú: ${note.trim()})`,
         shippingMethod: 'standard',
         paymentMethod,
       });
 
       setCreatedOrderNumber(res.orderNumber);
       if (res.orderId) setCreatedOrderId(res.orderId);
+
+      // Lưu địa chỉ mặc định cho khách nếu được chọn
+      if (saveAsDefault && user) {
+        updateUserProfile({
+          name: fullname.trim(),
+          phone: phone.trim(),
+          address: fullAddress,
+          city: selectedProvince.name,
+        }).catch((err) => console.warn('Could not save default profile address:', err));
+      }
+
       clearCart();
       setIsSuccess(true);
     } catch (err: any) {
@@ -205,8 +280,16 @@ export default function CheckoutScreen() {
                 {/* SHIPPING INFO */}
                 <View style={styles.card}>
                   <View style={styles.cardHeader}>
-                    <Ionicons name="location-outline" size={22} color="#2563eb" />
-                    <Text style={styles.cardTitle}>Thông tin nhận hàng</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Ionicons name="location-outline" size={20} color="#2563eb" />
+                      <Text style={styles.cardTitle}>Thông tin nhận hàng</Text>
+                    </View>
+                    {user?.address ? (
+                      <View style={styles.defaultBadge}>
+                        <Ionicons name="shield-checkmark" size={12} color="#16a34a" />
+                        <Text style={styles.defaultBadgeText}>Địa chỉ từ hồ sơ</Text>
+                      </View>
+                    ) : null}
                   </View>
 
                   <View style={styles.formRow}>
@@ -231,15 +314,78 @@ export default function CheckoutScreen() {
                     </View>
                   </View>
 
+                  {/* VIETNAM REGION SELECTION ROW */}
+                  <View style={styles.formRow}>
+                    {/* Tỉnh / Thành phố */}
+                    <View style={styles.fieldCol}>
+                      <Text style={styles.fieldLabel}>Tỉnh / Thành phố *</Text>
+                      <Pressable
+                        style={styles.pickerTrigger}
+                        onPress={() => setProvinceModalVisible(true)}
+                      >
+                        <Ionicons name="business-outline" size={17} color="#2563eb" />
+                        <Text style={styles.pickerTriggerText} numberOfLines={1}>
+                          {selectedProvince.name}
+                        </Text>
+                        <Ionicons name="chevron-down" size={16} color="#64748b" style={{ marginLeft: 'auto' }} />
+                      </Pressable>
+                    </View>
+
+                    {/* Quận / Huyện */}
+                    <View style={styles.fieldCol}>
+                      <Text style={styles.fieldLabel}>Quận / Huyện *</Text>
+                      <Pressable
+                        style={styles.pickerTrigger}
+                        onPress={() => setDistrictModalVisible(true)}
+                      >
+                        <Ionicons name="navigate-outline" size={17} color="#2563eb" />
+                        <Text style={styles.pickerTriggerText} numberOfLines={1}>
+                          {selectedDistrict || 'Chọn Quận / Huyện'}
+                        </Text>
+                        <Ionicons name="chevron-down" size={16} color="#64748b" style={{ marginLeft: 'auto' }} />
+                      </Pressable>
+                    </View>
+                  </View>
+
+                  {/* ĐỊA CHỈ CHI TIẾT */}
                   <View style={styles.formGroup}>
-                    <Text style={styles.fieldLabel}>Địa chỉ giao hàng chi tiết *</Text>
+                    <Text style={styles.fieldLabel}>Địa chỉ chi tiết (Số nhà, tên đường, phường/xã) *</Text>
                     <TextInput
                       style={styles.input}
-                      value={address}
-                      onChangeText={setAddress}
-                      placeholder="Số nhà, tên đường, phường/xã, quận/huyện..."
+                      value={streetAddress}
+                      onChangeText={setStreetAddress}
+                      placeholder="Ví dụ: 123 Lê Lợi, Phường Bến Nghé"
                     />
                   </View>
+
+                  {/* PREVIEW OF COMBINED FULL ADDRESS */}
+                  <View style={styles.addressPreviewBox}>
+                    <Ionicons name="location" size={18} color="#2563eb" style={{ marginTop: 2 }} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.addressPreviewLabel}>Địa chỉ nhận hàng đầy đủ:</Text>
+                      <Text style={styles.addressPreviewText}>
+                        {fullAddress || 'Vui lòng chọn khu vực và nhập địa chỉ cụ thể'}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* CHECKBOX: LƯU LÀM ĐỊA CHỈ MẶC ĐỊNH */}
+                  <Pressable
+                    style={styles.saveDefaultRow}
+                    onPress={() => setSaveAsDefault(!saveAsDefault)}
+                  >
+                    <View style={[styles.checkboxBox, saveAsDefault && styles.checkboxBoxActive]}>
+                      {saveAsDefault && <Ionicons name="checkmark" size={13} color="#ffffff" />}
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.saveDefaultTitle}>
+                        Lưu làm địa chỉ nhận hàng mặc định
+                      </Text>
+                      <Text style={styles.saveDefaultSub}>
+                        Tự động ghi nhớ và điền sẵn cho các đơn hàng tiếp theo
+                      </Text>
+                    </View>
+                  </Pressable>
 
                   <View style={styles.formGroup}>
                     <Text style={styles.fieldLabel}>Ghi chú cho shipper (Tùy chọn)</Text>
@@ -354,6 +500,110 @@ export default function CheckoutScreen() {
           )}
         </View>
       </ScrollView>
+
+      {/* MODAL: CHỌN TỈNH / THÀNH PHỐ */}
+      <Modal visible={provinceModalVisible} transparent animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalBox}>
+            <View style={styles.modalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name="business" size={20} color="#2563eb" />
+                <Text style={styles.modalTitle}>Chọn Tỉnh / Thành phố</Text>
+              </View>
+              <Pressable onPress={() => setProvinceModalVisible(false)} hitSlop={10}>
+                <Ionicons name="close" size={22} color="#64748b" />
+              </Pressable>
+            </View>
+
+            <View style={styles.modalSearchWrap}>
+              <Ionicons name="search-outline" size={17} color="#94a3b8" />
+              <TextInput
+                style={styles.modalSearchInput}
+                value={provinceSearch}
+                onChangeText={setProvinceSearch}
+                placeholder="Tìm kiếm tỉnh, thành phố..."
+              />
+              {provinceSearch.length > 0 && (
+                <Pressable onPress={() => setProvinceSearch('')}>
+                  <Ionicons name="close-circle" size={16} color="#94a3b8" />
+                </Pressable>
+              )}
+            </View>
+
+            <ScrollView style={styles.modalListScroll}>
+              {VIETNAM_PROVINCES.filter((p) =>
+                p.name.toLowerCase().includes(provinceSearch.toLowerCase().trim())
+              ).map((p) => {
+                const isSelected = p.id === selectedProvinceId;
+                return (
+                  <Pressable
+                    key={p.id}
+                    style={[styles.modalListItem, isSelected && styles.modalListItemActive]}
+                    onPress={() => handleSelectProvince(p.id)}
+                  >
+                    <Text style={[styles.modalListText, isSelected && styles.modalListTextActive]}>
+                      {p.name}
+                    </Text>
+                    {isSelected && <Ionicons name="checkmark-circle" size={18} color="#2563eb" />}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* MODAL: CHỌN QUẬN / HUYỆN */}
+      <Modal visible={districtModalVisible} transparent animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalBox}>
+            <View style={styles.modalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name="navigate" size={20} color="#2563eb" />
+                <Text style={styles.modalTitle}>Chọn Quận / Huyện ({selectedProvince.name})</Text>
+              </View>
+              <Pressable onPress={() => setDistrictModalVisible(false)} hitSlop={10}>
+                <Ionicons name="close" size={22} color="#64748b" />
+              </Pressable>
+            </View>
+
+            <View style={styles.modalSearchWrap}>
+              <Ionicons name="search-outline" size={17} color="#94a3b8" />
+              <TextInput
+                style={styles.modalSearchInput}
+                value={districtSearch}
+                onChangeText={setDistrictSearch}
+                placeholder="Tìm kiếm quận, huyện..."
+              />
+              {districtSearch.length > 0 && (
+                <Pressable onPress={() => setDistrictSearch('')}>
+                  <Ionicons name="close-circle" size={16} color="#94a3b8" />
+                </Pressable>
+              )}
+            </View>
+
+            <ScrollView style={styles.modalListScroll}>
+              {selectedProvince.districts
+                .filter((d) => d.toLowerCase().includes(districtSearch.toLowerCase().trim()))
+                .map((d) => {
+                  const isSelected = d === selectedDistrict;
+                  return (
+                    <Pressable
+                      key={d}
+                      style={[styles.modalListItem, isSelected && styles.modalListItemActive]}
+                      onPress={() => handleSelectDistrict(d)}
+                    >
+                      <Text style={[styles.modalListText, isSelected && styles.modalListTextActive]}>
+                        {d}
+                      </Text>
+                      {isSelected && <Ionicons name="checkmark-circle" size={18} color="#2563eb" />}
+                    </Pressable>
+                  );
+                })}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -381,8 +631,60 @@ const styles = StyleSheet.create({
     borderColor: '#e2e8f0',
     padding: 20,
   },
-  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 18 },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 },
   cardTitle: { fontSize: 16, fontWeight: '800', color: '#0f172a' },
+  defaultBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#f0fdf4',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+  },
+  defaultBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#16a34a',
+  },
+  saveDefaultRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#f8fafc',
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginBottom: 16,
+    cursor: 'pointer',
+  },
+  checkboxBox: {
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: '#94a3b8',
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxBoxActive: {
+    backgroundColor: '#2563eb',
+    borderColor: '#2563eb',
+  },
+  saveDefaultTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  saveDefaultSub: {
+    fontSize: 11,
+    color: '#64748b',
+    marginTop: 1,
+  },
 
   formRow: { flexDirection: 'row', gap: 14, marginBottom: 14 },
   fieldCol: { flex: 1 },
@@ -397,6 +699,124 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     fontSize: 14,
     color: '#0f172a',
+  },
+
+  pickerTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#f8fafc',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    cursor: 'pointer',
+  },
+  pickerTriggerText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#0f172a',
+    flex: 1,
+  },
+  addressPreviewBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    backgroundColor: '#eff6ff',
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#dbeafe',
+    marginBottom: 16,
+  },
+  addressPreviewLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#1e40af',
+    marginBottom: 2,
+  },
+  addressPreviewText: {
+    fontSize: 13,
+    color: '#1e3a8a',
+    lineHeight: 18,
+    fontWeight: '500',
+  },
+
+  /* MODAL SELECTOR */
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalBox: {
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    width: '100%',
+    maxWidth: 460,
+    maxHeight: '80%',
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 24,
+    elevation: 8,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  modalSearchWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#f1f5f9',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    marginBottom: 12,
+  },
+  modalSearchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: '#0f172a',
+    padding: 0,
+  },
+  modalListScroll: {
+    maxHeight: 340,
+  },
+  modalListItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    marginBottom: 4,
+    cursor: 'pointer',
+  },
+  modalListItemActive: {
+    backgroundColor: '#eff6ff',
+  },
+  modalListText: {
+    fontSize: 14,
+    color: '#334155',
+    fontWeight: '500',
+  },
+  modalListTextActive: {
+    color: '#2563eb',
+    fontWeight: '700',
   },
 
   paymentList: { gap: 10 },

@@ -8,36 +8,36 @@ const mysql = require('mysql2/promise');
 
 const IMAGE_POOLS = {
   laptop: [
-    'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=800&q=85',
-    'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=800&q=85',
-    'https://images.unsplash.com/photo-1525547719571-a2d4ac8945e2?auto=format&fit=crop&w=800&q=85',
-    'https://images.unsplash.com/photo-1541807084-5c52b6b3adef?auto=format&fit=crop&w=800&q=85',
+    'https://asset.msi.com/resize/image/global/product/product_167878235287611ef4f7c13481e19488a0b06b9b32_1024.png',
+    'https://dlcdnwebimgs.asus.com/gain/97BA3C80-5BFA-404B-AE26-7ACCE5B34825/w1000/h732',
+    'https://dlcdnwebimgs.asus.com/gain/452B2023-A0A3-4CE8-8547-B223BEBF9F18/w1000/h732',
+    'https://dlcdnwebimgs.asus.com/gain/49339233-C9A8-4F70-985B-3D7FFC46A085/w1000/h732',
+    'https://store.storeimages.cdn-apple.com/4982/as-images.apple.com/is/mbp16-spaceblack-select-202310?wid=904&hei=840&fmt=jpeg&qlt=90',
+    'https://asset.msi.com/resize/image/global/product/product_167879825556febc59f90b0c9dcf9e4f6d92f37e4a_1024.png',
+    'https://store.storeimages.cdn-apple.com/4982/as-images.apple.com/is/macbook-air-starlight-select-20220606?wid=904&hei=840&fmt=jpeg&qlt=90',
+    'https://m.media-amazon.com/images/I/81Ivn5DIxhL._AC_SL1500_.jpg',
+    'https://store.storeimages.cdn-apple.com/4982/as-images.apple.com/is/mba15-silver-select-202306?wid=904&hei=840&fmt=jpeg&qlt=90',
+    'https://dlcdnwebimgs.asus.com/gain/83FD3A6C-812C-400A-AEAA-555BE955C24E/w1000/h732',
+    'https://dlcdnwebimgs.asus.com/gain/4B5EF4B9-A454-4B2E-BE6F-44F4E40E3E8C/w1000/h732',
+    'https://store.storeimages.cdn-apple.com/4982/as-images.apple.com/is/mba13-m4-midnight-select-202502?wid=904&hei=840&fmt=jpeg&qlt=90',
+    'https://dlcdnwebimgs.asus.com/gain/16281734-DC08-41C2-82EB-B0F9F3B66D42/w1000/h732',
+    'https://dlcdnwebimgs.asus.com/gain/3D215E9F-1A51-4FB9-B6C8-4DE0B5D98BE9/w1000/h732',
+    'https://dlcdnwebimgs.asus.com/gain/9BD697EC-8935-4A93-A33A-E6728EC5965A/w1000/h732',
+    'https://store.storeimages.cdn-apple.com/4982/as-images.apple.com/is/mba15-midnight-select-202402?wid=904&hei=840&fmt=jpeg&qlt=90',
+    'https://store.storeimages.cdn-apple.com/4982/as-images.apple.com/is/macbook-air-space-gray-select-20220606?wid=904&hei=840&fmt=jpeg&qlt=90',
+    'https://store.storeimages.cdn-apple.com/4982/as-images.apple.com/is/mba15-spacegray-select-202306?wid=904&hei=840&fmt=jpeg&qlt=90',
+    'https://store.storeimages.cdn-apple.com/4982/as-images.apple.com/is/mbp13-spacegray-select-202206?wid=904&hei=840&fmt=jpeg&qlt=90',
     'https://images.unsplash.com/photo-1588872657578-7efd1f1555ed?auto=format&fit=crop&w=800&q=85',
-    'https://images.unsplash.com/photo-1611186871525-d91b8e007c6e?auto=format&fit=crop&w=800&q=85',
-    'https://images.unsplash.com/photo-1593642632559-0c6d3fc62b89?auto=format&fit=crop&w=800&q=85',
-    'https://images.unsplash.com/photo-1603302576837-37561b2e2302?auto=format&fit=crop&w=800&q=85',
-    'https://images.unsplash.com/photo-1610465299996-30f240ac2b1c?auto=format&fit=crop&w=800&q=85',
-    'https://images.unsplash.com/photo-1504707748692-419802cf939d?auto=format&fit=crop&w=800&q=85',
-    'https://images.unsplash.com/photo-1544099858-75a7b1b60ab2?auto=format&fit=crop&w=800&q=85',
-    'https://images.unsplash.com/photo-1555617981-dac3772ef3c2?auto=format&fit=crop&w=800&q=85',
-    'https://images.unsplash.com/photo-1574155376612-bfa4ed8aabfd?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1541807084-5c52b6b3adef?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1525547719571-a2d4ac8945e2?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=800&q=85',
     'https://images.unsplash.com/photo-1531297484001-80022131f5a1?auto=format&fit=crop&w=800&q=85',
-    'https://images.unsplash.com/photo-1640161704729-cbe966a08476?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1603302576837-37561b2e2302?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1618410320928-25228d811631?auto=format&fit=crop&w=800&q=85',
     'https://images.unsplash.com/photo-1629131726692-1accd0c53ce0?auto=format&fit=crop&w=800&q=85',
-    'https://images.unsplash.com/photo-1566296440929-a5e0b8dc7b38?auto=format&fit=crop&w=800&q=85',
-    'https://images.unsplash.com/photo-1519558260268-cde7e03a0152?auto=format&fit=crop&w=800&q=85',
-    'https://images.unsplash.com/photo-1484788984921-03950022c9ef?auto=format&fit=crop&w=800&q=85',
-    'https://images.unsplash.com/photo-1474631245212-32dc3c8310c6?auto=format&fit=crop&w=800&q=85',
-    'https://images.unsplash.com/photo-1546302915-a2a86fb6f02c?auto=format&fit=crop&w=800&q=85',
-    'https://images.unsplash.com/photo-1504439904031-93ded9f93e4e?auto=format&fit=crop&w=800&q=85',
-    'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?auto=format&fit=crop&w=800&q=85',
-    'https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=800&q=85',
-    'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=800&q=85',
-    'https://images.unsplash.com/photo-1555617748-45abb7be4e2a?auto=format&fit=crop&w=800&q=85',
-    'https://images.unsplash.com/photo-1536148935331-408321065b18?auto=format&fit=crop&w=800&q=85',
-    'https://images.unsplash.com/photo-1499951360447-b19be8fe80f5?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1504707748692-419802cf939d?auto=format&fit=crop&w=800&q=85',
     'https://images.unsplash.com/photo-1587614382346-4ec70e388b28?auto=format&fit=crop&w=800&q=85',
-    'https://images.unsplash.com/photo-1455945609732-5a6e62dbccc5?auto=format&fit=crop&w=800&q=85',
+    'https://images.unsplash.com/photo-1484788984921-03950022c9ef?auto=format&fit=crop&w=800&q=85',
   ],
   'gaming-pc': [
     'https://images.unsplash.com/photo-1587202372583-49330a15584d?auto=format&fit=crop&w=800&q=85',
@@ -383,6 +383,20 @@ async function main() {
 
   console.log('Connected to MySQL!');
 
+  const fs = require('fs');
+  const path = require('path');
+  const prodTs = fs.readFileSync(path.join(__dirname, '..', 'data', 'products.ts'), 'utf8');
+  const overridesMatch = prodTs.match(/const PRODUCT_IMAGE_OVERRIDES: Record<string, string> = \{([\s\S]*?)\};/);
+  const overrides = {};
+  if (overridesMatch) {
+    const lines = overridesMatch[1].split('\n');
+    for (const line of lines) {
+      const m = line.match(/'([^']+)':\s*'([^']+)'/);
+      if (m) overrides[m[1]] = m[2];
+    }
+  }
+  console.log(`Loaded ${Object.keys(overrides).length} product image overrides.`);
+
   const [products] = await conn.execute('SELECT id, name, category_id FROM products ORDER BY category_id, id');
   console.log(`Total products: ${products.length}`);
 
@@ -392,29 +406,31 @@ async function main() {
   let skipped = 0;
 
   for (const product of products) {
-    const cat = (product.category_id || 'default').toLowerCase().replace(/[^a-z-]/g, '');
-    const pool = IMAGE_POOLS[cat] || IMAGE_POOLS.default;
-
-    if (!categoryCounters[cat]) categoryCounters[cat] = 0;
-
-    let selectedImage = null;
-    const startIdx = categoryCounters[cat];
-
-    for (let i = 0; i < pool.length; i++) {
-      const idx = (startIdx + i) % pool.length;
-      const candidate = pool[idx];
-      if (!usedImages.has(candidate)) {
-        selectedImage = candidate;
-        categoryCounters[cat] = (idx + 1) % pool.length;
-        break;
-      }
-    }
+    let selectedImage = overrides[product.id] || null;
 
     if (!selectedImage) {
-      const baseImg = pool[categoryCounters[cat] % pool.length];
-      // Add unique query param to avoid duplicate URL
-      selectedImage = `${baseImg}&uid=${product.id}`;
-      categoryCounters[cat] = (categoryCounters[cat] + 1) % pool.length;
+      const cat = (product.category_id || 'default').toLowerCase().replace(/[^a-z-]/g, '');
+      const pool = IMAGE_POOLS[cat] || IMAGE_POOLS.default;
+
+      if (!categoryCounters[cat]) categoryCounters[cat] = 0;
+
+      const startIdx = categoryCounters[cat];
+
+      for (let i = 0; i < pool.length; i++) {
+        const idx = (startIdx + i) % pool.length;
+        const candidate = pool[idx];
+        if (!usedImages.has(candidate)) {
+          selectedImage = candidate;
+          categoryCounters[cat] = (idx + 1) % pool.length;
+          break;
+        }
+      }
+
+      if (!selectedImage) {
+        const baseImg = pool[categoryCounters[cat] % pool.length];
+        selectedImage = `${baseImg}&uid=${product.id}`;
+        categoryCounters[cat] = (categoryCounters[cat] + 1) % pool.length;
+      }
     }
 
     usedImages.add(selectedImage);
