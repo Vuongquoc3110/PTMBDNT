@@ -1,0 +1,337 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 500" width="100%" height="100%">
+  <defs>
+    <!-- Background Gradient -->
+    <linearGradient id="skyGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f0f7ff" />
+      <stop offset="100%" stop-color="#e0f0fe" />
+    </linearGradient>
+
+    <!-- Red Facade Gradient -->
+    <linearGradient id="redFacade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ef4444" />
+      <stop offset="100%" stop-color="#dc2626" />
+    </linearGradient>
+    <linearGradient id="darkRedFacade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#dc2626" />
+      <stop offset="100%" stop-color="#b91c1c" />
+    </linearGradient>
+
+    <!-- Glass Reflection Gradient -->
+    <linearGradient id="glassGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f0f9ff" stop-opacity="0.95" />
+      <stop offset="35%" stop-color="#bae6fd" stop-opacity="0.7" />
+      <stop offset="65%" stop-color="#e0f2fe" stop-opacity="0.85" />
+      <stop offset="100%" stop-color="#7dd3fc" stop-opacity="0.6" />
+    </linearGradient>
+
+    <!-- Yellow Scooter Gradient -->
+    <linearGradient id="scooterGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#fde047" />
+      <stop offset="100%" stop-color="#eab308" />
+    </linearGradient>
+
+    <!-- Grid Pattern for Facade -->
+    <pattern id="facadeTiles" width="20" height="20" patternUnits="userSpaceOnUse">
+      <rect width="20" height="20" fill="none" stroke="#b91c1c" stroke-width="0.8" stroke-opacity="0.4" />
+    </pattern>
+    <pattern id="facadeTilesLarge" width="24" height="24" patternUnits="userSpaceOnUse">
+      <rect width="24" height="24" fill="none" stroke="#991b1b" stroke-width="0.9" stroke-opacity="0.45" />
+    </pattern>
+  </defs>
+
+  <!-- SKY BACKGROUND -->
+  <rect width="1440" height="500" fill="url(#skyGrad)" />
+
+  <!-- CLOUDS -->
+  <g fill="#ffffff" opacity="0.85">
+    <path d="M70 120 Q90 90 130 95 Q170 85 200 110 Q230 110 240 135 Q220 160 170 160 Q110 160 80 145 Z" />
+    <path d="M480 80 Q510 50 550 55 Q590 45 620 70 Q650 70 660 95 Q630 120 570 120 Q500 120 480 100 Z" />
+    <path d="M1250 100 Q1275 75 1315 80 Q1350 70 1380 95 Q1410 95 1420 120 Q1390 140 1340 140 Q1280 140 1260 120 Z" />
+  </g>
+
+  <!-- DISTANT CITY SKYLINE (LAYER 1 - LIGHTEST) -->
+  <g fill="#dbeafe" opacity="0.65">
+    <rect x="20" y="240" width="45" height="210" />
+    <rect x="75" y="200" width="60" height="250" />
+    <rect x="145" y="260" width="50" height="190" />
+    <polygon points="145,260 170,225 195,260" />
+    <rect x="205" y="170" width="70" height="280" />
+    <rect x="285" y="220" width="55" height="230" />
+    <rect x="350" y="250" width="65" height="200" />
+    <rect x="425" y="190" width="50" height="260" />
+    <polygon points="425,190 450,150 475,190" />
+    <rect x="485" y="230" width="75" height="220" />
+    <rect x="570" y="200" width="45" height="250" />
+    <rect x="850" y="260" width="40" height="190" />
+    <rect x="1240" y="210" width="65" height="240" />
+    <polygon points="1240,210 1272,175 1305,210" />
+    <rect x="1315" y="180" width="55" height="270" />
+    <rect x="1380" y="240" width="50" height="210" />
+  </g>
+
+  <!-- MID-GROUND CITY SKYLINE (LAYER 2) -->
+  <g fill="#bfdbfe" opacity="0.85">
+    <rect x="40" y="270" width="50" height="180" />
+    <rect x="100" y="230" width="40" height="220" />
+    <rect x="150" y="290" width="45" height="160" />
+    <rect x="220" y="210" width="50" height="240" />
+    <rect x="300" y="260" width="60" height="190" />
+    <rect x="390" y="220" width="45" height="230" />
+    <polygon points="390,220 412,185 435,220" />
+    <rect x="460" y="270" width="55" height="180" />
+    <rect x="530" y="240" width="60" height="210" />
+    <rect x="1270" y="240" width="50" height="210" />
+    <rect x="1340" y="220" width="60" height="230" />
+  </g>
+
+  <!-- ==================== SHOWROOM 1 (MEDIUM STORE - LEFT) ==================== -->
+  <g id="showroom1">
+    <!-- Roof Spotlight Posts -->
+    <g stroke="#334155" stroke-width="3" fill="#475569">
+      <!-- Light 1 -->
+      <line x1="650" y1="205" x2="650" y2="175" />
+      <polygon points="642,175 658,175 655,165 645,165" />
+      <!-- Light 2 -->
+      <line x1="680" y1="205" x2="680" y2="175" />
+      <polygon points="672,175 688,175 685,165 675,165" />
+      <!-- Light 3 -->
+      <line x1="710" y1="205" x2="710" y2="175" />
+      <polygon points="702,175 718,175 715,165 705,165" />
+      <!-- Light 4 -->
+      <line x1="740" y1="205" x2="740" y2="175" />
+      <polygon points="732,175 748,175 745,165 735,165" />
+      <!-- Light 5 -->
+      <line x1="770" y1="205" x2="770" y2="175" />
+      <polygon points="762,175 778,175 775,165 765,165" />
+      <!-- Light 6 -->
+      <line x1="800" y1="205" x2="800" y2="175" />
+      <polygon points="792,175 808,175 805,165 795,165" />
+      <!-- Light 7 -->
+      <line x1="830" y1="205" x2="830" y2="175" />
+      <polygon points="822,175 838,175 835,165 825,165" />
+    </g>
+
+    <!-- Main Building Box -->
+    <rect x="630" y="205" width="220" height="245" fill="url(#redFacade)" stroke="#991b1b" stroke-width="2" />
+    <rect x="630" y="205" width="220" height="245" fill="url(#facadeTiles)" />
+
+    <!-- DANGVINHPC Emblem on store 1 -->
+    <g transform="translate(740, 252)">
+      <!-- Shield / Chip Icon -->
+      <polygon points="0,-22 22,-8 22,14 0,26 -22,14 -22,-8" fill="#ffffff" />
+      <polygon points="0,-16 16,-5 16,10 0,20 -16,10 -16,-5" fill="#dc2626" />
+      <text x="0" y="7" font-family="'Be Vietnam Pro', sans-serif" font-size="13" font-weight="900" fill="#ffffff" text-anchor="middle">DPC</text>
+    </g>
+
+    <!-- Black Signboard -->
+    <rect x="630" y="295" width="220" height="42" fill="#09090b" stroke="#000000" stroke-width="1.5" />
+    <text x="740" y="322" font-family="'Be Vietnam Pro', sans-serif" font-size="14" font-weight="900" fill="#ffffff" letter-spacing="6" text-anchor="middle">
+      DANGVINHPC
+    </text>
+
+    <!-- White Awning / Overhang -->
+    <rect x="640" y="342" width="200" height="14" fill="#ffffff" rx="2" />
+    <g fill="#dc2626">
+      <rect x="655" y="345" width="20" height="8" rx="1" />
+      <rect x="690" y="345" width="20" height="8" rx="1" />
+      <rect x="730" y="345" width="20" height="8" rx="1" />
+      <rect x="770" y="345" width="20" height="8" rx="1" />
+      <rect x="805" y="345" width="20" height="8" rx="1" />
+    </g>
+
+    <!-- Glass Entrance Arch & Doors -->
+    <path d="M642 450 L642 370 Q642 360 655 360 L825 360 Q838 360 838 370 L838 450 Z" fill="#0f172a" />
+    <!-- Glass Panes -->
+    <rect x="648" y="366" width="90" height="84" fill="url(#glassGrad)" stroke="#1e293b" stroke-width="1.5" />
+    <rect x="742" y="366" width="90" height="84" fill="url(#glassGrad)" stroke="#1e293b" stroke-width="1.5" />
+    <!-- Door Handles -->
+    <rect x="728" y="405" width="4" height="22" rx="2" fill="#0f172a" />
+    <rect x="748" y="405" width="4" height="22" rx="2" fill="#0f172a" />
+  </g>
+
+  <!-- ==================== STREET LAMP (BETWEEN BUILDINGS) ==================== -->
+  <g id="streetLamp">
+    <!-- Lamp Post -->
+    <line x1="868" y1="450" x2="868" y2="300" stroke="#0f172a" stroke-width="5" stroke-linecap="round" />
+    <rect x="862" y="435" width="12" height="15" fill="#0f172a" rx="2" />
+    <rect x="864" y="330" width="8" height="6" fill="#0f172a" rx="1" />
+    <!-- Lantern -->
+    <polygon points="860,300 876,300 873,280 863,280" fill="#fde047" stroke="#0f172a" stroke-width="2.5" />
+    <polygon points="858,280 878,280 868,268" fill="#0f172a" />
+    <!-- Glow -->
+    <circle cx="868" cy="290" r="14" fill="#fef08a" opacity="0.3" />
+  </g>
+
+  <!-- ==================== SHOWROOM 2 (MAIN FLAGSHIP STORE - RIGHT) ==================== -->
+  <g id="showroom2">
+    <!-- Roof Spotlight Posts (7 units) -->
+    <g stroke="#334155" stroke-width="3.5" fill="#475569">
+      <!-- Light 1 -->
+      <line x1="915" y1="85" x2="915" y2="50" />
+      <polygon points="905,50 925,50 920,38 910,38" />
+      <!-- Light 2 -->
+      <line x1="965" y1="85" x2="965" y2="50" />
+      <polygon points="955,50 975,50 970,38 960,38" />
+      <!-- Light 3 -->
+      <line x1="1015" y1="85" x2="1015" y2="50" />
+      <polygon points="1005,50 1025,50 1020,38 1010,38" />
+      <!-- Light 4 -->
+      <line x1="1065" y1="85" x2="1065" y2="50" />
+      <polygon points="1055,50 1075,50 1070,38 1060,38" />
+      <!-- Light 5 -->
+      <line x1="1115" y1="85" x2="1115" y2="50" />
+      <polygon points="1105,50 1125,50 1120,38 1110,38" />
+      <!-- Light 6 -->
+      <line x1="1165" y1="85" x2="1165" y2="50" />
+      <polygon points="1155,50 1175,50 1170,38 1160,38" />
+      <!-- Light 7 -->
+      <line x1="1215" y1="85" x2="1215" y2="50" />
+      <polygon points="1205,50 1225,50 1220,38 1210,38" />
+    </g>
+
+    <!-- Main Flagship Building Box -->
+    <rect x="890" y="85" width="345" height="365" fill="url(#darkRedFacade)" stroke="#7f1d1d" stroke-width="2" />
+    <rect x="890" y="85" width="345" height="365" fill="url(#facadeTilesLarge)" />
+
+    <!-- Big DANGVINHPC Shield Logo on Facade -->
+    <g transform="translate(1062, 145)">
+      <!-- Outer White Emblem -->
+      <polygon points="0,-40 38,-14 38,24 0,44 -38,24 -38,-14" fill="#ffffff" />
+      <!-- Inner Red Emblem -->
+      <polygon points="0,-32 29,-10 29,18 0,35 -29,18 -29,-10" fill="#dc2626" />
+      <!-- Stylized DPC Chip Typography -->
+      <text x="0" y="10" font-family="'Be Vietnam Pro', sans-serif" font-size="20" font-weight="900" fill="#ffffff" text-anchor="middle">
+        DPC
+      </text>
+    </g>
+
+    <!-- Main Black Signboard Band -->
+    <rect x="890" y="215" width="345" height="58" fill="#09090b" stroke="#000000" stroke-width="2" />
+    <text x="1062" y="254" font-family="'Be Vietnam Pro', sans-serif" font-size="22" font-weight="900" fill="#ffffff" letter-spacing="10" text-anchor="middle">
+      DANGVINHPC
+    </text>
+
+    <!-- White Modern Architectural Awning -->
+    <polygon points="895,278 1230,278 1215,296 910,296" fill="#ffffff" />
+    <g fill="#dc2626">
+      <rect x="925" y="282" width="35" height="8" rx="2" />
+      <rect x="985" y="282" width="35" height="8" rx="2" />
+      <rect x="1045" y="282" width="35" height="8" rx="2" />
+      <rect x="1105" y="282" width="35" height="8" rx="2" />
+      <rect x="1165" y="282" width="35" height="8" rx="2" />
+    </g>
+
+    <!-- Panoramic Double Glass Entrance -->
+    <path d="M908 450 L908 322 Q908 305 925 305 L1200 305 Q1217 305 1217 322 L1217 450 Z" fill="#0f172a" />
+    <!-- Glass Panels -->
+    <rect x="918" y="315" width="140" height="135" fill="url(#glassGrad)" stroke="#1e293b" stroke-width="2" />
+    <rect x="1066" y="315" width="140" height="135" fill="url(#glassGrad)" stroke="#1e293b" stroke-width="2" />
+    <!-- Center Door Handles -->
+    <rect x="1046" y="365" width="5" height="32" rx="2" fill="#0f172a" />
+    <rect x="1075" y="365" width="5" height="32" rx="2" fill="#0f172a" />
+    <!-- Glass Shine Lines -->
+    <line x1="930" y1="440" x2="990" y2="330" stroke="#ffffff" stroke-width="2.5" opacity="0.6" />
+    <line x1="1080" y1="440" x2="1140" y2="330" stroke="#ffffff" stroke-width="2.5" opacity="0.6" />
+  </g>
+
+  <!-- ==================== DELIVERY SCOOTER & SHIPPER MASCOT ==================== -->
+  <g id="deliveryShipper">
+    <!-- Motion speed puffs / exhaust smoke -->
+    <g fill="#ffffff" opacity="0.9">
+      <ellipse cx="330" cy="425" rx="14" ry="7" />
+      <ellipse cx="310" cy="432" rx="10" ry="5" />
+      <ellipse cx="295" cy="436" rx="6" ry="3" />
+      <line x1="335" y1="418" x2="280" y2="418" stroke="#38bdf8" stroke-width="3" stroke-linecap="round" />
+      <line x1="345" y1="426" x2="270" y2="426" stroke="#38bdf8" stroke-width="2.5" stroke-linecap="round" />
+    </g>
+
+    <!-- Scooter Rear Wheel -->
+    <g id="rearWheel">
+      <circle cx="365" cy="425" r="28" fill="#1e293b" stroke="#0f172a" stroke-width="3" />
+      <circle cx="365" cy="425" r="16" fill="#cbd5e1" />
+      <circle cx="365" cy="425" r="6" fill="#0f172a" />
+    </g>
+
+    <!-- Scooter Front Wheel -->
+    <g id="frontWheel">
+      <circle cx="510" cy="425" r="28" fill="#1e293b" stroke="#0f172a" stroke-width="3" />
+      <circle cx="510" cy="425" r="16" fill="#cbd5e1" />
+      <circle cx="510" cy="425" r="6" fill="#0f172a" />
+    </g>
+
+    <!-- Scooter Body -->
+    <path d="M360 415 Q360 380 400 375 L450 375 Q465 405 480 405 L500 405 Q520 405 525 390 L535 345 Q535 330 525 325 L500 325 Q485 330 485 350 L465 375 Z" fill="url(#scooterGrad)" stroke="#ca8a04" stroke-width="2.5" />
+    <!-- Floorboard -->
+    <rect x="420" y="405" width="65" height="12" rx="4" fill="#334155" />
+
+    <!-- Front Fender & Headlight -->
+    <path d="M495 405 Q515 390 535 410" fill="none" stroke="#eab308" stroke-width="8" stroke-linecap="round" />
+    <!-- Headlamp -->
+    <ellipse cx="538" cy="335" rx="9" ry="12" fill="#ffffff" stroke="#eab308" stroke-width="2.5" />
+    <path d="M545 335 L580 320 L580 350 Z" fill="#fef08a" opacity="0.35" />
+
+    <!-- Handlebar -->
+    <line x1="518" y1="325" x2="505" y2="305" stroke="#334155" stroke-width="4.5" stroke-linecap="round" />
+    <line x1="495" y1="305" x2="520" y2="305" stroke="#0f172a" stroke-width="5" stroke-linecap="round" />
+
+    <!-- DPC Delivery Cargo Box on Back -->
+    <rect x="335" y="325" width="55" height="52" rx="8" fill="#dc2626" stroke="#991b1b" stroke-width="2.5" />
+    <!-- Box Lid Strap -->
+    <rect x="335" y="338" width="55" height="6" fill="#991b1b" />
+    <!-- DPC White Logo on Box -->
+    <polygon points="362,348 375,356 375,368 362,374 349,368 349,356" fill="#ffffff" />
+    <text x="362" y="365" font-family="'Be Vietnam Pro', sans-serif" font-size="8" font-weight="900" fill="#dc2626" text-anchor="middle">DPC</text>
+
+    <!-- MASCOT RIDER BODY -->
+    <!-- Torso (Red Jumpsuit) -->
+    <path d="M410 395 Q405 340 435 330 Q465 330 460 395 Z" fill="#dc2626" stroke="#991b1b" stroke-width="2" />
+    <path d="M415 395 L435 340 L455 395 Z" fill="#b91c1c" opacity="0.4" />
+
+    <!-- Arm reaching to handlebar -->
+    <path d="M435 345 Q470 340 500 315" fill="none" stroke="#dc2626" stroke-width="14" stroke-linecap="round" />
+    <!-- White Glove -->
+    <circle cx="502" cy="312" r="7" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5" />
+
+    <!-- MASCOT HEAD & TECH HELMET -->
+    <g id="mascotHead">
+      <!-- Neck -->
+      <rect x="428" y="305" width="16" height="12" fill="#0f172a" rx="3" />
+      <!-- Helmet Outer (Red) -->
+      <circle cx="436" cy="275" r="32" fill="#dc2626" stroke="#991b1b" stroke-width="2.5" />
+      <!-- Helmet Ear Earpieces (Black Headphones) -->
+      <circle cx="410" cy="275" r="12" fill="#0f172a" stroke="#ffffff" stroke-width="2" />
+      <circle cx="410" cy="275" r="6" fill="#38bdf8" />
+      <!-- Helmet Visor / Face Area (Dark Shiny) -->
+      <path d="M428 255 Q465 255 465 285 Q465 300 432 300 Z" fill="#0f172a" />
+      <!-- Visor White Mask/Cheek -->
+      <path d="M440 282 Q468 282 465 298 L434 298 Z" fill="#ffffff" />
+      <!-- Cute Expressive Eyes (Smiling Cyan Curves) -->
+      <path d="M442 270 Q449 263 456 270" fill="none" stroke="#38bdf8" stroke-width="3" stroke-linecap="round" />
+      <!-- Helmet Highlight Shine -->
+      <path d="M425 248 Q445 246 455 255" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" opacity="0.75" />
+    </g>
+  </g>
+
+  <!-- ==================== GROUND / PAVEMENT ==================== -->
+  <rect x="0" y="450" width="1440" height="50" fill="#0f172a" />
+  <line x1="0" y1="450" x2="1440" y2="450" stroke="#2563eb" stroke-width="5" />
+  <line x1="0" y1="458" x2="1440" y2="458" stroke="#3b82f6" stroke-width="1.5" opacity="0.5" />
+
+  <!-- ==================== LEFT TEXT OVERLAY (GEARVN PRO STYLE) ==================== -->
+  <g id="leftText">
+    <text x="60" y="145" font-family="'Be Vietnam Pro', -apple-system, sans-serif" font-size="34" font-weight="900" fill="#0f172a" letter-spacing="-0.5">
+      HỆ THỐNG SHOWROOM DANGVINHPC
+    </text>
+    <text x="60" y="185" font-family="'Be Vietnam Pro', -apple-system, sans-serif" font-size="16" font-weight="600" fill="#475569">
+      Địa điểm trải nghiệm và mua sắm thiết bị công nghệ cao cấp
+    </text>
+
+    <!-- Red "XEM NGAY" Button -->
+    <g transform="translate(60, 220)">
+      <rect width="160" height="46" rx="8" fill="#dc2626" />
+      <text x="80" y="29" font-family="'Be Vietnam Pro', -apple-system, sans-serif" font-size="15" font-weight="800" fill="#ffffff" text-anchor="middle" letter-spacing="1">
+        XEM NGAY
+      </text>
+    </g>
+  </g>
+</svg>

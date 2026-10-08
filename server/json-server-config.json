@@ -1,0 +1,10 @@
+{
+  "port": 3000,
+  "host": "localhost",
+  "watch": true,
+  "read-only": false,
+  "no-cors": false,
+  "no-gzip": false,
+  "routes": {},
+  "middlewares": []
+}
