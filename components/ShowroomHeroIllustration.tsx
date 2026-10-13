@@ -450,18 +450,18 @@ const SVG_XML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 480" 
 
   <!-- ==================== KHỐI CHỮ BÊN TRÁI (CHỮ & NÚT XANH DPC) ==================== -->
   <g id="leftText">
-    <text x="50" y="130" font-family="'Be Vietnam Pro', -apple-system, sans-serif" font-size="34" font-weight="900" fill="#0f172a" letter-spacing="-0.5">
+    <text x="35" y="125" font-family="'Be Vietnam Pro', -apple-system, sans-serif" font-size="32" font-weight="900" fill="#0f172a" letter-spacing="-0.5">
       HỆ THỐNG SHOWROOM DANGVINHPC
     </text>
-    <text x="50" y="170" font-family="'Be Vietnam Pro', -apple-system, sans-serif" font-size="16" font-weight="600" fill="#475569">
+    <text x="35" y="165" font-family="'Be Vietnam Pro', -apple-system, sans-serif" font-size="16" font-weight="600" fill="#475569">
       Địa điểm trải nghiệm và mua sắm thiết bị công nghệ cao cấp
     </text>
-    <text x="50" y="196" font-family="'Be Vietnam Pro', -apple-system, sans-serif" font-size="13" font-weight="700" fill="#2563eb">
+    <text x="35" y="192" font-family="'Be Vietnam Pro', -apple-system, sans-serif" font-size="13" font-weight="700" fill="#2563eb">
       📍 191 Nguyễn Thị Duệ, Phường Thanh Bình, TP. Hải Dương
     </text>
 
     <!-- Nút "XEM NGAY" Màu Xanh Dương Chuẩn DANGVINHPC -->
-    <g transform="translate(50, 225)">
+    <g transform="translate(35, 220)">
       <rect width="160" height="46" rx="8" fill="#2563eb" />
       <text x="80" y="29" font-family="'Be Vietnam Pro', -apple-system, sans-serif" font-size="15" font-weight="800" fill="#ffffff" text-anchor="middle" letter-spacing="1">
         XEM NGAY
@@ -474,12 +474,20 @@ const SVG_DATA_URI = `data:image/svg+xml;utf8,${encodeURIComponent(SVG_XML)}`;
 
 export function ShowroomHeroIllustration({ onActionClick }: { onActionClick?: () => void }) {
   const { width } = useWindowDimensions();
+  const isDesktop = width >= 768;
+
+  const dynamicSvg = React.useMemo(() => {
+    return SVG_XML.replace(
+      'preserveAspectRatio="xMidYMid slice"',
+      `preserveAspectRatio="${isDesktop ? 'xMidYMid slice' : 'xMinYMid slice'}"`
+    );
+  }, [isDesktop]);
 
   // On Web: render native SVG element with interactive cursor and click
   if (Platform.OS === 'web') {
     return (
       <Pressable
-        style={styles.containerWeb}
+        style={StyleSheet.flatten([styles.containerWeb, !isDesktop && styles.containerWebMobile])}
         onPress={onActionClick}
         accessibilityRole="button"
         accessibilityLabel="Xem hệ thống showroom DANGVINHPC Hải Dương"
@@ -493,7 +501,7 @@ export function ShowroomHeroIllustration({ onActionClick }: { onActionClick?: ()
             justifyContent: 'center',
             overflow: 'hidden',
           }}
-          dangerouslySetInnerHTML={{ __html: SVG_XML }}
+          dangerouslySetInnerHTML={{ __html: dynamicSvg }}
         />
       </Pressable>
     );
@@ -503,7 +511,7 @@ export function ShowroomHeroIllustration({ onActionClick }: { onActionClick?: ()
   return (
     <Pressable style={styles.containerNative} onPress={onActionClick}>
       <img
-        src={SVG_DATA_URI}
+        src={`data:image/svg+xml;utf8,${encodeURIComponent(dynamicSvg)}`}
         style={{ width: '100%', height: 'auto', display: 'block' }}
         alt="Hệ thống Showroom DANGVINHPC"
       />
@@ -529,6 +537,11 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     cursor: 'pointer',
   } as any,
+  containerWebMobile: {
+    minHeight: 170,
+    borderRadius: 14,
+    marginBottom: 16,
+  },
   containerNative: {
     width: '100%',
     aspectRatio: 1440 / 480,

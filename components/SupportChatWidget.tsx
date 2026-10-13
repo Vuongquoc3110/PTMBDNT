@@ -15,6 +15,7 @@ import {
 
 import { useAppContext } from '@/context/AppContext';
 import { apiService, type SupportTicket } from '@/services/api';
+import { playNotificationSound } from '@/utils/sound';
 
 type ChatAction = { label: string; path: '/products' | '/orders' };
 type ChatRole = 'assistant' | 'customer' | 'admin';
@@ -138,8 +139,23 @@ export function SupportChatWidget() {
     return () => clearInterval(timer);
   }, [ticketId, ticketStatus, isOpen, refreshTicket]);
 
+  const prevMsgCountRef = useRef(0);
+  useEffect(() => {
+    const total = (ticket?.messages?.length || 0);
+    if (prevMsgCountRef.current > 0 && total > prevMsgCountRef.current) {
+      const last = ticket?.messages?.[ticket.messages.length - 1];
+      if (last && (last.sender === 'admin' || last.sender === 'bot')) {
+        playNotificationSound();
+      }
+    }
+    prevMsgCountRef.current = total;
+  }, [ticket?.messages?.length]);
+
   const pushLocal = (items: Omit<ChatMessage, 'id'>[]) => {
     setMessages((current) => [...current, ...items.map((m) => ({ ...m, id: messageId.current++ }))]);
+    if (items.some((i) => i.role === 'assistant')) {
+      playNotificationSound();
+    }
   };
 
   const escalate = async (text: string, botReply: string) => {

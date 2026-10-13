@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Link, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
     Image,
@@ -14,10 +14,32 @@ import {
 
 import { Footer } from '@/components/Footer';
 import { Header } from '@/components/Header';
+import { ProductCardSkeleton } from '@/components/SkeletonLoader';
 import { GEAR_CATEGORIES, isProductInCategory } from '@/constants/categories';
 import { useAppContext } from '@/context/AppContext';
 import { formatPrice, getProductFallbackImage, isInvalidOrBlockedImageUrl } from '@/data/products';
 import { useProducts } from '@/hooks/useApi';
+
+const PRICE_PRESETS = [
+  { id: 'all', label: 'Tất cả mức giá', min: 0, max: Infinity },
+  { id: 'under5m', label: 'Dưới 5 triệu', min: 0, max: 5000000 },
+  { id: '5m-15m', label: '5tr - 15 triệu', min: 5000000, max: 15000000 },
+  { id: '15m-30m', label: '15tr - 30 triệu', min: 15000000, max: 30000000 },
+  { id: 'over30m', label: 'Trên 30 triệu', min: 30000000, max: Infinity },
+];
+
+const POPULAR_BRANDS = [
+  'ASUS',
+  'MSI',
+  'Gigabyte',
+  'Apple',
+  'Logitech',
+  'Corsair',
+  'Intel',
+  'AMD',
+  'Kingston',
+  'Razer',
+];
 
 function getValidItemImage(item: any) {
   const direct = item?.image || item?.images?.[0];
@@ -45,6 +67,7 @@ function ProductGridItem({
   toggleFavorite: (id: string, e: any) => void;
   showToast: (msg: string) => void;
 }) {
+  const router = useRouter();
   const { width } = useWindowDimensions();
   const isMobile = width < 920;
   const categoryLabel = categoryOptions.find(
@@ -67,11 +90,11 @@ function ProductGridItem({
 
   return (
     <View style={[styles.cardCol, isMobile && styles.cardColMobile]}>
-      <Link href={{ pathname: '/products/[id]', params: { id: item.id } }} asChild>
-        <Pressable
-          style={styles.productCard}
-          {...({ dataSet: { productCard: 'true' } } as any)}
-        >
+      <Pressable
+        onPress={() => router.push({ pathname: '/products/[id]', params: { id: item.id } })}
+        style={styles.productCard}
+        {...({ dataSet: { productCard: 'true' } } as any)}
+      >
           {/* PRODUCT IMAGE & BADGES */}
           <View style={[styles.cardImageWrapper, isMobile && styles.cardImageWrapperMobile]}>
             <Image
@@ -173,12 +196,12 @@ function ProductGridItem({
             </Pressable>
           </View>
         </Pressable>
-      </Link>
     </View>
   );
 }
 
 export default function ProductsPage() {
+  const router = useRouter();
   const { width } = useWindowDimensions();
   const isDesktop = width >= 920;
   const params = useLocalSearchParams<{ q?: string; category?: string; filter?: string }>();
@@ -199,6 +222,34 @@ export default function ProductsPage() {
   const [sortBy, setSortBy] = useState<'featured' | 'newest' | 'low' | 'high' | 'rating'>('featured');
   const [isSortDropdownOpen, setIsSortDropdownOpen] = useState(false);
   const [toast, setToast] = useState('');
+
+  // 1. Advanced Price Range States
+  const [selectedPricePreset, setSelectedPricePreset] = useState('all');
+  const [customMinPrice, setCustomMinPrice] = useState('');
+  const [customMaxPrice, setCustomMaxPrice] = useState('');
+  const [appliedCustomPrice, setAppliedCustomPrice] = useState<{ min: number; max: number } | null>(null);
+
+  // 2. Brand & Stock Filter States
+  const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
+  const [inStockOnly, setInStockOnly] = useState(false);
+
+  const toggleBrand = (brand: string) => {
+    setSelectedBrands((prev) =>
+      prev.includes(brand) ? prev.filter((b) => b !== brand) : [...prev, brand]
+    );
+  };
+
+  const handleApplyCustomPrice = () => {
+    const min = parseInt(customMinPrice.replace(/[^0-9]/g, ''), 10) || 0;
+    const max = parseInt(customMaxPrice.replace(/[^0-9]/g, ''), 10) || Infinity;
+    if (min > max && max !== Infinity) {
+      showToast('Giá tối thiểu không được lớn hơn giá tối đa');
+      return;
+    }
+    setSelectedPricePreset('custom');
+    setAppliedCustomPrice({ min, max });
+    showToast(`Đã lọc giá: ${formatPrice(min)} - ${max === Infinity ? 'Trở lên' : formatPrice(max)}`);
+  };
 
   useEffect(() => {
     setSearch(typeof params.q === 'string' ? params.q : '');
@@ -255,6 +306,36 @@ export default function ProductsPage() {
       );
     }
 
+    // 1. Lọc theo khoảng giá
+    if (appliedCustomPrice) {
+      result = result.filter(
+        (item) => item.price >= appliedCustomPrice.min && item.price <= appliedCustomPrice.max
+      );
+    } else if (selectedPricePreset !== 'all' && selectedPricePreset !== 'custom') {
+      const preset = PRICE_PRESETS.find((p) => p.id === selectedPricePreset);
+      if (preset) {
+        result = result.filter((item) => item.price >= preset.min && item.price <= preset.max);
+      }
+    }
+
+    // 2. Lọc theo thương hiệu
+    if (selectedBrands.length > 0) {
+      result = result.filter((item) => {
+        const pName = (item.name || '').toLowerCase();
+        const pBrand = ((item as any).brand || '').toLowerCase();
+        const pDesc = (item.description || '').toLowerCase();
+        return selectedBrands.some((b) => {
+          const bLower = b.toLowerCase();
+          return pName.includes(bLower) || pBrand.includes(bLower) || pDesc.includes(bLower);
+        });
+      });
+    }
+
+    // 3. Lọc chỉ hàng còn sẵn
+    if (inStockOnly) {
+      result = result.filter((item) => (item.stock || 0) > 0);
+    }
+
     switch (sortBy) {
       case 'newest':
         result.sort((a, b) => Number(b.isNew) - Number(a.isNew));
@@ -274,14 +355,31 @@ export default function ProductsPage() {
     }
 
     return result;
-  }, [apiProducts, search, selectedCategories, sortBy, activeFilter, onlySale]);
+  }, [
+    apiProducts,
+    search,
+    selectedCategories,
+    sortBy,
+    activeFilter,
+    onlySale,
+    selectedPricePreset,
+    appliedCustomPrice,
+    selectedBrands,
+    inStockOnly,
+  ]);
 
   const clearFilters = () => {
     setSearch('');
     clearCategoryFilter();
     setOnlySale(false);
+    setSelectedPricePreset('all');
+    setCustomMinPrice('');
+    setCustomMaxPrice('');
+    setAppliedCustomPrice(null);
+    setSelectedBrands([]);
+    setInStockOnly(false);
     setSortBy('featured');
-    showToast('Đã xóa bộ lọc tìm kiếm');
+    showToast('Đã xóa tất cả bộ lọc');
   };
 
   const sortLabels: Record<string, string> = {
@@ -312,9 +410,9 @@ export default function ProductsPage() {
         <View style={[styles.topBar, !isDesktop && styles.topBarMobile]}>
           <View style={styles.topBarLeft}>
             <View style={[styles.breadcrumbRow, !isDesktop && styles.breadcrumbRowMobile]}>
-              <Link href="/(tabs)" style={styles.breadcrumbLink}>
-                Trang chủ
-              </Link>
+              <Pressable onPress={() => router.push('/(tabs)')}>
+                <Text style={styles.breadcrumbLink}>Trang chủ</Text>
+              </Pressable>
               <Text style={styles.breadcrumbSep}>/</Text>
               <Text style={styles.breadcrumbCurrent}>Danh sách sản phẩm</Text>
             </View>
@@ -387,7 +485,13 @@ export default function ProductsPage() {
         </View>
 
         {/* ACTIVE FILTER BANNER */}
-        {(search.trim().length > 0 || selectedCategories.length > 0 || onlySale) && (
+        {(search.trim().length > 0 ||
+          selectedCategories.length > 0 ||
+          onlySale ||
+          selectedPricePreset !== 'all' ||
+          appliedCustomPrice !== null ||
+          selectedBrands.length > 0 ||
+          inStockOnly) && (
           <View style={styles.activeFilterBanner}>
             <View style={styles.activeFilterLeft}>
               <Ionicons name="funnel" size={16} color="#2563eb" style={{ marginRight: 4 }} />
@@ -395,12 +499,48 @@ export default function ProductsPage() {
               {onlySale && (
                 <View style={[styles.filterChip, { borderColor: '#fed7aa', backgroundColor: '#fff7ed' }]}>
                   <Ionicons name="flame" size={14} color="#ea580c" style={{ marginRight: 4 }} />
-                  <Text style={[styles.filterChipText, { color: '#ea580c' }]}>Khuyến mãi giảm sốc</Text>
+                  <Text style={[styles.filterChipText, { color: '#ea580c' }]}>Khuyến mãi</Text>
                   <Pressable onPress={() => setOnlySale(false)} hitSlop={6}>
                     <Ionicons name="close" size={14} color="#ea580c" style={{ marginLeft: 4 }} />
                   </Pressable>
                 </View>
               )}
+              {inStockOnly && (
+                <View style={[styles.filterChip, { borderColor: '#bbf7d0', backgroundColor: '#f0fdf4' }]}>
+                  <Ionicons name="checkmark-circle" size={14} color="#16a34a" style={{ marginRight: 4 }} />
+                  <Text style={[styles.filterChipText, { color: '#16a34a' }]}>Chỉ còn hàng</Text>
+                  <Pressable onPress={() => setInStockOnly(false)} hitSlop={6}>
+                    <Ionicons name="close" size={14} color="#16a34a" style={{ marginLeft: 4 }} />
+                  </Pressable>
+                </View>
+              )}
+              {(selectedPricePreset !== 'all' || appliedCustomPrice) && (
+                <View style={[styles.filterChip, { borderColor: '#bfdbfe', backgroundColor: '#eff6ff' }]}>
+                  <Ionicons name="cash-outline" size={14} color="#2563eb" style={{ marginRight: 4 }} />
+                  <Text style={[styles.filterChipText, { color: '#2563eb' }]}>
+                    {appliedCustomPrice
+                      ? `${formatPrice(appliedCustomPrice.min)} - ${appliedCustomPrice.max === Infinity ? 'Trở lên' : formatPrice(appliedCustomPrice.max)}`
+                      : PRICE_PRESETS.find((p) => p.id === selectedPricePreset)?.label}
+                  </Text>
+                  <Pressable
+                    onPress={() => {
+                      setSelectedPricePreset('all');
+                      setAppliedCustomPrice(null);
+                    }}
+                    hitSlop={6}
+                  >
+                    <Ionicons name="close" size={14} color="#2563eb" style={{ marginLeft: 4 }} />
+                  </Pressable>
+                </View>
+              )}
+              {selectedBrands.map((brand) => (
+                <View key={brand} style={[styles.filterChip, { borderColor: '#e2e8f0', backgroundColor: '#f8fafc' }]}>
+                  <Text style={styles.filterChipText}>Hãng: {brand}</Text>
+                  <Pressable onPress={() => toggleBrand(brand)} hitSlop={6}>
+                    <Ionicons name="close" size={14} color="#64748b" style={{ marginLeft: 4 }} />
+                  </Pressable>
+                </View>
+              ))}
               {search.trim().length > 0 && (
                 <View style={styles.filterChip}>
                   <Text style={styles.filterChipText}>Từ khóa: &quot;{search.trim()}&quot;</Text>
@@ -433,15 +573,17 @@ export default function ProductsPage() {
             <View style={styles.filterHeader}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 <Ionicons name="filter" size={18} color="#2563eb" />
-                <Text style={styles.filterHeaderTitle}>Bộ lọc danh mục</Text>
+                <Text style={styles.filterHeaderTitle}>Bộ lọc sản phẩm</Text>
               </View>
-              {(selectedCategories.length > 0 || search.length > 0) && (
+              {(selectedCategories.length > 0 || search.length > 0 || selectedPricePreset !== 'all' || selectedBrands.length > 0 || inStockOnly || onlySale) && (
                 <Pressable onPress={clearFilters}>
                   <Text style={styles.clearFilterText}>Xóa tất cả</Text>
                 </Pressable>
               )}
             </View>
 
+            {/* DANH MỤC */}
+            <Text style={styles.filterSectionTitle}>Danh mục sản phẩm</Text>
             <View style={[styles.categoryList, !isDesktop && styles.categoryListMobile]}>
               {categoryOptions.map((cat) => {
                 const isSelected = selectedCategories.some(
@@ -470,6 +612,113 @@ export default function ProductsPage() {
               })}
             </View>
 
+            {/* KHOẢNG GIÁ */}
+            <View style={styles.filterSection}>
+              <View style={styles.filterSectionHeader}>
+                <Ionicons name="pricetag-outline" size={16} color="#2563eb" />
+                <Text style={styles.filterSectionTitle}>Khoảng giá</Text>
+              </View>
+              <View style={styles.pricePresetList}>
+                {PRICE_PRESETS.map((preset) => {
+                  const isActive = selectedPricePreset === preset.id && !appliedCustomPrice;
+                  return (
+                    <Pressable
+                      key={preset.id}
+                      style={[styles.pricePresetItem, isActive && styles.pricePresetItemActive]}
+                      onPress={() => {
+                        setSelectedPricePreset(preset.id);
+                        setAppliedCustomPrice(null);
+                      }}
+                    >
+                      <View style={[styles.radioCircle, isActive && styles.radioCircleActive]}>
+                        {isActive && <View style={styles.radioDot} />}
+                      </View>
+                      <Text style={[styles.pricePresetText, isActive && styles.pricePresetTextActive]}>
+                        {preset.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              <View style={styles.customPriceRow}>
+                <TextInput
+                  style={styles.priceInput}
+                  placeholder="Từ đ"
+                  placeholderTextColor="#94a3b8"
+                  value={customMinPrice}
+                  onChangeText={setCustomMinPrice}
+                  keyboardType="numeric"
+                />
+                <Text style={{ color: '#94a3b8', fontWeight: 'bold' }}>-</Text>
+                <TextInput
+                  style={styles.priceInput}
+                  placeholder="Đến đ"
+                  placeholderTextColor="#94a3b8"
+                  value={customMaxPrice}
+                  onChangeText={setCustomMaxPrice}
+                  keyboardType="numeric"
+                />
+                <Pressable style={styles.applyPriceBtn} onPress={handleApplyCustomPrice}>
+                  <Ionicons name="arrow-forward" size={14} color="#ffffff" />
+                </Pressable>
+              </View>
+            </View>
+
+            {/* THƯƠNG HIỆU */}
+            <View style={styles.filterSection}>
+              <View style={styles.filterSectionHeader}>
+                <Ionicons name="ribbon-outline" size={16} color="#2563eb" />
+                <Text style={styles.filterSectionTitle}>Thương hiệu</Text>
+              </View>
+              <View style={styles.brandChipsWrap}>
+                {POPULAR_BRANDS.map((brand) => {
+                  const isSelected = selectedBrands.includes(brand);
+                  return (
+                    <Pressable
+                      key={brand}
+                      style={[styles.brandChip, isSelected && styles.brandChipActive]}
+                      onPress={() => toggleBrand(brand)}
+                    >
+                      <Text style={[styles.brandChipText, isSelected && styles.brandChipTextActive]}>
+                        {brand}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
+            {/* TÌNH TRẠNG */}
+            <View style={styles.filterSection}>
+              <View style={styles.filterSectionHeader}>
+                <Ionicons name="shield-checkmark-outline" size={16} color="#2563eb" />
+                <Text style={styles.filterSectionTitle}>Tình trạng</Text>
+              </View>
+              <Pressable
+                style={[styles.statusToggleRow, inStockOnly && styles.statusToggleRowActive]}
+                onPress={() => setInStockOnly(!inStockOnly)}
+              >
+                <View style={[styles.checkbox, inStockOnly && styles.checkboxActive]}>
+                  {inStockOnly && <Ionicons name="checkmark" size={12} color="#ffffff" />}
+                </View>
+                <Text style={[styles.statusToggleText, inStockOnly && { color: '#2563eb', fontWeight: '700' }]}>
+                  Chỉ hiện hàng có sẵn
+                </Text>
+              </Pressable>
+              <Pressable
+                style={[styles.statusToggleRow, onlySale && styles.statusToggleRowActive]}
+                onPress={() => setOnlySale(!onlySale)}
+              >
+                <View style={[styles.checkbox, onlySale && styles.checkboxActive]}>
+                  {onlySale && <Ionicons name="checkmark" size={12} color="#ffffff" />}
+                </View>
+                <Text style={[styles.statusToggleText, onlySale && { color: '#ea580c', fontWeight: '700' }]}>
+                  Khuyến mãi giảm giá
+                </Text>
+              </Pressable>
+            </View>
+
             {/* QUICK PROMO BADGE */}
             <View style={styles.promoSidebarBox}>
               <Ionicons name="flash" size={20} color="#ea580c" />
@@ -480,7 +729,15 @@ export default function ProductsPage() {
 
           {/* PRODUCTS LIST CONTAINER */}
           <View style={styles.productsArea}>
-            {filteredProducts.length === 0 ? (
+            {productsLoading ? (
+              <View style={[styles.productsGrid, !isDesktop && styles.productsGridMobile]}>
+                {Array.from({ length: 8 }).map((_, idx) => (
+                  <View key={idx} style={[styles.cardCol, !isDesktop && styles.cardColMobile]}>
+                    <ProductCardSkeleton />
+                  </View>
+                ))}
+              </View>
+            ) : filteredProducts.length === 0 ? (
               <View style={styles.emptyContainer}>
                 <Ionicons name="search-outline" size={56} color="#cbd5e1" />
                 <Text style={styles.emptyTitle}>Không tìm thấy sản phẩm nào</Text>
@@ -857,6 +1114,136 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#9a3412',
     marginTop: 2,
+  },
+
+  /* NEW ADVANCED FILTERS STYLES */
+  filterSection: {
+    marginTop: 16,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+  },
+  filterSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 10,
+  },
+  filterSectionTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0f172a',
+    letterSpacing: 0.2,
+  },
+  pricePresetList: {
+    gap: 4,
+    marginBottom: 8,
+  },
+  pricePresetItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    backgroundColor: '#ffffff',
+  },
+  pricePresetItemActive: {
+    backgroundColor: '#eff6ff',
+  },
+  radioCircle: {
+    width: 15,
+    height: 15,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: '#cbd5e1',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+  },
+  radioCircleActive: {
+    borderColor: '#2563eb',
+  },
+  radioDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: '#2563eb',
+  },
+  pricePresetText: {
+    fontSize: 13,
+    color: '#475569',
+    fontWeight: '500',
+  },
+  pricePresetTextActive: {
+    color: '#2563eb',
+    fontWeight: '700',
+  },
+  customPriceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
+  },
+  priceInput: {
+    flex: 1,
+    height: 32,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    fontSize: 12,
+    color: '#0f172a',
+  },
+  applyPriceBtn: {
+    width: 32,
+    height: 32,
+    backgroundColor: '#2563eb',
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  brandChipsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  brandChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  brandChipActive: {
+    backgroundColor: '#2563eb',
+    borderColor: '#2563eb',
+  },
+  brandChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  brandChipTextActive: {
+    color: '#ffffff',
+    fontWeight: '700',
+  },
+  statusToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    marginBottom: 4,
+  },
+  statusToggleRowActive: {
+    backgroundColor: '#f8fafc',
+  },
+  statusToggleText: {
+    fontSize: 13,
+    color: '#475569',
+    fontWeight: '500',
   },
 
   /* PRODUCTS AREA */

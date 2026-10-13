@@ -67,11 +67,9 @@ export default function ShowroomScreen() {
         <View style={styles.container}>
           {/* BREADCRUMB */}
           <View style={styles.breadcrumbBar}>
-            <Link href="/(tabs)" asChild>
-              <Pressable style={styles.breadcrumbTouch}>
-                <Text style={styles.breadcrumbLink}>Trang chủ</Text>
-              </Pressable>
-            </Link>
+            <Pressable style={styles.breadcrumbTouch} onPress={() => router.push('/(tabs)')}>
+              <Text style={styles.breadcrumbLink}>Trang chủ</Text>
+            </Pressable>
             <Text style={styles.breadcrumbSep}>/</Text>
             <Text style={styles.breadcrumbCurrent}>Hệ thống Showroom</Text>
           </View>

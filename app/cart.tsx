@@ -277,9 +277,9 @@ export default function CartScreen() {
           {/* BREADCRUMB & HEADER */}
           <View style={styles.topHeader}>
             <View style={styles.breadcrumbRow}>
-              <Link href="/(tabs)" style={styles.breadcrumbLink}>
-                Trang chủ
-              </Link>
+              <Pressable onPress={() => router.push('/(tabs)')}>
+                <Text style={styles.breadcrumbLink}>Trang chủ</Text>
+              </Pressable>
               <Text style={styles.breadcrumbSep}>/</Text>
               <Text style={styles.breadcrumbCurrent}>Giỏ hàng</Text>
             </View>
@@ -290,10 +290,10 @@ export default function CartScreen() {
                   <Text style={styles.countBadgeText}>{items.length} sản phẩm</Text>
                 </View>
               </View>
-              <Link href={'/products' as any} style={styles.continueLink}>
+              <Pressable onPress={() => router.push('/products' as any)} style={styles.continueLink}>
                 <Ionicons name="arrow-back" size={16} color="#2563eb" style={{ marginRight: 6 }} />
                 <Text style={styles.continueLinkText}>Tiếp tục mua hàng</Text>
-              </Link>
+              </Pressable>
             </View>
           </View>
 
@@ -426,18 +426,19 @@ export default function CartScreen() {
                         </Pressable>
 
                         {/* PRODUCT IMAGE */}
-                        <Link href={{ pathname: '/products/[id]', params: { id: item.id.split('::')[0] } }} asChild>
-                          <Pressable style={styles.imgWrap}>
-                            <Image
-                              source={{
-                                uri: item.image && !isInvalidOrBlockedImageUrl(item.image)
-                                  ? item.image
-                                  : getProductFallbackImage(item),
-                              }}
-                              style={styles.productImg}
-                            />
-                          </Pressable>
-                        </Link>
+                        <Pressable
+                          style={styles.imgWrap}
+                          onPress={() => router.push({ pathname: '/products/[id]', params: { id: item.id.split('::')[0] } })}
+                        >
+                          <Image
+                            source={{
+                              uri: item.image && !isInvalidOrBlockedImageUrl(item.image)
+                                ? item.image
+                                : getProductFallbackImage(item),
+                            }}
+                            style={styles.productImg}
+                          />
+                        </Pressable>
 
                         {/* PRODUCT INFO */}
                         <View style={styles.productDetails}>
@@ -454,13 +455,11 @@ export default function CartScreen() {
                             </Pressable>
                           </View>
 
-                          <Link href={{ pathname: '/products/[id]', params: { id: item.id.split('::')[0] } }} asChild>
-                            <Pressable>
-                              <Text style={styles.productTitle} numberOfLines={2}>
-                                {item.name}
-                              </Text>
-                            </Pressable>
-                          </Link>
+                          <Pressable onPress={() => router.push({ pathname: '/products/[id]', params: { id: item.id.split('::')[0] } })}>
+                            <Text style={styles.productTitle} numberOfLines={2}>
+                              {item.name}
+                            </Text>
+                          </Pressable>
 
                           <Text style={styles.productSpec} numberOfLines={1}>
                             {item.spec}

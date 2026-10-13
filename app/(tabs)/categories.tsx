@@ -15,6 +15,7 @@ import {
 
 import { Footer } from '@/components/Footer';
 import { Header } from '@/components/Header';
+import { CategoryCardSkeleton } from '@/components/SkeletonLoader';
 import { GEAR_CATEGORIES, isProductInCategory, type CategoryOption } from '@/constants/categories';
 import { useAppContext } from '@/context/AppContext';
 import { useProducts } from '@/hooks/useApi';
@@ -255,10 +256,10 @@ export default function CategoriesTabScreen() {
   const activeFilterInfo = filters.find((f) => f.key === activeFilter) || filters[0];
 
   return (
-    <View style={[styles.pageWrapper, isDark && styles.pageDark]}>
+    <View style={StyleSheet.flatten([styles.pageWrapper, isDark && styles.pageDark])}>
       <Header />
 
-      <View style={[styles.container, isDark && styles.containerDark]}>
+      <View style={StyleSheet.flatten([styles.container, isDark && styles.containerDark])}>
         {/* BREADCRUMB / VỀ TRANG CHỦ */}
         <View style={styles.breadcrumbBar}>
           <Pressable
@@ -275,30 +276,30 @@ export default function CategoriesTabScreen() {
         {/* HEADER */}
         <View style={styles.headerRow}>
           <View style={{ flex: 1, marginRight: 12 }}>
-            <Text style={[styles.title, isDark && styles.textDark]}>Danh mục sản phẩm</Text>
-            <Text style={[styles.subtitle, isDark && styles.textMutedDark]}>
+            <Text style={StyleSheet.flatten([styles.title, isDark && styles.textDark])}>Danh mục sản phẩm</Text>
+            <Text style={StyleSheet.flatten([styles.subtitle, isDark && styles.textMutedDark])}>
               Khám phá linh kiện máy tính, laptop và gaming gear chính hãng
             </Text>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <Pressable
               onPress={() => loadCategories(true)}
-              style={[
+              style={StyleSheet.flatten([
                 styles.headerBadge,
                 isApiConnected ? styles.headerBadgeSuccess : (isDark ? styles.headerBadgeDark : null),
-              ]}
+              ])}
             >
               <Text
-                style={[
+                style={StyleSheet.flatten([
                   styles.headerBadgeText,
                   isApiConnected ? styles.textSuccess : (isDark ? { color: '#60a5fa' } : null),
-                ]}
+                ])}
               >
                 {isApiConnected ? '● API Online' : '○ Dữ liệu máy'}
               </Text>
             </Pressable>
-            <View style={[styles.headerBadge, isDark && styles.headerBadgeDark]}>
-              <Text style={[styles.headerBadgeText, isDark && { color: '#60a5fa' }]}>
+            <View style={StyleSheet.flatten([styles.headerBadge, isDark && styles.headerBadgeDark])}>
+              <Text style={StyleSheet.flatten([styles.headerBadgeText, isDark && { color: '#60a5fa' }])}>
                 {filteredCategories.length} danh mục
               </Text>
             </View>
@@ -401,11 +402,12 @@ export default function CategoriesTabScreen() {
 
       {/* CATEGORIES GRID */}
       {prodLoading && categoriesList.length === 0 ? (
-        <View style={styles.loadingBox}>
-          <ActivityIndicator size="large" color="#2563eb" />
-          <Text style={{ marginTop: 12, color: '#64748b', fontSize: 14 }}>
-            Đang tải danh mục sản phẩm từ API...
-          </Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 14 }}>
+          {Array.from({ length: 8 }).map((_, idx) => (
+            <View key={idx} style={isDesktop ? { width: '23.5%' } : { width: '47.5%' }}>
+              <CategoryCardSkeleton />
+            </View>
+          ))}
         </View>
       ) : filteredCategories.length === 0 ? (
         <View style={styles.emptyBox}>

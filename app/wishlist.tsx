@@ -42,23 +42,24 @@ export default function WishlistScreen() {
         ) : (
           wishlistedProducts.map((item) => (
             <View key={item.id} style={styles.card}>
-              <Link href={{ pathname: '/products/[id]', params: { id: item.id } }} asChild>
-                <Pressable style={styles.cardLeft}>
-                  <Image
-                    source={{
-                      uri: item.image && !isInvalidOrBlockedImageUrl(item.image)
-                        ? item.image
-                        : getProductFallbackImage(item),
-                    }}
-                    style={styles.image}
-                  />
-                  <View style={styles.info}>
-                    <Text style={styles.category}>{item.category || item.category_id}</Text>
-                    <Text style={styles.name} numberOfLines={2}>{item.name}</Text>
-                    <Text style={styles.price}>{formatPrice(item.price)}</Text>
-                  </View>
-                </Pressable>
-              </Link>
+              <Pressable
+                style={styles.cardLeft}
+                onPress={() => router.push({ pathname: '/products/[id]', params: { id: item.id } })}
+              >
+                <Image
+                  source={{
+                    uri: item.image && !isInvalidOrBlockedImageUrl(item.image)
+                      ? item.image
+                      : getProductFallbackImage(item),
+                  }}
+                  style={styles.image}
+                />
+                <View style={styles.info}>
+                  <Text style={styles.category}>{item.category || item.category_id}</Text>
+                  <Text style={styles.name} numberOfLines={2}>{item.name}</Text>
+                  <Text style={styles.price}>{formatPrice(item.price)}</Text>
+                </View>
+              </Pressable>
 
               <View style={styles.actionCol}>
                 <Pressable

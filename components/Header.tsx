@@ -5,6 +5,7 @@ import {
     Image,
     Platform,
     Pressable,
+    ScrollView,
     StyleSheet,
     Text,
     TextInput,
@@ -19,21 +20,37 @@ import { apiService, type Product } from '@/services/api';
 const POPULAR_SEARCHES = ['Laptop Gaming', 'RTX 4090', 'RAM DDR5', 'Màn hình 4K', 'MacBook', 'Bàn phím cơ'];
 
 export function Header() {
-  const { cartCount, user, wishlist, isDark, logout, isAdmin } = useAppContext();
+  const {
+    cartCount,
+    user,
+    wishlist,
+    isDark,
+    logout,
+    isAdmin,
+    notifications,
+    unreadNotiCount,
+    markNotificationAsRead,
+    markAllNotificationsAsRead,
+    toastNotice,
+    clearToastNotice,
+  } = useAppContext();
   const [search, setSearch] = useState('');
   const [isFocused, setIsFocused] = useState(false);
   const [matchingProducts, setMatchingProducts] = useState<Product[]>([]);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [notiOpen, setNotiOpen] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768;
   const blurTimeoutRef = useRef<any>(null);
   const accountWrapperRef = useRef<any>(null);
+  const notiWrapperRef = useRef<any>(null);
 
-  // Close user menu on route changes
+  // Close menus on route changes
   useEffect(() => {
     setUserMenuOpen(false);
+    setNotiOpen(false);
   }, [pathname]);
 
   // Click outside to close user dropdown on web
@@ -54,6 +71,25 @@ export function Header() {
       };
     }
   }, [userMenuOpen]);
+
+  // Click outside to close noti dropdown on web
+  useEffect(() => {
+    if (!notiOpen) return;
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      const handleNotiClick = (e: any) => {
+        if (notiWrapperRef.current && !notiWrapperRef.current.contains(e.target)) {
+          setNotiOpen(false);
+        }
+      };
+      const timer = setTimeout(() => {
+        document.addEventListener('click', handleNotiClick);
+      }, 10);
+      return () => {
+        clearTimeout(timer);
+        document.removeEventListener('click', handleNotiClick);
+      };
+    }
+  }, [notiOpen]);
 
   const avatarLetter = (user?.name || user?.email || 'D').trim().charAt(0).toUpperCase();
 
@@ -315,6 +351,109 @@ export function Header() {
             )}
           </Pressable>
 
+          {/* NOTIFICATION BUTTON & POPUP */}
+          <View ref={notiWrapperRef} style={styles.notiWrapper}>
+            <Pressable
+              style={[styles.actionButton, !isDesktop && styles.actionButtonMobile]}
+              onPress={() => setNotiOpen((prev) => !prev)}
+              accessibilityLabel="Thông báo"
+            >
+              <Ionicons
+                name={unreadNotiCount > 0 ? 'notifications' : 'notifications-outline'}
+                size={isDesktop ? 20 : 18}
+                color={unreadNotiCount > 0 ? '#ea580c' : '#334155'}
+              />
+              {unreadNotiCount > 0 && (
+                <View style={[styles.cartBadge, { backgroundColor: '#ea580c' }]}>
+                  <Text style={styles.cartBadgeText}>{unreadNotiCount > 9 ? '9+' : unreadNotiCount}</Text>
+                </View>
+              )}
+            </Pressable>
+
+            {/* NOTIFICATION POPUP */}
+            {notiOpen && (
+              <View style={[styles.notiDropdown, isDark && styles.userDropdownDark]}>
+                <View style={styles.notiHeader}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Ionicons name="notifications" size={16} color="#2563eb" />
+                    <Text style={[styles.notiHeaderTitle, isDark && styles.textLight]}>Thông báo đơn hàng</Text>
+                  </View>
+                  {unreadNotiCount > 0 && (
+                    <Pressable onPress={() => markAllNotificationsAsRead()} hitSlop={6}>
+                      <Text style={styles.notiMarkAllText}>Đã đọc tất cả</Text>
+                    </Pressable>
+                  )}
+                </View>
+
+                <View style={[styles.dropdownDivider, isDark && styles.dropdownDividerDark]} />
+
+                <ScrollView style={{ maxHeight: 300 }} showsVerticalScrollIndicator={false}>
+                  {notifications.length === 0 ? (
+                    <View style={styles.notiEmpty}>
+                      <Ionicons name="mail-open-outline" size={32} color="#94a3b8" />
+                      <Text style={styles.notiEmptyText}>Chưa có thông báo đơn hàng nào</Text>
+                    </View>
+                  ) : (
+                    notifications.map((item) => {
+                      const isUnread = !item.isRead;
+                      return (
+                        <Pressable
+                          key={item.id}
+                          style={[styles.notiItem, isUnread && styles.notiItemUnread, isDark && isUnread && styles.notiItemUnreadDark]}
+                          onPress={() => {
+                            markNotificationAsRead(item.id);
+                            setNotiOpen(false);
+                            if (item.orderId) {
+                              router.push({ pathname: '/orders/[id]', params: { id: String(item.orderId) } } as any);
+                            } else {
+                              router.push('/(tabs)/explore');
+                            }
+                          }}
+                        >
+                          <View style={styles.notiIconWrap}>
+                            <Ionicons
+                              name={
+                                item.title.includes('xác nhận')
+                                  ? 'checkmark-circle'
+                                  : item.title.includes('vận chuyển') || item.title.includes('giao')
+                                  ? 'car'
+                                  : item.title.includes('hủy')
+                                  ? 'close-circle'
+                                  : 'notifications'
+                              }
+                              size={18}
+                              color={
+                                item.title.includes('xác nhận')
+                                  ? '#2563eb'
+                                  : item.title.includes('vận chuyển') || item.title.includes('giao')
+                                  ? '#16a34a'
+                                  : item.title.includes('hủy')
+                                  ? '#dc2626'
+                                  : '#ea580c'
+                              }
+                            />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={[styles.notiTitle, isUnread && styles.notiTitleUnread, isDark && styles.textLight]} numberOfLines={1}>
+                              {item.title}
+                            </Text>
+                            <Text style={styles.notiMessage} numberOfLines={2}>
+                              {item.message}
+                            </Text>
+                            <Text style={styles.notiTime}>
+                              {new Date(item.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} • {new Date(item.createdAt).toLocaleDateString('vi-VN')}
+                            </Text>
+                          </View>
+                          {isUnread && <View style={styles.notiDot} />}
+                        </Pressable>
+                      );
+                    })
+                  )}
+                </ScrollView>
+              </View>
+            )}
+          </View>
+
           {/* CART BUTTON WITH BLUE PILL/BOX AND WHITE ICON */}
           <Pressable
             style={[styles.cartButton, !isDesktop && styles.cartButtonMobile]}
@@ -421,6 +560,34 @@ export function Header() {
                   </Text>
                 </Pressable>
 
+                <Pressable
+                  style={styles.dropdownItem}
+                  onPress={() => {
+                    setUserMenuOpen(false);
+                    router.push('/showroom' as any);
+                  }}
+                  {...({ dataSet: { userMenuItem: 'true' } } as any)}
+                >
+                  <Ionicons name="location-outline" size={18} color={isDark ? '#cbd5e1' : '#334155'} />
+                  <Text style={[styles.dropdownItemText, isDark && styles.textLight]}>
+                    Hệ thống Showroom
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  style={styles.dropdownItem}
+                  onPress={() => {
+                    setUserMenuOpen(false);
+                    router.push('/warranty' as any);
+                  }}
+                  {...({ dataSet: { userMenuItem: 'true' } } as any)}
+                >
+                  <Ionicons name="shield-checkmark-outline" size={18} color={isDark ? '#cbd5e1' : '#334155'} />
+                  <Text style={[styles.dropdownItemText, isDark && styles.textLight]}>
+                    Chính sách bảo hành
+                  </Text>
+                </Pressable>
+
                 {!isAdmin ? (
                   <Pressable
                     style={styles.dropdownItem}
@@ -468,6 +635,131 @@ export function Header() {
           </View>
         </View>
       </View>
+
+      {/* MOBILE QUICK NAVIGATION STRIP */}
+      {!isDesktop && (
+        <View style={StyleSheet.flatten([styles.mobileNavStrip, isDark && styles.mobileNavStripDark])}>
+          <Pressable
+            style={StyleSheet.flatten([
+              styles.mobileNavItem,
+              isDark && styles.mobileNavItemDark,
+              isHomeActive && styles.mobileNavItemActive,
+            ])}
+            onPress={() => router.push('/(tabs)')}
+          >
+            <Ionicons
+              name="home"
+              size={13}
+              color={isHomeActive ? '#ffffff' : (isDark ? '#60a5fa' : '#2563eb')}
+            />
+            <Text
+              style={StyleSheet.flatten([
+                styles.mobileNavText,
+                isDark && styles.textLight,
+                isHomeActive && styles.mobileNavTextActive,
+              ])}
+            >
+              Trang chủ
+            </Text>
+          </Pressable>
+
+          <Pressable
+            style={StyleSheet.flatten([
+              styles.mobileNavItem,
+              isDark && styles.mobileNavItemDark,
+              isShowroomActive && styles.mobileNavItemActive,
+            ])}
+            onPress={() => router.push('/showroom' as any)}
+          >
+            <Ionicons
+              name="location"
+              size={13}
+              color={isShowroomActive ? '#ffffff' : (isDark ? '#60a5fa' : '#2563eb')}
+            />
+            <Text
+              style={StyleSheet.flatten([
+                styles.mobileNavText,
+                isDark && styles.textLight,
+                isShowroomActive && styles.mobileNavTextActive,
+              ])}
+            >
+              Showroom
+            </Text>
+          </Pressable>
+
+          <Pressable
+            style={StyleSheet.flatten([
+              styles.mobileNavItem,
+              isDark && styles.mobileNavItemDark,
+              isWarrantyActive && styles.mobileNavItemActive,
+            ])}
+            onPress={() => router.push('/warranty' as any)}
+          >
+            <Ionicons
+              name="shield-checkmark"
+              size={13}
+              color={isWarrantyActive ? '#ffffff' : '#059669'}
+            />
+            <Text
+              style={StyleSheet.flatten([
+                styles.mobileNavText,
+                isDark && styles.textLight,
+                isWarrantyActive && styles.mobileNavTextActive,
+              ])}
+            >
+              Bảo hành
+            </Text>
+          </Pressable>
+
+          <Pressable
+            style={StyleSheet.flatten([
+              styles.mobileNavItem,
+              isDark && styles.mobileNavItemDark,
+              isPromosActive && styles.mobileNavItemActivePromo,
+            ])}
+            onPress={() => router.push({ pathname: '/products' as any, params: { filter: 'sale' } })}
+          >
+            <Ionicons
+              name="flame"
+              size={13}
+              color={isPromosActive ? '#ffffff' : '#dc2626'}
+            />
+            <Text
+              style={StyleSheet.flatten([
+                styles.mobileNavText,
+                isDark && styles.textLight,
+                isPromosActive && styles.mobileNavTextActive,
+              ])}
+            >
+              Khuyến mãi
+            </Text>
+          </Pressable>
+        </View>
+      )}
+
+      {/* FLOATING IN-APP NOTIFICATION TOAST */}
+      {toastNotice && (
+        <Pressable
+          style={styles.floatingToast}
+          onPress={() => {
+            clearToastNotice();
+            router.push('/(tabs)/explore');
+          }}
+        >
+          <View style={styles.floatingToastIcon}>
+            <Ionicons name="notifications" size={18} color="#ffffff" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.floatingToastTitle} numberOfLines={1}>
+              {toastNotice}
+            </Text>
+            <Text style={styles.floatingToastSub}>Bấm để kiểm tra chi tiết đơn hàng</Text>
+          </View>
+          <Pressable onPress={clearToastNotice} hitSlop={8}>
+            <Ionicons name="close" size={16} color="#94a3b8" />
+          </Pressable>
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -962,5 +1254,198 @@ const styles = StyleSheet.create({
   dropdownBackdrop: {
     backgroundColor: 'transparent',
     zIndex: 9998,
+  },
+  mobileNavStrip: {
+    backgroundColor: '#ffffff',
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 8,
+    paddingVertical: 7,
+    gap: 6,
+    width: '100%',
+  },
+  mobileNavStripDark: {
+    backgroundColor: '#0f172a',
+    borderTopColor: '#1e293b',
+  },
+  mobileNavItem: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    paddingVertical: 6,
+    paddingHorizontal: 2,
+    borderRadius: 8,
+  },
+  mobileNavItemDark: {
+    backgroundColor: '#1e293b',
+    borderColor: '#334155',
+  },
+  mobileNavItemActive: {
+    backgroundColor: '#2563eb',
+    borderColor: '#2563eb',
+  },
+  mobileNavItemActivePromo: {
+    backgroundColor: '#dc2626',
+    borderColor: '#dc2626',
+  },
+  mobileNavText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  mobileNavTextActive: {
+    color: '#ffffff',
+  },
+
+  /* NOTIFICATION CENTER STYLES */
+  notiWrapper: {
+    position: 'relative',
+    zIndex: 1005,
+  },
+  notiDropdown: {
+    position: 'absolute',
+    top: 48,
+    right: 0,
+    width: 340,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 10,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.14,
+    shadowRadius: 20,
+    elevation: 16,
+    zIndex: 9999,
+  },
+  notiHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingTop: 4,
+    paddingBottom: 8,
+  },
+  notiHeaderTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  notiMarkAllText: {
+    fontSize: 12,
+    color: '#2563eb',
+    fontWeight: '700',
+  },
+  notiEmpty: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 36,
+    gap: 8,
+  },
+  notiEmptyText: {
+    fontSize: 13,
+    color: '#94a3b8',
+    fontWeight: '500',
+  },
+  notiItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    padding: 10,
+    borderRadius: 10,
+    gap: 10,
+    marginBottom: 4,
+  },
+  notiItemUnread: {
+    backgroundColor: '#eff6ff',
+  },
+  notiItemUnreadDark: {
+    backgroundColor: 'rgba(37, 99, 235, 0.15)',
+  },
+  notiIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+  },
+  notiTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  notiTitleUnread: {
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  notiMessage: {
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  notiTime: {
+    fontSize: 10,
+    color: '#94a3b8',
+    marginTop: 4,
+    fontWeight: '600',
+  },
+  notiDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: '#2563eb',
+    marginTop: 6,
+  },
+  floatingToast: {
+    position: 'absolute',
+    top: 65,
+    left: 20,
+    right: 20,
+    maxWidth: 420,
+    alignSelf: 'center',
+    backgroundColor: '#0f172a',
+    borderRadius: 14,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 20,
+    zIndex: 99999,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  floatingToastIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#2563eb',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  floatingToastTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#ffffff',
+  },
+  floatingToastSub: {
+    fontSize: 11,
+    color: '#94a3b8',
+    marginTop: 2,
   },
 });

@@ -37,11 +37,11 @@ export function ProductCard({ product }: { product: any }) {
   }, [product?.id, product?.name, product?.category, product?.image, product?.images?.[0]]);
 
   return (
-    <Link href={{ pathname: '/products/[id]', params: { id: product.id } }} asChild>
-      <Pressable
-        style={StyleSheet.flatten([styles.card, isMobile && styles.cardMobile])}
-        {...({ dataSet: { productCard: 'true' } } as any)}
-      >
+    <Pressable
+      onPress={() => router.push({ pathname: '/products/[id]', params: { id: product.id } })}
+      style={StyleSheet.flatten([styles.card, isMobile && styles.cardMobile])}
+      {...({ dataSet: { productCard: 'true' } } as any)}
+    >
         <View style={styles.imageWrap}>
           <Image
             key={imageUri}
@@ -99,7 +99,6 @@ export function ProductCard({ product }: { product: any }) {
           </Text>
         </View>
       </Pressable>
-    </Link>
   );
 }
 

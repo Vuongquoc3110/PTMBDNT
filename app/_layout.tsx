@@ -140,6 +140,28 @@ if (Platform.OS === 'web' && typeof document !== 'undefined') {
       [data-app-theme="dark"] [data-category-sidebar-item]:hover [data-category-sidebar-text] {
         color: #60a5fa !important;
       }
+
+      /* Skeleton Shimmer Keyframes */
+      @keyframes dpcShimmerAnim {
+        0% {
+          background-position: -200% 0;
+        }
+        100% {
+          background-position: 200% 0;
+        }
+      }
+
+      .dpc-shimmer {
+        background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%) !important;
+        background-size: 200% 100% !important;
+        animation: dpcShimmerAnim 1.5s ease-in-out infinite !important;
+      }
+
+      [data-app-theme="dark"] .dpc-shimmer {
+        background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%) !important;
+        background-size: 200% 100% !important;
+        animation: dpcShimmerAnim 1.5s ease-in-out infinite !important;
+      }
     `;
     document.head.appendChild(style);
   }

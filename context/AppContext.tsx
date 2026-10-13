@@ -1,5 +1,6 @@
-import { apiService, type OrderItem, type User } from '@/services/api';
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { apiService, type AppNotification, type OrderItem, type User } from '@/services/api';
+import { playNotificationSound } from '@/utils/sound';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 
 export interface CartItem {
@@ -51,6 +52,14 @@ interface AppContextType {
   toggleCategoryFilter: (category: string) => void;
   clearCategoryFilter: () => void;
   setSelectedCategories: React.Dispatch<React.SetStateAction<string[]>>;
+
+  notifications: AppNotification[];
+  unreadNotiCount: number;
+  refreshNotifications: () => Promise<void>;
+  markNotificationAsRead: (id: number) => Promise<void>;
+  markAllNotificationsAsRead: () => Promise<void>;
+  toastNotice: string | null;
+  clearToastNotice: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -431,6 +440,78 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setSelectedCategories([]);
   };
 
+  // ==================== NOTIFICATIONS ====================
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [toastNotice, setToastNotice] = useState<string | null>(null);
+  const prevUnreadCountRef = useRef<number | null>(null);
+
+  const unreadNotiCount = useMemo(() => {
+    return notifications.filter((n) => !n.isRead).length;
+  }, [notifications]);
+
+  const refreshNotifications = useCallback(async () => {
+    if (!user?.id) {
+      setNotifications([]);
+      return;
+    }
+    try {
+      const list = await apiService.getNotifications(user.id);
+      setNotifications(list);
+
+      const unreadCount = list.filter((n) => !n.isRead).length;
+      if (prevUnreadCountRef.current !== null && unreadCount > prevUnreadCountRef.current) {
+        // Có thông báo trạng thái đơn hàng mới!
+        const latest = list[0];
+        playNotificationSound();
+        if (latest) {
+          setToastNotice(latest.title);
+          setTimeout(() => setToastNotice(null), 4500);
+        }
+      }
+      prevUnreadCountRef.current = unreadCount;
+    } catch {}
+  }, [user?.id]);
+
+  useEffect(() => {
+    refreshNotifications();
+    if (!user?.id) return;
+    const interval = setInterval(refreshNotifications, 4000);
+
+    if (typeof window !== 'undefined') {
+      const handleSync = () => refreshNotifications();
+      window.addEventListener('focus', handleSync);
+      window.addEventListener('dpc_order_updated', handleSync);
+      let bc: BroadcastChannel | null = null;
+      try {
+        bc = new BroadcastChannel('dpc_order_sync');
+        bc.onmessage = () => refreshNotifications();
+      } catch {}
+      return () => {
+        clearInterval(interval);
+        window.removeEventListener('focus', handleSync);
+        window.removeEventListener('dpc_order_updated', handleSync);
+        if (bc) bc.close();
+      };
+    }
+
+    return () => clearInterval(interval);
+  }, [user?.id, refreshNotifications]);
+
+  const markNotificationAsRead = async (id: number) => {
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, isRead: true } : n))
+    );
+    await apiService.markNotificationAsRead(id);
+  };
+
+  const markAllNotificationsAsRead = async () => {
+    if (!user?.id) return;
+    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+    await apiService.markAllNotificationsAsRead(user.id);
+  };
+
+  const clearToastNotice = () => setToastNotice(null);
+
   return (
     <AppContext.Provider
       value={{
@@ -466,6 +547,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         toggleCategoryFilter,
         clearCategoryFilter,
         setSelectedCategories,
+        notifications,
+        unreadNotiCount,
+        refreshNotifications,
+        markNotificationAsRead,
+        markAllNotificationsAsRead,
+        toastNotice,
+        clearToastNotice,
       }}
     >
       {children}

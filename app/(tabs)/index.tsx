@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Link, useRouter } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Image, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
 import { Footer } from '@/components/Footer';
@@ -10,6 +10,7 @@ import { ProductCard } from '@/components/ProductCard';
 import { GEAR_CATEGORIES, isProductInCategory, normalizeCategory } from '@/constants/categories';
 import { useAppContext } from '@/context/AppContext';
 import { useProducts } from '@/hooks/useApi';
+import { apiService } from '@/services/api';
 
 function FlashSaleCountdown() {
 	const [timeLeft, setTimeLeft] = useState({ h: 5, m: 32, s: 18 });
@@ -79,6 +80,32 @@ export default function HomeScreen() {
 	const { selectedCategories, toggleCategoryFilter, clearCategoryFilter, isDark } = useAppContext();
 
 	const { products } = useProducts();
+
+	const [recentReviews, setRecentReviews] = useState<any[]>([]);
+
+	const loadReviews = useCallback(async () => {
+		try {
+			const data = await apiService.getRecentReviews();
+			setRecentReviews(data || []);
+		} catch {}
+	}, []);
+
+	useEffect(() => {
+		loadReviews();
+		if (typeof window !== 'undefined') {
+			const handleSync = () => loadReviews();
+			window.addEventListener('dpc_order_updated', handleSync);
+			let bc: BroadcastChannel | null = null;
+			try {
+				bc = new BroadcastChannel('dpc_order_sync');
+				bc.onmessage = () => loadReviews();
+			} catch {}
+			return () => {
+				window.removeEventListener('dpc_order_updated', handleSync);
+				if (bc) bc.close();
+			};
+		}
+	}, [loadReviews]);
 
 	const filteredProducts = useMemo(() => {
 		if (!products || selectedCategories.length === 0) return [];
@@ -255,7 +282,7 @@ export default function HomeScreen() {
 						{/* Featured */}
 						<View style={styles.sectionHeader}>
 							<Text style={[styles.sectionTitle, !isDesktop && styles.sectionTitleMobile]}>Sản phẩm nổi bật</Text>
-							<Link href={'/products' as any} style={styles.sectionLink}>Xem tất cả</Link>
+							<Pressable onPress={() => router.push('/products' as any)}><Text style={styles.sectionLink}>Xem tất cả</Text></Pressable>
 						</View>
 
 						<View style={styles.gridList}>
@@ -269,7 +296,7 @@ export default function HomeScreen() {
 						{/* New Arrivals */}
 						<View style={styles.sectionHeader}>
 							<Text style={[styles.sectionTitle, !isDesktop && styles.sectionTitleMobile]}>Sản phẩm mới</Text>
-							<Link href={'/products' as any} style={styles.sectionLink}>Xem tất cả</Link>
+							<Pressable onPress={() => router.push('/products' as any)}><Text style={styles.sectionLink}>Xem tất cả</Text></Pressable>
 						</View>
 
 						<View style={styles.gridList}>
@@ -280,6 +307,87 @@ export default function HomeScreen() {
 							))}
 						</View>
 
+						{/* Section: Đánh giá thực tế từ khách hàng */}
+						{recentReviews.length > 0 && (
+							<View style={styles.reviewsSectionWrap}>
+								<View style={styles.sectionHeader}>
+									<View>
+										<View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+											<Text style={{ fontSize: 20 }}>💬</Text>
+											<Text style={[styles.sectionTitle, !isDesktop && styles.sectionTitleMobile]}>
+												Đánh giá từ khách hàng
+											</Text>
+										</View>
+										<Text style={styles.reviewSectionSub}>
+											Trải nghiệm thực tế từ những khách hàng đã mua sắm tại DANGVINHPC
+										</Text>
+									</View>
+									<View style={styles.trustScorePill}>
+										<Ionicons name="shield-checkmark" size={14} color="#16a34a" />
+										<Text style={styles.trustScoreText}>4.9/5 ⭐ Đánh giá xác thực</Text>
+									</View>
+								</View>
+
+								<View style={styles.reviewsGrid}>
+									{recentReviews.slice(0, isDesktop ? 6 : 4).map((rev, idx) => (
+										<View
+											key={rev.id || idx}
+											style={[styles.reviewCard, isDesktop ? styles.reviewCardDesktop : styles.reviewCardMobile, isDark && styles.reviewCardDark]}
+										>
+											<View style={styles.revHeader}>
+												<View style={styles.revAvatar}>
+													<Text style={styles.revAvatarText}>
+														{(rev.userName ? rev.userName[0] : 'U').toUpperCase()}
+													</Text>
+												</View>
+												<View style={{ flex: 1 }}>
+													<View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+														<Text style={[styles.revAuthor, isDark && styles.textLight]} numberOfLines={1}>
+															{rev.userName || 'Khách hàng'}
+														</Text>
+														<View style={styles.verifiedBuyerBadge}>
+															<Ionicons name="checkmark-circle" size={12} color="#16a34a" />
+															<Text style={styles.verifiedBuyerText}>Đã mua</Text>
+														</View>
+													</View>
+													<Text style={styles.revDate}>
+														{rev.createdAt ? new Date(rev.createdAt).toLocaleDateString('vi-VN') : 'Gần đây'}
+													</Text>
+												</View>
+											</View>
+
+											<View style={styles.revStarsRow}>
+												{[1, 2, 3, 4, 5].map((s) => (
+													<Ionicons
+														key={s}
+														name={s <= (rev.rating || 5) ? 'star' : 'star-outline'}
+														size={14}
+														color="#f59e0b"
+													/>
+												))}
+											</View>
+
+											{rev.productName ? (
+												<Pressable
+													onPress={() => rev.productId && router.push(`/products/${rev.productId}` as any)}
+													style={styles.revProductTag}
+												>
+													<Ionicons name="hardware-chip-outline" size={12} color="#2563eb" />
+													<Text style={styles.revProductTagText} numberOfLines={1}>
+														{rev.productName}
+													</Text>
+												</Pressable>
+											) : null}
+
+											<Text style={[styles.revComment, isDark && styles.textLight]} numberOfLines={3}>
+												“{rev.comment}”
+											</Text>
+										</View>
+									))}
+								</View>
+							</View>
+						)}
+
 						{/* Deal Banner */}
 						<View style={[styles.dealBanner, isDark && styles.dealBannerDark, !isDesktop && styles.dealBannerMobile]}>
 							<View style={!isDesktop && { flex: 1 }}>
@@ -287,9 +395,9 @@ export default function HomeScreen() {
 								<Text style={[styles.dealTitle, isDark && styles.dealTitleDark, !isDesktop && styles.dealTitleMobile]}>Nâng cấp setup của bạn</Text>
 								<Text style={[styles.dealSubtitle, isDark && styles.dealSubtitleDark, !isDesktop && styles.dealSubtitleMobile]}>Tiết kiệm lên đến 30% cho các sản phẩm đã chọn.</Text>
 							</View>
-							<Link href={'/products' as any} style={StyleSheet.flatten([styles.dealButton, !isDesktop && styles.dealButtonMobile])}>
+							<Pressable onPress={() => router.push('/products' as any)} style={StyleSheet.flatten([styles.dealButton, !isDesktop && styles.dealButtonMobile])}>
 								<Text style={styles.dealButtonText}>MUA DEAL</Text>
-							</Link>
+							</Pressable>
 						</View>
 					</>
 				)}
@@ -712,6 +820,133 @@ const styles = StyleSheet.create({
 		paddingVertical: 10,
 		borderRadius: 10,
 	},
+	/* REVIEWS SECTION STYLES */
+	reviewsSectionWrap: {
+		marginTop: 28,
+		marginBottom: 10,
+	},
+	reviewSectionSub: {
+		fontSize: 12,
+		color: '#64748b',
+		marginTop: 2,
+	},
+	trustScorePill: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		gap: 6,
+		backgroundColor: '#f0fdf4',
+		borderWidth: 1,
+		borderColor: '#bbf7d0',
+		paddingHorizontal: 10,
+		paddingVertical: 5,
+		borderRadius: 20,
+	},
+	trustScoreText: {
+		fontSize: 11,
+		fontWeight: '700',
+		color: '#166534',
+	},
+	reviewsGrid: {
+		flexDirection: 'row',
+		flexWrap: 'wrap',
+		gap: 12,
+		marginTop: 14,
+	},
+	reviewCard: {
+		backgroundColor: '#ffffff',
+		borderRadius: 16,
+		borderWidth: 1,
+		borderColor: '#e2e8f0',
+		padding: 16,
+		shadowColor: '#000',
+		shadowOpacity: 0.03,
+		shadowRadius: 10,
+		elevation: 2,
+		gap: 10,
+	},
+	reviewCardDesktop: {
+		width: '31.8%',
+		minWidth: 260,
+	},
+	reviewCardMobile: {
+		width: '100%',
+	},
+	reviewCardDark: {
+		backgroundColor: '#1e293b',
+		borderColor: '#334155',
+	},
+	revHeader: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		gap: 10,
+	},
+	revAvatar: {
+		width: 36,
+		height: 36,
+		borderRadius: 18,
+		backgroundColor: '#2563eb',
+		alignItems: 'center',
+		justifyContent: 'center',
+	},
+	revAvatarText: {
+		color: '#ffffff',
+		fontWeight: '800',
+		fontSize: 14,
+	},
+	revAuthor: {
+		fontSize: 13,
+		fontWeight: '700',
+		color: '#0f172a',
+		maxWidth: 140,
+	},
+	verifiedBuyerBadge: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		gap: 2,
+		backgroundColor: '#f0fdf4',
+		paddingHorizontal: 6,
+		paddingVertical: 2,
+		borderRadius: 6,
+	},
+	verifiedBuyerText: {
+		fontSize: 10,
+		fontWeight: '700',
+		color: '#166534',
+	},
+	revDate: {
+		fontSize: 10,
+		color: '#94a3b8',
+	},
+	revStarsRow: {
+		flexDirection: 'row',
+		gap: 2,
+	},
+	revProductTag: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		gap: 5,
+		backgroundColor: '#eff6ff',
+		paddingHorizontal: 8,
+		paddingVertical: 4,
+		borderRadius: 6,
+		alignSelf: 'flex-start',
+		maxWidth: '100%',
+	},
+	revProductTagText: {
+		fontSize: 11,
+		fontWeight: '600',
+		color: '#2563eb',
+	},
+	revComment: {
+		fontSize: 12,
+		color: '#334155',
+		lineHeight: 18,
+		fontStyle: 'italic',
+	},
+	textLight: {
+		color: '#f8fafc',
+	},
+
 	emptyResetBtnText: {
 		color: '#ffffff',
 		fontWeight: '700',

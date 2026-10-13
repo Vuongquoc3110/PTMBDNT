@@ -3,7 +3,9 @@ import { useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
   Linking,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -16,6 +18,7 @@ import {
 import { Footer } from '@/components/Footer';
 import { Header } from '@/components/Header';
 import { useAppContext } from '@/context/AppContext';
+import { apiService, type Order } from '@/services/api';
 
 interface WarrantyItem {
   id: string;
@@ -27,6 +30,58 @@ interface WarrantyItem {
   status: 'valid' | 'expiring' | 'expired';
   remainingDays: number;
   showroom: string;
+  orderNumber?: string;
+  orderId?: number | string;
+  customerAddress?: string;
+  customerPhone?: string;
+  matchedPhone?: string;
+  returnStatus?: 'pending' | 'approved' | 'rejected' | null;
+  returnReason?: string;
+  returnMedia?: string[];
+  productImage?: string;
+  price?: number;
+}
+
+// So khớp số điện thoại thông minh (hỗ trợ lệch 1 số do gõ nhầm hoặc 10/11 chữ số)
+function isPhoneMatch(queryDigits: string, targetStr: string): boolean {
+  if (!queryDigits || queryDigits.length < 6) return false;
+
+  // 1. Khớp chuỗi trực tiếp
+  if (targetStr.includes(queryDigits)) return true;
+
+  // 2. Tìm tất cả các dãy số trong targetStr (8 - 12 chữ số)
+  const phoneMatches = targetStr.match(/[0-9]{8,12}/g) || [];
+
+  for (const phone of phoneMatches) {
+    if (phone === queryDigits) return true;
+    if (phone.includes(queryDigits) || queryDigits.includes(phone)) return true;
+
+    // Bỏ số 0 ở đầu
+    const pNoZero = phone.replace(/^0+/, '');
+    const qNoZero = queryDigits.replace(/^0+/, '');
+    if (pNoZero === qNoZero || pNoZero.includes(qNoZero) || qNoZero.includes(pNoZero)) return true;
+
+    // So khớp sai lệch tối đa 1 ký tự (ví dụ: 0865752150 vs 08657525150)
+    if (Math.abs(phone.length - queryDigits.length) <= 1) {
+      let i = 0, j = 0, matchCount = 0;
+      while (i < phone.length && j < queryDigits.length) {
+        if (phone[i] === queryDigits[j]) {
+          matchCount++;
+          i++;
+          j++;
+        } else if (phone.length > queryDigits.length) {
+          i++;
+        } else {
+          j++;
+        }
+      }
+      if (matchCount >= Math.min(phone.length, queryDigits.length) - 1 && matchCount >= 8) {
+        return true;
+      }
+    }
+  }
+
+  return false;
 }
 
 const MOCK_WARRANTY_DATA: Record<string, WarrantyItem[]> = {
@@ -160,7 +215,7 @@ const WARRANTY_CATEGORIES = [
 export default function WarrantyScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
-  const { isDark } = useAppContext();
+  const { user, isDark } = useAppContext();
 
   // Search input & lookup state
   const [searchQuery, setSearchQuery] = useState('');
@@ -168,6 +223,23 @@ export default function WarrantyScreen() {
   const [hasSearched, setHasSearched] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [searchResult, setSearchResult] = useState<WarrantyItem[]>([]);
+  const [previewMediaUrl, setPreviewMediaUrl] = useState<string | null>(null);
+
+  // Đơn hàng gần nhất của tài khoản đăng nhập để gợi ý tra cứu
+  const [userRecentOrder, setUserRecentOrder] = useState<Order | null>(null);
+
+  React.useEffect(() => {
+    if (user?.id) {
+      apiService
+        .getOrders(user.id)
+        .then((orders) => {
+          if (orders && orders.length > 0) {
+            setUserRecentOrder(orders[0]);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [user?.id]);
 
   // Category Tab Selection
   const [activeTab, setActiveTab] = useState('laptop');
@@ -176,35 +248,131 @@ export default function WarrantyScreen() {
     return WARRANTY_CATEGORIES.find((c) => c.key === activeTab) || WARRANTY_CATEGORIES[0];
   }, [activeTab]);
 
-  const handleLookup = () => {
-    const clean = searchQuery.trim().replace(/\s+/g, '');
-    if (!clean) return;
+  const handleLookup = async (queryOverride?: string) => {
+    const rawQuery = (typeof queryOverride === 'string' ? queryOverride : searchQuery).trim();
+    if (!rawQuery) return;
+
+    if (typeof queryOverride === 'string') {
+      setSearchQuery(queryOverride);
+    }
 
     setIsSearching(true);
     setHasSearched(true);
 
-    setTimeout(() => {
-      let found: WarrantyItem[] = [];
+    try {
+      // 1. Lấy toàn bộ đơn hàng thực tế từ hệ thống cơ sở dữ liệu
+      const orders = await apiService.getOrders().catch(() => []);
 
-      if (MOCK_WARRANTY_DATA[clean]) {
-        found = MOCK_WARRANTY_DATA[clean];
-      } else {
-        Object.values(MOCK_WARRANTY_DATA).forEach((items) => {
-          items.forEach((item) => {
-            if (
-              item.serialNumber.toLowerCase().includes(clean.toLowerCase()) ||
-              item.id.toLowerCase().includes(clean.toLowerCase()) ||
-              item.name.toLowerCase().includes(clean.toLowerCase())
-            ) {
-              found.push(item);
+      const cleanQuery = rawQuery.toLowerCase();
+      const cleanDigits = rawQuery.replace(/[^0-9]/g, '');
+
+      let matchedItems: WarrantyItem[] = [];
+
+      // 2. Tra cứu trong các đơn hàng thực tế
+      orders.forEach((order: Order) => {
+        const orderNum = (order.orderNumber || String(order.id)).toLowerCase();
+        const address = (order.shippingAddress || '').toLowerCase();
+        const reason = (order.returnReason || '').toLowerCase();
+
+        // Khớp mã đơn hàng (ví dụ: 1791707088214 hoặc ORD-1791707088214)
+        const matchOrderCode =
+          orderNum.includes(cleanQuery) ||
+          (cleanDigits.length >= 4 && (orderNum.includes(cleanDigits) || String(order.id).includes(cleanDigits)));
+
+        // Khớp số điện thoại thông minh (hỗ trợ cả lệch 1 số: 0865752150 vs 08657525150)
+        const matchPhone = isPhoneMatch(cleanDigits, address);
+
+        // Khớp tên khách / địa chỉ hoặc tên linh kiện
+        const matchAddressOrName = address.includes(cleanQuery);
+        const matchItems = order.items?.some((it) => it.name?.toLowerCase().includes(cleanQuery));
+
+        if (matchOrderCode || matchPhone || matchAddressOrName || matchItems) {
+          const orderDate = order.createdAt ? new Date(order.createdAt) : new Date();
+          const purchaseDateStr = orderDate.toLocaleDateString('vi-VN');
+
+          // Mặc định bảo hành 36 tháng đối với linh kiện DANGVINHPC
+          const expiryDate = new Date(orderDate);
+          expiryDate.setFullYear(expiryDate.getFullYear() + 3);
+          const diffMs = expiryDate.getTime() - new Date().getTime();
+          const remainingDays = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+
+          const phoneOnOrder = address.match(/0[0-9]{8,10}/)?.[0];
+
+          (order.items || []).forEach((prodItem, idx) => {
+            const nameLower = (prodItem.name || '').toLowerCase();
+            let cat = 'Linh kiện PC';
+            let period = '36 Tháng';
+            if (nameLower.includes('laptop') || nameLower.includes('macbook')) {
+              cat = 'Laptop';
+              period = '24 Tháng';
+            } else if (nameLower.includes('màn hình') || nameLower.includes('monitor')) {
+              cat = 'Màn hình';
+              period = '36 Tháng';
+            } else if (nameLower.includes('rtx') || nameLower.includes('vga') || nameLower.includes('card')) {
+              cat = 'VGA / Card đồ họa';
+              period = '36 Tháng';
+            } else if (nameLower.includes('cpu') || nameLower.includes('ram') || nameLower.includes('ssd') || nameLower.includes('mainboard')) {
+              cat = 'Linh kiện máy tính';
+              period = '36 Tháng';
+            } else if (nameLower.includes('chuột') || nameLower.includes('bàn phím') || nameLower.includes('tai nghe')) {
+              cat = 'Gaming Gear';
+              period = '24 Tháng';
             }
+
+            const rawDigits = (order.orderNumber || String(order.id)).replace(/[^0-9]/g, '');
+            const serialNumber = `SN-DPC-${rawDigits.slice(-8) || order.id}-${idx + 1}`;
+
+            matchedItems.push({
+              id: `RMA-${order.orderNumber || order.id}`,
+              name: prodItem.name,
+              category: cat,
+              serialNumber,
+              purchaseDate: purchaseDateStr,
+              warrantyPeriod: period,
+              status: remainingDays > 0 ? 'valid' : 'expired',
+              remainingDays,
+              showroom: '191 Nguyễn Thị Duệ, TP. Hải Dương & 123 Lê Lợi, Q.1, TP.HCM',
+              orderNumber: order.orderNumber || String(order.id),
+              orderId: order.id,
+              customerAddress: order.shippingAddress,
+              matchedPhone: phoneOnOrder,
+              returnStatus: order.returnStatus as any,
+              returnReason: order.returnReason,
+              returnMedia: order.returnMedia,
+              productImage: prodItem.image,
+              price: prodItem.price,
+            });
           });
-        });
+        }
+      });
+
+      // 3. Nếu không có đơn hàng khớp, kiểm tra mảng mock data cũ dự phòng
+      if (matchedItems.length === 0) {
+        const cleanNoSpace = rawQuery.replace(/\s+/g, '');
+        if (MOCK_WARRANTY_DATA[cleanNoSpace]) {
+          matchedItems = MOCK_WARRANTY_DATA[cleanNoSpace];
+        } else {
+          Object.values(MOCK_WARRANTY_DATA).forEach((items) => {
+            items.forEach((item) => {
+              if (
+                item.serialNumber.toLowerCase().includes(cleanQuery) ||
+                item.id.toLowerCase().includes(cleanQuery) ||
+                item.name.toLowerCase().includes(cleanQuery)
+              ) {
+                matchedItems.push(item);
+              }
+            });
+          });
+        }
       }
 
-      setSearchResult(found);
+      setSearchResult(matchedItems);
+    } catch (err) {
+      console.error('Error looking up warranty:', err);
+      setSearchResult([]);
+    } finally {
       setIsSearching(false);
-    }, 300);
+    }
   };
 
   const handleCallHotline = (phone: string) => {
@@ -286,7 +454,7 @@ export default function WarrantyScreen() {
               <TextInput
                 value={searchQuery}
                 onChangeText={setSearchQuery}
-                placeholder="Nhập SĐT mua hàng (ví dụ: 0988888888) hoặc số Serial Number..."
+                placeholder="Nhập SĐT mua hàng (VD: 0865752150), mã đơn hàng hoặc số Serial..."
                 placeholderTextColor="#94a3b8"
                 style={StyleSheet.flatten([styles.input, isDark ? styles.textDark : null])}
                 onFocus={() => setSearchFocused(true)}
@@ -315,6 +483,38 @@ export default function WarrantyScreen() {
             </Pressable>
           </View>
 
+          {/* GỢI Ý ĐƠN HÀNG NHANH CỦA TÀI KHOẢN ĐĂNG NHẬP */}
+          {userRecentOrder ? (
+            <View style={styles.quickSuggestRow}>
+              <Text style={[styles.quickSuggestLabel, isDark && styles.textMutedDark]}>
+                ⚡ Gợi ý đơn của bạn:
+              </Text>
+              <Pressable
+                style={styles.quickSuggestPill}
+                onPress={() => handleLookup(userRecentOrder.orderNumber || String(userRecentOrder.id))}
+              >
+                <Ionicons name="receipt-outline" size={13} color="#2563eb" />
+                <Text style={styles.quickSuggestPillText}>
+                  Đơn #{userRecentOrder.orderNumber || userRecentOrder.id}
+                </Text>
+              </Pressable>
+              {userRecentOrder.shippingAddress?.match(/0[0-9]{8,10}/)?.[0] ? (
+                <Pressable
+                  style={[styles.quickSuggestPill, { backgroundColor: '#f0fdf4', borderColor: '#bbf7d0' }]}
+                  onPress={() => {
+                    const phone = userRecentOrder.shippingAddress?.match(/0[0-9]{8,10}/)?.[0] || '';
+                    handleLookup(phone);
+                  }}
+                >
+                  <Ionicons name="call-outline" size={13} color="#15803d" />
+                  <Text style={[styles.quickSuggestPillText, { color: '#15803d' }]}>
+                    SĐT: {userRecentOrder.shippingAddress?.match(/0[0-9]{8,10}/)?.[0]}
+                  </Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
+
           {/* LOOKUP RESULTS */}
           {hasSearched ? (
             <View style={styles.resultContainer}>
@@ -329,18 +529,120 @@ export default function WarrantyScreen() {
                         <View style={{ flex: 1 }}>
                           <View style={styles.catBadgeWrap}>
                             <Text style={styles.catBadgeText}>{item.category}</Text>
-                            <Text style={styles.codeText}>Mã: {item.id}</Text>
+                            <Text style={styles.codeText}>Mã phiếu: {item.id}</Text>
                           </View>
                           <Text style={StyleSheet.flatten([styles.itemTitle, isDark ? styles.textDark : null])}>{item.name}</Text>
                           <Text style={StyleSheet.flatten([styles.serialText, isDark ? styles.textMutedDark : null])}>
-                            Serial: <Text style={{ fontWeight: '700', color: '#0f172a' }}>{item.serialNumber}</Text>
+                            Serial: <Text style={{ fontWeight: '700', color: isDark ? '#f8fafc' : '#0f172a' }}>{item.serialNumber}</Text>
                           </Text>
+                          {item.matchedPhone ? (
+                            <Text style={[styles.serialText, isDark && styles.textMutedDark, { marginTop: 2 }]}>
+                              📞 SĐT nhận hàng: <Text style={{ fontWeight: '700', color: isDark ? '#f8fafc' : '#0f172a' }}>{item.matchedPhone}</Text>
+                            </Text>
+                          ) : null}
                         </View>
-                        <View style={styles.statusBadgeValid}>
-                          <Ionicons name="shield-checkmark" size={14} color="#15803d" style={{ marginRight: 4 }} />
-                          <Text style={styles.statusBadgeText}>Còn bảo hành</Text>
-                        </View>
+                        {item.returnStatus === 'approved' ? (
+                          <View style={[styles.statusBadgeValid, { backgroundColor: '#dcfce7', borderColor: '#86efac' }]}>
+                            <Ionicons name="checkmark-circle" size={14} color="#15803d" style={{ marginRight: 4 }} />
+                            <Text style={[styles.statusBadgeText, { color: '#15803d' }]}>Đã duyệt đổi mới</Text>
+                          </View>
+                        ) : item.returnStatus === 'pending' ? (
+                          <View style={[styles.statusBadgeValid, { backgroundColor: '#fef3c7', borderColor: '#fde047' }]}>
+                            <Ionicons name="time" size={14} color="#b45309" style={{ marginRight: 4 }} />
+                            <Text style={[styles.statusBadgeText, { color: '#b45309' }]}>Chờ duyệt đổi trả</Text>
+                          </View>
+                        ) : (
+                          <View style={styles.statusBadgeValid}>
+                            <Ionicons name="shield-checkmark" size={14} color="#15803d" style={{ marginRight: 4 }} />
+                            <Text style={styles.statusBadgeText}>Còn bảo hành</Text>
+                          </View>
+                        )}
                       </View>
+
+                      {/* HỒ SƠ ĐỔI TRẢ & BẢO HÀNH NẾU CÓ */}
+                      {item.returnStatus ? (
+                        <View
+                          style={[
+                            styles.returnNoticeCard,
+                            item.returnStatus === 'approved'
+                              ? styles.returnApprovedBg
+                              : item.returnStatus === 'pending'
+                              ? styles.returnPendingBg
+                              : styles.returnRejectedBg,
+                          ]}
+                        >
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                            <Ionicons
+                              name={
+                                item.returnStatus === 'approved'
+                                  ? 'checkmark-circle'
+                                  : item.returnStatus === 'pending'
+                                  ? 'time'
+                                  : 'close-circle'
+                              }
+                              size={16}
+                              color={
+                                item.returnStatus === 'approved'
+                                  ? '#15803d'
+                                  : item.returnStatus === 'pending'
+                                  ? '#b45309'
+                                  : '#b91c1c'
+                              }
+                            />
+                            <Text
+                              style={{
+                                fontSize: 13,
+                                fontWeight: '800',
+                                color:
+                                  item.returnStatus === 'approved'
+                                    ? '#15803d'
+                                    : item.returnStatus === 'pending'
+                                    ? '#b45309'
+                                    : '#b91c1c',
+                              }}
+                            >
+                              {item.returnStatus === 'approved'
+                                ? 'HỒ SƠ BẢO HÀNH ĐÃ DUYỆT: CHẤP THUẬN ĐỔI MỚI 1-1'
+                                : item.returnStatus === 'pending'
+                                ? 'HỒ SƠ ĐANG CHỜ KỸ THUẬT VIÊN XÉT DUYỆT'
+                                : 'HỒ SƠ BẢO HÀNH KHÔNG ĐƯỢC CHẤP THUẬN'}
+                            </Text>
+                          </View>
+
+                          <Text style={{ fontSize: 12, color: '#334155', lineHeight: 18 }}>
+                            Lỗi ghi nhận: <Text style={{ fontWeight: '700' }}>{item.returnReason || 'Sản phẩm lỗi kỹ thuật / nứt vỡ khi vận chuyển'}</Text>
+                          </Text>
+
+                          {item.returnStatus === 'approved' && (
+                            <Text style={{ fontSize: 12, color: '#166534', marginTop: 4, fontWeight: '600', lineHeight: 18 }}>
+                              ✅ DANGVINHPC đã duyệt đổi mới thiết bị. Kỹ thuật viên / bưu tá sẽ liên hệ qua điện thoại để thu hồi sản phẩm lỗi và bàn giao sản phẩm mới 100% tận nơi.
+                            </Text>
+                          )}
+
+                          {/* Minh chứng ảnh từ khách */}
+                          {item.returnMedia && item.returnMedia.length > 0 && (
+                            <View style={{ marginTop: 8 }}>
+                              <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748b', marginBottom: 4 }}>
+                                📸 Minh chứng ảnh từ khách ({item.returnMedia.length} file - nhấn để phóng to):
+                              </Text>
+                              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexDirection: 'row', gap: 6 }}>
+                                {item.returnMedia.map((mediaUrl: string, mIdx: number) => (
+                                  <Pressable
+                                    key={mIdx}
+                                    style={styles.proofThumb}
+                                    onPress={() => setPreviewMediaUrl(mediaUrl)}
+                                  >
+                                    <Image source={{ uri: mediaUrl }} style={styles.proofThumbImg} resizeMode="cover" />
+                                    <View style={styles.proofZoomIcon}>
+                                      <Ionicons name="scan-outline" size={11} color="#ffffff" />
+                                    </View>
+                                  </Pressable>
+                                ))}
+                              </ScrollView>
+                            </View>
+                          )}
+                        </View>
+                      ) : null}
 
                       <View style={styles.resultItemBottom}>
                         <View style={styles.infoCol}>
@@ -364,6 +666,20 @@ export default function WarrantyScreen() {
                           </Text>
                         </View>
                       </View>
+
+                      {item.orderId ? (
+                        <View style={styles.cardFooterActions}>
+                          <Text style={{ fontSize: 12, color: '#64748b' }}>
+                            Mã đơn mua gốc: <Text style={{ fontWeight: '700', color: isDark ? '#f8fafc' : '#0f172a' }}>#{item.orderNumber}</Text>
+                          </Text>
+                          <Pressable
+                            style={styles.btnViewOrder}
+                            onPress={() => router.push(`/orders/${item.orderId}` as any)}
+                          >
+                            <Text style={styles.btnViewOrderText}>Xem chi tiết đơn hàng →</Text>
+                          </Pressable>
+                        </View>
+                      ) : null}
                     </View>
                   ))}
                 </View>
@@ -627,6 +943,50 @@ export default function WarrantyScreen() {
 
         <Footer />
       </ScrollView>
+
+      {/* MODAL LIGHTBOX XEM ẢNH MINH CHỨNG */}
+      <Modal visible={!!previewMediaUrl} transparent animationType="fade">
+        <View style={styles.lightboxBackdrop}>
+          <View style={[styles.lightboxContainer, isDark && styles.lightboxContainerDark]}>
+            <View style={styles.lightboxHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name="image" size={20} color="#ffffff" />
+                <Text style={styles.lightboxTitle}>Ảnh minh chứng lỗi từ khách hàng</Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                {previewMediaUrl && typeof window !== 'undefined' && (
+                  <Pressable
+                    style={styles.lightboxOpenTabBtn}
+                    onPress={() => window.open(previewMediaUrl!, '_blank')}
+                  >
+                    <Ionicons name="open-outline" size={15} color="#ffffff" style={{ marginRight: 4 }} />
+                    <Text style={styles.lightboxOpenTabText}>Mở ảnh gốc</Text>
+                  </Pressable>
+                )}
+                <Pressable
+                  style={styles.lightboxCloseBtn}
+                  onPress={() => setPreviewMediaUrl(null)}
+                >
+                  <Ionicons name="close" size={22} color="#ffffff" />
+                </Pressable>
+              </View>
+            </View>
+
+            <Pressable
+              style={styles.lightboxImageWrap}
+              onPress={() => setPreviewMediaUrl(null)}
+            >
+              {previewMediaUrl ? (
+                <Image
+                  source={{ uri: previewMediaUrl }}
+                  style={styles.lightboxImage}
+                  resizeMode="contain"
+                />
+              ) : null}
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -854,6 +1214,35 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 14,
     fontWeight: '800',
+  },
+  quickSuggestRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+    marginBottom: 10,
+    paddingHorizontal: 2,
+  },
+  quickSuggestLabel: {
+    fontSize: 12,
+    color: '#64748b',
+    fontWeight: '600',
+  },
+  quickSuggestPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  quickSuggestPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#2563eb',
   },
   resultContainer: {
     marginTop: 20,
@@ -1301,5 +1690,138 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: '#2563eb',
+  },
+
+  /* RETURN & WARRANTY NOTICE STYLES */
+  returnNoticeCard: {
+    marginVertical: 10,
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  returnApprovedBg: {
+    backgroundColor: '#f0fdf4',
+    borderColor: '#bbf7d0',
+  },
+  returnPendingBg: {
+    backgroundColor: '#fffbeb',
+    borderColor: '#fde047',
+  },
+  returnRejectedBg: {
+    backgroundColor: '#fef2f2',
+    borderColor: '#fecaca',
+  },
+  proofThumb: {
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    backgroundColor: '#0f172a',
+    position: 'relative',
+  },
+  proofThumbImg: {
+    width: '100%',
+    height: '100%',
+  },
+  proofZoomIcon: {
+    position: 'absolute',
+    right: 3,
+    bottom: 3,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    borderRadius: 4,
+    padding: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardFooterActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 10,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+  },
+  btnViewOrder: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  btnViewOrderText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#2563eb',
+  },
+
+  /* LIGHTBOX MODAL STYLES */
+  lightboxBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  lightboxContainer: {
+    width: '100%',
+    maxWidth: 820,
+    backgroundColor: '#0f172a',
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOpacity: 0.35,
+    shadowRadius: 24,
+    elevation: 10,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  lightboxContainerDark: {
+    backgroundColor: '#020617',
+    borderColor: '#1e293b',
+  },
+  lightboxHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1e293b',
+    backgroundColor: '#0f172a',
+  },
+  lightboxTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  lightboxOpenTabBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+  },
+  lightboxOpenTabText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  lightboxCloseBtn: {
+    padding: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    borderRadius: 6,
+  },
+  lightboxImageWrap: {
+    width: '100%',
+    height: 520,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#020617',
+    padding: 8,
+  },
+  lightboxImage: {
+    width: '100%',
+    height: '100%',
   },
 });

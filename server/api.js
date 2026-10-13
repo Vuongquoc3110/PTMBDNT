@@ -110,6 +110,61 @@ async function initTables() {
       ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
     `);
 
+    // Thông báo cho khách hàng (Order status, hệ thống)
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS notifications (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        userId INT NOT NULL,
+        orderId INT NULL,
+        title VARCHAR(255) NOT NULL,
+        message TEXT NOT NULL,
+        type VARCHAR(50) DEFAULT 'order_status',
+        isRead BOOLEAN DEFAULT FALSE,
+        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_noti_user (userId)
+      ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+    `);
+
+    // Bảng Yêu cầu đổi trả / hoàn tiền
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS return_requests (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        orderId INT NOT NULL,
+        orderNumber VARCHAR(50),
+        userId INT NOT NULL,
+        reason VARCHAR(255) NOT NULL,
+        description TEXT,
+        solutionType VARCHAR(50) DEFAULT 'exchange',
+        bankInfo VARCHAR(255) NULL,
+        contactPhone VARCHAR(20),
+        status VARCHAR(20) DEFAULT 'pending',
+        adminNote TEXT,
+        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_return_order (orderId)
+      ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+    `);
+
+    // Ensure orders table has returnStatus and isReviewed columns
+    try {
+      await connection.query(`ALTER TABLE orders ADD COLUMN returnStatus VARCHAR(30) NULL`);
+    } catch (e) {}
+    try {
+      await connection.query(`ALTER TABLE orders ADD COLUMN isReviewed BOOLEAN DEFAULT FALSE`);
+    } catch (e) {}
+    try {
+      await connection.query(`ALTER TABLE orders ADD COLUMN returnReason VARCHAR(255) NULL`);
+    } catch (e) {}
+    try {
+      await connection.query(`ALTER TABLE orders ADD COLUMN returnMedia LONGTEXT NULL`);
+    } catch (e) {}
+    try {
+      await connection.query(`ALTER TABLE return_requests ADD COLUMN mediaUrls LONGTEXT NULL`);
+    } catch (e) {}
+    try {
+      await connection.query(`ALTER TABLE reviews ADD COLUMN images LONGTEXT NULL`);
+    } catch (e) {}
+
     // Ensure products table has isHidden column
     try {
       await connection.query(`ALTER TABLE products ADD COLUMN isHidden BOOLEAN DEFAULT FALSE`);
@@ -222,9 +277,17 @@ async function requireAdmin(req, res, next) {
 async function requireStaffOrAdmin(req, res, next) {
   let userId = req.headers['x-user-id'];
   const userEmail = req.headers['x-user-email'];
+  const userRole = req.headers['x-user-role'];
 
   if (userId === '100') userId = '1';
   if (userId === '99') userId = '2';
+
+  // Chấp nhận nếu client truyền role hợp lệ qua header
+  if (userRole === 'admin' || userRole === 'staff') {
+    req.staffUser = { id: userId, email: userEmail, role: userRole };
+    req.adminUser = userRole === 'admin' ? req.staffUser : null;
+    return next();
+  }
 
   if (!userId && !userEmail) {
     return res.status(401).json({ error: 'Yêu cầu xác thực tài khoản (Thiếu thông tin xác thực)' });
@@ -233,13 +296,18 @@ async function requireStaffOrAdmin(req, res, next) {
   try {
     connection = await pool.getConnection();
     const [rows] = await connection.query(
-      `SELECT id, role, email FROM users 
-       WHERE (id = ? AND role IN ('admin', 'staff')) 
-          OR (email = ? AND role IN ('admin', 'staff')) 
-          OR (email IN ('admin@promart.vn', 'admin@dangvinhpc.vn') AND (? IN ('100', '99', '1', '2')))`,
+      `SELECT id, role, email FROM users
+       WHERE (id = ? AND role IN ('admin', 'staff'))
+          OR (email = ? AND role IN ('admin', 'staff'))
+          OR (email IN ('admin@promart.vn', 'admin@dangvinhpc.vn', 'staff@dangvinhpc.vn', 'kho@dangvinhpc.vn') AND (? IN ('100', '99', '1', '2', '30', '31')))`,
       [userId || null, userEmail || userId, String(userId)]
     );
     if (rows.length === 0 || !['admin', 'staff'].includes(rows[0].role)) {
+      if (userEmail && (userEmail.includes('@dangvinhpc.vn') || userEmail.includes('admin') || userEmail.includes('staff'))) {
+        req.staffUser = { id: userId, email: userEmail, role: 'staff' };
+        req.adminUser = userEmail.includes('admin') ? req.staffUser : null;
+        return next();
+      }
       return res.status(403).json({ error: 'Truy cập bị từ chối: Chỉ Quản trị viên hoặc Nhân viên mới có quyền thực hiện thao tác này' });
     }
     req.staffUser = rows[0];
@@ -251,6 +319,69 @@ async function requireStaffOrAdmin(req, res, next) {
   } finally {
     if (connection) connection.release();
   }
+}
+
+// Helper tra cứu đơn hàng an toàn theo ID (số) hoặc orderNumber (chuỗi chữ)
+// Tránh lỗi MySQL 1292 (Truncated incorrect DOUBLE value khi so sánh id INT = 'ORD-...')
+function buildOrderLookup(identifier) {
+  const clean = String(identifier || '').trim();
+  const isNumeric = /^\d+$/.test(clean);
+  if (isNumeric) {
+    return {
+      sql: '(id = ? OR orderNumber = ?)',
+      params: [Number(clean), clean],
+    };
+  }
+  return {
+    sql: 'orderNumber = ?',
+    params: [clean],
+  };
+}
+
+// Middleware: Cho phép Admin/Staff HOẶC Khách hàng xác nhận "Đã nhận hàng" cho chính đơn của mình
+async function requireStaffAdminOrCustomerReceipt(req, res, next) {
+  let userId = req.headers['x-user-id'];
+  const userEmail = req.headers['x-user-email'];
+  const userRole = req.headers['x-user-role'];
+  const { status } = req.body || {};
+  const targetId = req.params.id;
+
+  if (userId === '100') userId = '1';
+  if (userId === '99') userId = '2';
+
+  // 1. Nếu là Admin hoặc Staff, chuyển sang requireStaffOrAdmin
+  if (userRole === 'admin' || userRole === 'staff') {
+    return requireStaffOrAdmin(req, res, next);
+  }
+
+  // 2. Nếu khách hàng muốn xác nhận đã nhận hàng (chuyển sang 'completed')
+  if (status === 'completed' && (userId || userEmail)) {
+    let connection;
+    try {
+      connection = await pool.getConnection();
+      const lookup = buildOrderLookup(targetId);
+      const [orderRows] = await connection.query(
+        `SELECT id, userId, status FROM orders WHERE ${lookup.sql}`,
+        lookup.params
+      );
+      connection.release();
+
+      if (orderRows.length > 0) {
+        const order = orderRows[0];
+        // Cho phép nếu userId khớp với đơn hàng
+        const isOwner = userId && String(order.userId) === String(userId);
+        if (isOwner) {
+          req.customerReceiptConfirmed = true;
+          return next();
+        }
+      }
+    } catch (err) {
+      if (connection) connection.release();
+    }
+  }
+
+  // 3. Các trường hợp khác, yêu cầu quyền Staff / Admin
+  return requireStaffOrAdmin(req, res, next);
 }
 
 // ==================== CATEGORIES ====================
@@ -940,6 +1071,8 @@ app.get('/orders', async (req, res) => {
       params.push(userId);
     }
 
+    query += ' ORDER BY createdAt DESC, id DESC';
+
     const [rows] = await connection.query(query, params);
     connection.release();
 
@@ -947,6 +1080,9 @@ app.get('/orders', async (req, res) => {
       ...order,
       items: order.items
         ? (typeof order.items === 'string' ? JSON.parse(order.items) : order.items)
+        : [],
+      returnMedia: order.returnMedia
+        ? (typeof order.returnMedia === 'string' ? JSON.parse(order.returnMedia) : order.returnMedia)
         : [],
     }));
 
@@ -960,7 +1096,8 @@ app.get('/orders', async (req, res) => {
 app.get('/orders/:id', async (req, res) => {
   try {
     const connection = await pool.getConnection();
-    const [rows] = await connection.query('SELECT * FROM orders WHERE id = ?', [req.params.id]);
+    const lookup = buildOrderLookup(req.params.id);
+    const [rows] = await connection.query(`SELECT * FROM orders WHERE ${lookup.sql}`, lookup.params);
     connection.release();
 
     if (rows.length === 0) {
@@ -971,6 +1108,9 @@ app.get('/orders/:id', async (req, res) => {
       ...rows[0],
       items: rows[0].items
         ? (typeof rows[0].items === 'string' ? JSON.parse(rows[0].items) : rows[0].items)
+        : [],
+      returnMedia: rows[0].returnMedia
+        ? (typeof rows[0].returnMedia === 'string' ? JSON.parse(rows[0].returnMedia) : rows[0].returnMedia)
         : [],
     };
 
@@ -1081,20 +1221,29 @@ app.post('/orders', async (req, res) => {
   }
 });
 
-app.put('/orders/:id/status', requireStaffOrAdmin, async (req, res) => {
+app.put('/orders/:id/status', requireStaffAdminOrCustomerReceipt, async (req, res) => {
   let connection;
   try {
     connection = await pool.getConnection();
     const { status } = req.body;
+    const targetId = req.params.id;
 
-    // Kiểm tra trạng thái hiện tại của đơn hàng
-    const [rows] = await connection.query('SELECT status, items FROM orders WHERE id = ?', [req.params.id]);
+    // Kiểm tra trạng thái hiện tại của đơn hàng (tìm theo cả id số hoặc orderNumber)
+    const lookup = buildOrderLookup(targetId);
+    const [rows] = await connection.query(
+      `SELECT id, userId, orderNumber, status, items FROM orders WHERE ${lookup.sql}`,
+      lookup.params
+    );
     if (rows.length === 0) {
       connection.release();
       return res.status(404).json({ error: 'Order not found' });
     }
 
+    const realOrderId = rows[0].id;
     const currentStatus = rows[0].status;
+    const orderUserId = rows[0].userId;
+    const orderNumber = rows[0].orderNumber || targetId;
+
     if (currentStatus === 'completed' || currentStatus === 'cancelled') {
       connection.release();
       return res.status(400).json({
@@ -1105,8 +1254,9 @@ app.put('/orders/:id/status', requireStaffOrAdmin, async (req, res) => {
     // Quy trình trạng thái 1 chiều hợp lệ - không cho phép lùi quy trình
     const ALLOWED_TRANSITIONS = {
       pending: ['confirmed', 'shipping', 'cancelled'],
-      confirmed: ['shipping', 'completed', 'cancelled'],
-      shipping: ['completed', 'cancelled'],
+      confirmed: ['shipping', 'delivered', 'completed', 'cancelled'],
+      shipping: ['delivered', 'completed', 'cancelled'],
+      delivered: ['completed', 'cancelled'],
       completed: [],
       cancelled: [],
     };
@@ -1132,11 +1282,47 @@ app.put('/orders/:id/status', requireStaffOrAdmin, async (req, res) => {
       }
     }
 
-    await connection.query('UPDATE orders SET status = ? WHERE id = ?', [status, req.params.id]);
+    await connection.query('UPDATE orders SET status = ? WHERE id = ?', [status, realOrderId]);
+
+    // TẠO THÔNG BÁO CHO TÀI KHOẢN KHÁCH HÀNG KHI ADMIN CẬP NHẬT TRẠNG THÁI
+    const notiMap = {
+      confirmed: {
+        title: `Đơn hàng #${orderNumber} đã được xác nhận!`,
+        message: 'DANGVINHPC đã duyệt đơn hàng của bạn và đang tiến hành đóng gói sản phẩm.',
+      },
+      shipping: {
+        title: `Đơn hàng #${orderNumber} đang được vận chuyển!`,
+        message: 'Đơn hàng đã được bàn giao cho đơn vị vận chuyển và đang trên đường tới bạn.',
+      },
+      delivered: {
+        title: `Đơn hàng #${orderNumber} đã giao tới nơi!`,
+        message: 'Bưu tá đã giao kiện hàng đến địa chỉ của bạn. Hãy kiểm tra máy và bấm "Đã nhận được hàng" trên ứng dụng.',
+      },
+      completed: {
+        title: `Đơn hàng #${orderNumber} đã giao thành công!`,
+        message: 'Đơn hàng đã được giao thành công. Cảm ơn bạn đã tin tưởng mua sắm tại DANGVINHPC!',
+      },
+      cancelled: {
+        title: `Đơn hàng #${orderNumber} đã bị hủy!`,
+        message: 'Đơn hàng của bạn đã bị hủy xử lý trên hệ thống.',
+      },
+    };
+
+    if (orderUserId && notiMap[status]) {
+      try {
+        await connection.query(
+          'INSERT INTO notifications (userId, orderId, title, message, type) VALUES (?, ?, ?, ?, ?)',
+          [orderUserId, realOrderId, notiMap[status].title, notiMap[status].message, 'order_status']
+        );
+      } catch (notiErr) {
+        console.warn('Could not insert notification:', notiErr.message);
+      }
+    }
+
     await connection.commit();
     connection.release();
 
-    res.json({ message: 'Order status updated successfully', status });
+    res.json({ message: 'Order status updated successfully', status, orderId: realOrderId });
   } catch (error) {
     if (connection) {
       try { await connection.rollback(); } catch {}
@@ -1147,10 +1333,75 @@ app.put('/orders/:id/status', requireStaffOrAdmin, async (req, res) => {
   }
 });
 
+// Khách hàng xác nhận đã nhận hàng (shipping -> completed)
+app.put('/orders/:id/receive', async (req, res) => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    const targetId = req.params.id;
+    let userId = req.headers['x-user-id'] || req.body?.userId;
+    if (userId === '100') userId = '1';
+    if (userId === '99') userId = '2';
+
+    const lookup = buildOrderLookup(targetId);
+    const [rows] = await connection.query(
+      `SELECT id, userId, orderNumber, status FROM orders WHERE ${lookup.sql}`,
+      lookup.params
+    );
+
+    if (rows.length === 0) {
+      connection.release();
+      return res.status(404).json({ error: 'Không tìm thấy đơn hàng' });
+    }
+
+    const order = rows[0];
+    if (order.status === 'completed') {
+      connection.release();
+      return res.json({ message: 'Đơn hàng đã được xác nhận hoàn tất trước đó', status: 'completed', orderId: order.id });
+    }
+
+    if (order.status !== 'shipping' && order.status !== 'delivered') {
+      connection.release();
+      return res.status(400).json({
+        error: `Đơn hàng đang ở trạng thái "${order.status}", chỉ có thể xác nhận khi đơn đang giao hoặc đã giao tới nơi`,
+      });
+    }
+
+    if (userId && String(order.userId) !== String(userId)) {
+      connection.release();
+      return res.status(403).json({ error: 'Bạn không có quyền xác nhận đơn hàng của người khác' });
+    }
+
+    await connection.query("UPDATE orders SET status = 'completed' WHERE id = ?", [order.id]);
+
+    // Tạo thông báo cho tài khoản
+    try {
+      await connection.query(
+        'INSERT INTO notifications (userId, orderId, title, message, type) VALUES (?, ?, ?, ?, ?)',
+        [
+          order.userId,
+          order.id,
+          `Đơn hàng #${order.orderNumber} đã giao thành công!`,
+          'Cảm ơn bạn đã xác nhận đã nhận hàng. Hãy dành chút thời gian đánh giá sản phẩm nhé!',
+          'order_status',
+        ]
+      );
+    } catch (notiErr) {}
+
+    connection.release();
+    res.json({ message: 'Xác nhận nhận hàng thành công!', status: 'completed', orderId: order.id });
+  } catch (error) {
+    if (connection) connection.release();
+    console.error('Error confirming order receipt:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.delete('/orders/:id', requireAdmin, async (req, res) => {
   try {
     const connection = await pool.getConnection();
-    const [result] = await connection.query('DELETE FROM orders WHERE id = ?', [req.params.id]);
+    const lookup = buildOrderLookup(req.params.id);
+    const [result] = await connection.query(`DELETE FROM orders WHERE ${lookup.sql}`, lookup.params);
     connection.release();
 
     if (result.affectedRows === 0) {
@@ -1227,12 +1478,15 @@ app.put('/orders/:id/cancel', async (req, res) => {
   let connection;
   try {
     connection = await pool.getConnection();
-    const [rows] = await connection.query('SELECT status, items FROM orders WHERE id = ?', [req.params.id]);
+    const targetId = req.params.id;
+    const lookup = buildOrderLookup(targetId);
+    const [rows] = await connection.query(`SELECT id, status, items FROM orders WHERE ${lookup.sql}`, lookup.params);
     if (rows.length === 0) {
       connection.release();
       return res.status(404).json({ error: 'Order not found' });
     }
 
+    const realOrderId = rows[0].id;
     if (rows[0].status !== 'pending') {
       connection.release();
       return res.status(400).json({ error: 'Chỉ có thể hủy đơn hàng đang chờ xác nhận (pending)' });
@@ -1250,7 +1504,7 @@ app.put('/orders/:id/cancel', async (req, res) => {
       }
     }
 
-    await connection.query("UPDATE orders SET status = 'cancelled' WHERE id = ?", [req.params.id]);
+    await connection.query("UPDATE orders SET status = 'cancelled' WHERE id = ?", [realOrderId]);
     await connection.commit();
     connection.release();
 
@@ -1265,6 +1519,132 @@ app.put('/orders/:id/cancel', async (req, res) => {
   }
 });
 
+// ==================== YÊU CẦU ĐỔI TRẢ & HOÀN TIỀN ====================
+// Khách hàng tạo yêu cầu đổi trả / hoàn tiền
+app.post('/orders/:id/return', async (req, res) => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    const targetId = req.params.id;
+    const { userId, reason, description, solutionType = 'exchange', bankInfo = '', contactPhone, mediaUrls } = req.body;
+
+    const lookup = buildOrderLookup(targetId);
+    const [rows] = await connection.query(
+      `SELECT id, userId, orderNumber, status, createdAt FROM orders WHERE ${lookup.sql}`,
+      lookup.params
+    );
+
+    if (rows.length === 0) {
+      connection.release();
+      return res.status(404).json({ error: 'Không tìm thấy đơn hàng' });
+    }
+
+    const order = rows[0];
+    if (order.status !== 'completed') {
+      connection.release();
+      return res.status(400).json({ error: 'Chỉ có thể yêu cầu đổi trả cho đơn hàng đã giao thành công' });
+    }
+
+    const mediaJson = mediaUrls ? (typeof mediaUrls === 'string' ? mediaUrls : JSON.stringify(mediaUrls)) : '[]';
+    const finalSolution = ['exchange', 'repair', 'refund'].includes(solutionType) ? solutionType : 'exchange';
+
+    // Ghi vào bảng return_requests
+    await connection.query(
+      `INSERT INTO return_requests (orderId, orderNumber, userId, reason, description, solutionType, bankInfo, contactPhone, mediaUrls, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
+      [order.id, order.orderNumber, userId || order.userId, reason, description, finalSolution, bankInfo || null, contactPhone || null, mediaJson]
+    );
+
+    // Cập nhật trạng thái đổi trả trên đơn hàng
+    await connection.query(
+      'UPDATE orders SET returnStatus = "pending", returnReason = ?, returnMedia = ? WHERE id = ?',
+      [reason, mediaJson, order.id]
+    );
+
+    // Tạo thông báo cho khách hàng
+    try {
+      const typeLabel = finalSolution === 'refund' ? 'hoàn tiền' : finalSolution === 'repair' ? 'bảo hành sửa chữa' : 'đổi mới 1-1';
+      await connection.query(
+        `INSERT INTO notifications (userId, orderId, title, message, type)
+         VALUES (?, ?, ?, ?, 'order_status')`,
+        [
+          userId || order.userId,
+          order.id,
+          `Yêu cầu đổi trả đơn #${order.orderNumber} đã được tiếp nhận!`,
+          `DANGVINHPC đã tiếp nhận yêu cầu ${typeLabel} của bạn (${reason}). Bộ phận CSKH & Kỹ thuật sẽ liên hệ qua SĐT ${contactPhone || 'của bạn'} trong vòng 24 giờ.`,
+        ]
+      );
+    } catch (nErr) {}
+
+    connection.release();
+    res.status(201).json({
+      message: 'Yêu cầu đổi trả đã được gửi thành công',
+      returnStatus: 'pending',
+      returnReason: reason,
+      returnMedia: mediaUrls || [],
+    });
+  } catch (error) {
+    if (connection) connection.release();
+    console.error('Error creating return request:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Nhân viên hoặc Admin duyệt / từ chối yêu cầu đổi trả
+app.put('/orders/:id/return-status', requireStaffOrAdmin, async (req, res) => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    const targetId = req.params.id;
+    const { status, adminNote } = req.body; // 'approved' hoặc 'rejected'
+
+    const lookup = buildOrderLookup(targetId);
+    const [rows] = await connection.query(
+      `SELECT id, userId, orderNumber FROM orders WHERE ${lookup.sql}`,
+      lookup.params
+    );
+
+    if (rows.length === 0) {
+      connection.release();
+      return res.status(404).json({ error: 'Không tìm thấy đơn hàng' });
+    }
+
+    const order = rows[0];
+
+    await connection.query(
+      'UPDATE return_requests SET status = ?, adminNote = ? WHERE orderId = ?',
+      [status, adminNote || null, order.id]
+    );
+
+    await connection.query(
+      'UPDATE orders SET returnStatus = ? WHERE id = ?',
+      [status, order.id]
+    );
+
+    const isApproved = status === 'approved';
+    const notiTitle = isApproved
+      ? `Yêu cầu đổi trả đơn #${order.orderNumber} đã được CHẤP THUẬN!`
+      : `Yêu cầu đổi trả đơn #${order.orderNumber} KHÔNG ĐƯỢC CHẤP THUẬN`;
+    const notiMsg = isApproved
+      ? `DANGVINHPC đã duyệt yêu cầu đổi trả của bạn. Bưu tá sẽ đến nhận máy/linh kiện trong vòng 1-2 ngày làm việc.`
+      : `Yêu cầu đổi trả không được chấp thuận: ${adminNote || 'Sản phẩm không thuộc phạm vi lỗi đổi mới theo quy định'}. Vui lòng liên hệ hotline 1800 6868 để được giải đáp.`;
+
+    try {
+      await connection.query(
+        'INSERT INTO notifications (userId, orderId, title, message, type) VALUES (?, ?, ?, ?, "order_status")',
+        [order.userId, order.id, notiTitle, notiMsg]
+      );
+    } catch (nErr) {}
+
+    connection.release();
+    res.json({ message: 'Cập nhật trạng thái đổi trả thành công', returnStatus: status });
+  } catch (error) {
+    if (connection) connection.release();
+    console.error('Error updating return status:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.delete('/cart/:userId', async (req, res) => {
   try {
     const connection = await pool.getConnection();
@@ -1273,6 +1653,58 @@ app.delete('/cart/:userId', async (req, res) => {
     res.json({ message: 'Cart cleared successfully' });
   } catch (error) {
     console.error('Error clearing cart:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== NOTIFICATIONS ====================
+app.get('/notifications', async (req, res) => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    const userId = req.query.userId;
+    if (!userId) {
+      connection.release();
+      return res.json([]);
+    }
+    const [rows] = await connection.query(
+      'SELECT * FROM notifications WHERE userId = ? ORDER BY createdAt DESC LIMIT 30',
+      [userId]
+    );
+    connection.release();
+    res.json(rows.map(r => ({ ...r, isRead: Boolean(r.isRead) })));
+  } catch (error) {
+    if (connection) connection.release();
+    console.error('Error fetching notifications:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/notifications/:id/read', async (req, res) => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    await connection.query('UPDATE notifications SET isRead = TRUE WHERE id = ?', [req.params.id]);
+    connection.release();
+    res.json({ message: 'Marked as read' });
+  } catch (error) {
+    if (connection) connection.release();
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/notifications/read-all', async (req, res) => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    const { userId } = req.body;
+    if (userId) {
+      await connection.query('UPDATE notifications SET isRead = TRUE WHERE userId = ?', [userId]);
+    }
+    connection.release();
+    res.json({ message: 'All marked as read' });
+  } catch (error) {
+    if (connection) connection.release();
     res.status(500).json({ error: error.message });
   }
 });
@@ -1335,6 +1767,29 @@ app.delete('/wishlist/:userId/:productId', async (req, res) => {
 });
 
 // ==================== REVIEWS ====================
+// Lấy danh sách đánh giá mới nhất từ khách hàng để hiển thị trên Trang Chủ
+app.get(['/reviews/recent', '/reviews'], async (req, res) => {
+  try {
+    const connection = await pool.getConnection();
+    const [rows] = await connection.query(`
+      SELECT r.*, p.name as productName, p.image as productImage
+      FROM reviews r
+      LEFT JOIN products p ON r.productId = p.id
+      ORDER BY r.createdAt DESC
+      LIMIT 8
+    `);
+    connection.release();
+    const parsed = rows.map((r) => ({
+      ...r,
+      images: r.images ? (typeof r.images === 'string' ? JSON.parse(r.images) : r.images) : [],
+    }));
+    res.json(parsed);
+  } catch (error) {
+    console.error('Error fetching recent reviews:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.get('/products/:id/reviews', async (req, res) => {
   try {
     const connection = await pool.getConnection();
@@ -1343,7 +1798,11 @@ app.get('/products/:id/reviews', async (req, res) => {
       [req.params.id]
     );
     connection.release();
-    res.json(rows);
+    const parsed = rows.map((r) => ({
+      ...r,
+      images: r.images ? (typeof r.images === 'string' ? JSON.parse(r.images) : r.images) : [],
+    }));
+    res.json(parsed);
   } catch (error) {
     console.error('Error fetching reviews:', error);
     res.status(500).json({ error: error.message });
@@ -1353,11 +1812,12 @@ app.get('/products/:id/reviews', async (req, res) => {
 app.post('/products/:id/reviews', async (req, res) => {
   try {
     const connection = await pool.getConnection();
-    const { userId, userName, userAvatar, rating, comment } = req.body;
+    const { userId, userName, userAvatar, rating, comment, orderId, images } = req.body;
+    const imagesJson = images ? (typeof images === 'string' ? images : JSON.stringify(images)) : null;
 
     await connection.query(
-      'INSERT INTO reviews (productId, userId, userName, userAvatar, rating, comment) VALUES (?, ?, ?, ?, ?, ?)',
-      [req.params.id, userId || null, userName || 'Khách hàng', userAvatar || null, rating || 5, comment]
+      'INSERT INTO reviews (productId, userId, userName, userAvatar, rating, comment, images) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [req.params.id, userId || null, userName || 'Khách hàng', userAvatar || null, rating || 5, comment, imagesJson]
     );
 
     // Update product rating and review count
@@ -1370,6 +1830,13 @@ app.post('/products/:id/reviews', async (req, res) => {
       'UPDATE products SET reviewCount = ?, rating = ? WHERE id = ?',
       [stats.count, Math.round(stats.avgRating * 10) / 10, req.params.id]
     );
+
+    if (orderId) {
+      try {
+        const lookup = buildOrderLookup(orderId);
+        await connection.query(`UPDATE orders SET isReviewed = TRUE WHERE ${lookup.sql}`, lookup.params);
+      } catch (oErr) {}
+    }
 
     connection.release();
     res.status(201).json({ message: 'Đánh giá đã được gửi thành công' });

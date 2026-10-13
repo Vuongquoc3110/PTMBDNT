@@ -20,9 +20,9 @@ export default function RegisterScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Chỉ cho phép nhập đúng số và tối đa 10 ký tự cho số điện thoại VN
+  // Cho phép nhập số và tối đa 11 ký tự
   const handlePhoneChange = (text: string) => {
-    const numericText = text.replace(/[^0-9]/g, '').slice(0, 10);
+    const numericText = text.replace(/[^0-9]/g, '').slice(0, 11);
     setPhone(numericText);
     if (error) setError('');
   };
@@ -56,9 +56,9 @@ export default function RegisterScreen() {
       setError('Vui lòng nhập số điện thoại');
       return;
     }
-    const phoneRegex = /^(0[3|5|7|8|9])[0-9]{8}$/;
+    const phoneRegex = /^(0[1-9])[0-9]{8,9}$/;
     if (!phoneRegex.test(phone.trim())) {
-      setError('Số điện thoại không hợp lệ (phải gồm 10 số, bắt đầu bằng 03, 05, 07, 08 hoặc 09)');
+      setError('Số điện thoại không hợp lệ (phải gồm 10 - 11 số, bắt đầu bằng số 0)');
       return;
     }
 
@@ -153,23 +153,23 @@ export default function RegisterScreen() {
           />
         </View>
 
-        {/* FIELD 3: SỐ ĐIỆN THOẠI (CHUẨN 10 SỐ) */}
+        {/* FIELD 3: SỐ ĐIỆN THOẠI (10 - 11 SỐ) */}
         <View style={styles.labelRow}>
           <Text style={styles.label}>Số điện thoại *</Text>
-          <Text style={styles.phoneCounter}>{phone.length}/10 số</Text>
+          <Text style={styles.phoneCounter}>{phone.length}/11 số</Text>
         </View>
         <View style={styles.inputWrap}>
           <Ionicons name="call-outline" size={18} color="#94a3b8" style={styles.inputIcon} />
           <TextInput
-            placeholder="Số điện thoại di động (10 chữ số)"
+            placeholder="Số điện thoại di động (10 - 11 chữ số)"
             placeholderTextColor="#94a3b8"
             style={styles.input}
             keyboardType="phone-pad"
-            maxLength={10}
+            maxLength={11}
             value={phone}
             onChangeText={handlePhoneChange}
           />
-          {phone.length === 10 && /^(0[3|5|7|8|9])[0-9]{8}$/.test(phone) && (
+          {phone.length >= 10 && /^(0[1-9])[0-9]{8,9}$/.test(phone) && (
             <Ionicons name="checkmark-circle" size={18} color="#16a34a" />
           )}
         </View>
@@ -230,9 +230,9 @@ export default function RegisterScreen() {
         {/* LIÊN KẾT ĐĂNG NHẬP */}
         <View style={styles.row}>
           <Text style={styles.mutedText}>Đã có tài khoản?</Text>
-          <Link href={'/login' as any} style={styles.linkText}>
-            Đăng nhập
-          </Link>
+          <Pressable onPress={() => router.push('/login' as any)}>
+            <Text style={styles.linkText}>Đăng nhập</Text>
+          </Pressable>
         </View>
       </View>
     </View>

@@ -82,13 +82,20 @@ export default function AdminScreen() {
   const { width } = useWindowDimensions();
   const isDesktop = width >= 900;
   const isTablet = width >= 600 && width < 900;
-  const { user, isAdmin, isDark } = useAppContext();
+  const { user, isAdmin, isDark, logout } = useAppContext();
 
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [toast, setToast] = useState('');
   const [updatingOrderId, setUpdatingOrderId] = useState<number | null>(null);
+  const [logoutModalVisible, setLogoutModalVisible] = useState(false);
+
+  const handleLogout = () => {
+    setLogoutModalVisible(false);
+    logout();
+    router.replace('/login');
+  };
 
   // Stats
   const [stats, setStats] = useState({
@@ -116,10 +123,12 @@ export default function AdminScreen() {
 
   // Order specific filters
   const [orderStatusFilter, setOrderStatusFilter] = useState<string>('all');
+  const [returnSubFilter, setReturnSubFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
 
   // Viewing Order Detail Modal
   const [viewingOrder, setViewingOrder] = useState<Order | null>(null);
   const [invoicePreview, setInvoicePreview] = useState(false);
+  const [previewMediaUrl, setPreviewMediaUrl] = useState<string | null>(null);
 
   // Product Modal
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
@@ -490,19 +499,320 @@ export default function AdminScreen() {
 
     try {
       setUpdatingOrderId(orderId);
-      await apiService.updateOrderStatus(orderId, newStatus);
+      await apiService.updateOrderStatus(currentOrder.id || currentOrder.orderNumber || orderId, newStatus);
       setOrderList((prev) =>
-        prev.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o))
+        prev.map((o) =>
+          String(o.id) === String(orderId) || (currentOrder.orderNumber && o.orderNumber === currentOrder.orderNumber)
+            ? { ...o, status: newStatus }
+            : o
+        )
       );
-      if (viewingOrder && viewingOrder.id === orderId) {
+      if (viewingOrder && (String(viewingOrder.id) === String(orderId) || (currentOrder.orderNumber && viewingOrder.orderNumber === currentOrder.orderNumber))) {
         setViewingOrder({ ...viewingOrder, status: newStatus });
       }
       showToast(`Đơn #${currentOrder.orderNumber || orderId} chuyển sang: ${getStatusLabel(newStatus)}`);
+      setTimeout(() => loadData(), 400);
     } catch (err: any) {
       showToast('Lỗi đổi trạng thái đơn: ' + err.message);
     } finally {
       setUpdatingOrderId(null);
     }
+  };
+
+  // Xử lý duyệt / từ chối yêu cầu đổi trả / bảo hành từ khách
+  const handleUpdateReturnStatus = async (orderId: string | number, status: 'approved' | 'rejected') => {
+    const currentOrder = orderList.find(
+      (o) => String(o.id) === String(orderId) || (o.orderNumber && o.orderNumber === String(orderId))
+    );
+    const orderCode = currentOrder?.orderNumber || `#${orderId}`;
+
+    if (typeof window !== 'undefined') {
+      const confirmMsg =
+        status === 'approved'
+          ? `Xác nhận DUYỆT yêu cầu đổi trả / bảo hành cho đơn ${orderCode}?\n\nKhách hàng sẽ nhận được thông báo chấp thuận đổi mới sản phẩm.`
+          : `Xác nhận TỪ CHỐI yêu cầu đổi trả cho đơn ${orderCode}?`;
+      if (!window.confirm(confirmMsg)) return;
+    }
+
+    try {
+      setLoading(true);
+      await apiService.updateReturnStatus(currentOrder?.id || currentOrder?.orderNumber || orderId, status);
+      setOrderList((prev) =>
+        prev.map((o) =>
+          String(o.id) === String(orderId) || (currentOrder?.orderNumber && o.orderNumber === currentOrder.orderNumber)
+            ? { ...o, returnStatus: status }
+            : o
+        )
+      );
+      if (
+        viewingOrder &&
+        (String(viewingOrder.id) === String(orderId) ||
+          (currentOrder?.orderNumber && viewingOrder.orderNumber === currentOrder.orderNumber))
+      ) {
+        setViewingOrder({ ...viewingOrder, returnStatus: status });
+      }
+      showToast(
+        status === 'approved'
+          ? `Đã duyệt yêu cầu đổi trả đơn #${currentOrder?.orderNumber || orderId}`
+          : `Đã từ chối yêu cầu đổi trả đơn #${currentOrder?.orderNumber || orderId}`
+      );
+      setTimeout(() => loadData(), 400);
+    } catch (err: any) {
+      showToast('Lỗi cập nhật đổi trả: ' + (err.message || 'Thất bại'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // In Phiếu Tiếp Nhận & Thẩm Định Bảo Hành / Đổi Trả
+  const handlePrintWarrantyReceipt = (order: Order) => {
+    if (typeof window === 'undefined') return;
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      showToast('Vui lòng cho phép popup trình duyệt để in phiếu');
+      return;
+    }
+
+    const itemsHtml = (order.items || [])
+      .map(
+        (it, idx) => `
+      <tr>
+        <td style="text-align: center;">${idx + 1}</td>
+        <td><strong>${it.name}</strong></td>
+        <td style="text-align: center;">${it.quantity}</td>
+        <td style="text-align: right;">${Number(it.price).toLocaleString('vi-VN')} đ</td>
+        <td style="text-align: right;"><strong>${(it.price * it.quantity).toLocaleString('vi-VN')} đ</strong></td>
+      </tr>
+    `
+      )
+      .join('');
+
+    const statusText =
+      order.returnStatus === 'approved'
+        ? '<span style="color: #16a34a; font-weight: bold;">ĐÃ CHẤP THUẬN ĐỔI MỚI 1-1 CHÍNH HÃNG</span>'
+        : order.returnStatus === 'pending'
+        ? '<span style="color: #d97706; font-weight: bold;">ĐANG XÉT DUYỆT BẢO HÀNH</span>'
+        : '<span style="color: #dc2626; font-weight: bold;">TỪ CHỐI BẢO HÀNH</span>';
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Phiếu Bảo Hành & Đổi Trả #${order.orderNumber || order.id}</title>
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; padding: 28px; color: #1e293b; line-height: 1.5; font-size: 13px; }
+          .header { display: flex; justify-content: space-between; border-bottom: 2px solid #dc2626; padding-bottom: 14px; margin-bottom: 18px; }
+          .brand { font-size: 22px; font-weight: 800; color: #dc2626; }
+          .title { text-align: center; font-size: 18px; font-weight: 800; text-transform: uppercase; margin: 16px 0; color: #0f172a; }
+          .info-table { width: 100%; margin-bottom: 16px; border-collapse: collapse; }
+          .info-table td { padding: 5px 0; }
+          .items-table { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
+          .items-table th, .items-table td { border: 1px solid #cbd5e1; padding: 8px 10px; }
+          .items-table th { background: #f8fafc; font-weight: 700; text-align: left; }
+          .fault-box { background: #fffbeb; border: 1px solid #fde047; padding: 12px; border-radius: 8px; margin-bottom: 18px; }
+          .sign-row { display: flex; justify-content: space-between; margin-top: 36px; text-align: center; }
+          .sign-col { width: 45%; }
+          .sign-space { height: 75px; }
+          @media print {
+            body { padding: 0; }
+            button { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div>
+            <div class="brand">DANGVINHPC</div>
+            <div style="font-size: 12px; color: #64748b;">Trung tâm phân phối linh kiện PC & Máy tính Gaming</div>
+            <div style="font-size: 12px; color: #64748b;">Hotline CSKH: 1800 6868 • Kỹ thuật: 0909 123 456</div>
+          </div>
+          <div style="text-align: right;">
+            <div style="font-weight: 800; font-size: 13px;">BIÊN BẢN TIẾP NHẬN BẢO HÀNH</div>
+            <div style="color: #64748b;">Mã RMA: #${order.orderNumber || order.id}</div>
+            <div style="color: #64748b;">Ngày xuất: ${new Date().toLocaleDateString('vi-VN')}</div>
+          </div>
+        </div>
+
+        <div class="title">BIÊN BẢN BẢO HÀNH & ĐỔI TRẢ THIẾT BỊ</div>
+
+        <table class="info-table">
+          <tr>
+            <td style="width: 50%;"><strong>Khách hàng:</strong> ${order.shippingAddress?.split(',')[0] || 'Khách hàng'}</td>
+            <td><strong>Mã đơn mua gốc:</strong> #${order.orderNumber || order.id}</td>
+          </tr>
+          <tr>
+            <td><strong>Địa chỉ / Liên hệ:</strong> ${order.shippingAddress || 'Chưa cung cấp'}</td>
+            <td><strong>Ngày mua:</strong> ${order.createdAt ? new Date(order.createdAt).toLocaleDateString('vi-VN') : 'Gần đây'}</td>
+          </tr>
+          <tr>
+            <td><strong>Thẩm định lỗi:</strong> ${statusText}</td>
+            <td><strong>Hình thức:</strong> Đổi mới sản phẩm 1-1</td>
+          </tr>
+        </table>
+
+        <div class="fault-box">
+          <div style="font-weight: 700; color: #b45309; margin-bottom: 3px;">⚠️ TÌNH TRẠNG LỖI GHI NHẬN KHI TIẾP NHẬN:</div>
+          <div style="color: #78350f;">${order.returnReason || 'Sản phẩm lỗi kỹ thuật / nứt vỡ, móp méo khi vận chuyển'}</div>
+        </div>
+
+        <div style="font-weight: 700; margin-bottom: 6px;">DANH SÁCH SẢN PHẨM BẢO HÀNH:</div>
+        <table class="items-table">
+          <thead>
+            <tr>
+              <th style="width: 40px; text-align: center;">STT</th>
+              <th>Tên sản phẩm / Linh kiện</th>
+              <th style="width: 70px; text-align: center;">SL</th>
+              <th style="width: 130px; text-align: right;">Đơn giá</th>
+              <th style="width: 140px; text-align: right;">Thành tiền</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${itemsHtml}
+          </tbody>
+        </table>
+
+        <div class="sign-row">
+          <div class="sign-col">
+            <strong>KHÁCH HÀNG BÀN GIAO</strong><br>
+            <span style="font-size: 11px; color: #64748b;">(Ký và ghi rõ họ tên)</span>
+            <div class="sign-space"></div>
+          </div>
+          <div class="sign-col">
+            <strong>KỸ THUẬT VIÊN / DANGVINHPC</strong><br>
+            <span style="font-size: 11px; color: #64748b;">(Ký và ghi rõ họ tên)</span>
+            <div class="sign-space"></div>
+          </div>
+        </div>
+
+        <script>
+          window.onload = function() { window.print(); }
+        </script>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+  };
+
+  // In Hóa Đơn Bán Lẻ Gốc
+  const handlePrintSalesInvoice = (order: Order) => {
+    if (typeof window === 'undefined') return;
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      showToast('Vui lòng cho phép popup trình duyệt để in hóa đơn');
+      return;
+    }
+    const itemsHtml = (order.items || [])
+      .map(
+        (it, idx) => `
+      <tr>
+        <td style="text-align: center;">${idx + 1}</td>
+        <td><strong>${it.name}</strong></td>
+        <td style="text-align: center;">${it.quantity}</td>
+        <td style="text-align: right;">${Number(it.price).toLocaleString('vi-VN')} đ</td>
+        <td style="text-align: right;"><strong>${(it.price * it.quantity).toLocaleString('vi-VN')} đ</strong></td>
+      </tr>
+    `
+      )
+      .join('');
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Hóa Đơn Bán Hàng #${order.orderNumber || order.id}</title>
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; padding: 28px; color: #1e293b; line-height: 1.5; font-size: 13px; }
+          .header { display: flex; justify-content: space-between; border-bottom: 2px solid #2563eb; padding-bottom: 14px; margin-bottom: 18px; }
+          .brand { font-size: 22px; font-weight: 800; color: #2563eb; }
+          .title { text-align: center; font-size: 18px; font-weight: 800; text-transform: uppercase; margin: 16px 0; color: #0f172a; }
+          .info-table { width: 100%; margin-bottom: 16px; border-collapse: collapse; }
+          .info-table td { padding: 5px 0; }
+          .items-table { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
+          .items-table th, .items-table td { border: 1px solid #cbd5e1; padding: 8px 10px; }
+          .items-table th { background: #f8fafc; font-weight: 700; text-align: left; }
+          .total-box { text-align: right; margin-top: 10px; font-size: 16px; font-weight: 800; color: #dc2626; }
+          .sign-row { display: flex; justify-content: space-between; margin-top: 36px; text-align: center; }
+          .sign-col { width: 45%; }
+          .sign-space { height: 75px; }
+          @media print {
+            body { padding: 0; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div>
+            <div class="brand">DANGVINHPC</div>
+            <div style="font-size: 12px; color: #64748b;">Hệ thống linh kiện máy tính & PC Gaming cao cấp</div>
+            <div style="font-size: 12px; color: #64748b;">Hotline: 1800 6868 • cskh@dangvinhpc.vn</div>
+          </div>
+          <div style="text-align: right;">
+            <div style="font-weight: 800; font-size: 13px;">HÓA ĐƠN BÁN HÀNG & PHIẾU XUẤT KHO</div>
+            <div style="color: #64748b;">Mã đơn: #${order.orderNumber || order.id}</div>
+            <div style="color: #64748b;">Ngày đặt: ${order.createdAt ? new Date(order.createdAt).toLocaleString('vi-VN') : ''}</div>
+          </div>
+        </div>
+
+        <div class="title">HÓA ĐƠN BÁN LẺ</div>
+
+        <table class="info-table">
+          <tr>
+            <td style="width: 55%;"><strong>Khách hàng:</strong> ${order.shippingAddress?.split(',')[0] || 'Khách hàng'}</td>
+            <td><strong>Thanh toán:</strong> ${order.paymentMethod === 'cod' ? 'COD (Tiền mặt khi nhận)' : order.paymentMethod?.toUpperCase()}</td>
+          </tr>
+          <tr>
+            <td colspan="2"><strong>Địa chỉ giao:</strong> ${order.shippingAddress || 'Chưa cung cấp'}</td>
+          </tr>
+        </table>
+
+        <table class="items-table">
+          <thead>
+            <tr>
+              <th style="width: 40px; text-align: center;">STT</th>
+              <th>Tên sản phẩm</th>
+              <th style="width: 70px; text-align: center;">SL</th>
+              <th style="width: 130px; text-align: right;">Đơn giá</th>
+              <th style="width: 140px; text-align: right;">Thành tiền</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${itemsHtml}
+          </tbody>
+        </table>
+
+        <div class="total-box">
+          TỔNG THANH TOÁN: ${Number(order.totalAmount).toLocaleString('vi-VN')} đ
+        </div>
+
+        <div class="sign-row">
+          <div class="sign-col">
+            <strong>NGƯỜI MUA HÀNG</strong><br>
+            <span style="font-size: 11px; color: #64748b;">(Ký và ghi rõ họ tên)</span>
+            <div class="sign-space"></div>
+          </div>
+          <div class="sign-col">
+            <strong>NGƯỜI BÁN HÀNG / THỦ KHO</strong><br>
+            <span style="font-size: 11px; color: #64748b;">(Ký và ghi rõ họ tên)</span>
+            <div class="sign-space"></div>
+          </div>
+        </div>
+
+        <script>
+          window.onload = function() { window.print(); }
+        </script>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
   };
 
   // User Role Management
@@ -755,18 +1065,38 @@ export default function AdminScreen() {
 
   const filteredOrders = useMemo(() => {
     return orderList.filter((order) => {
-      const query = searchTerm.toLowerCase();
+      const query = searchTerm.toLowerCase().trim();
       const matchSearch =
+        !query ||
         order.orderNumber?.toLowerCase().includes(query) ||
+        String(order.id).includes(query) ||
         order.shippingAddress?.toLowerCase().includes(query) ||
-        order.items?.some((i) => i.name?.toLowerCase().includes(query)) ||
-        order.paymentMethod?.toLowerCase().includes(query);
+        order.paymentMethod?.toLowerCase().includes(query) ||
+        order.returnReason?.toLowerCase().includes(query) ||
+        order.items?.some((i) => i.name?.toLowerCase().includes(query));
 
-      const matchStatus = orderStatusFilter === 'all' || order.status === orderStatusFilter;
+      let matchStatus = true;
+      if (orderStatusFilter === 'returns') {
+        if (!order.returnStatus) {
+          matchStatus = false;
+        } else if (returnSubFilter === 'pending') {
+          matchStatus = order.returnStatus === 'pending';
+        } else if (returnSubFilter === 'approved') {
+          matchStatus = order.returnStatus === 'approved';
+        } else if (returnSubFilter === 'rejected') {
+          matchStatus = order.returnStatus === 'rejected';
+        } else {
+          matchStatus = true;
+        }
+      } else if (orderStatusFilter === 'shipping') {
+        matchStatus = order.status === 'shipping' || order.status === 'delivered';
+      } else if (orderStatusFilter !== 'all') {
+        matchStatus = order.status === orderStatusFilter;
+      }
 
       return matchSearch && matchStatus;
     });
-  }, [orderList, searchTerm, orderStatusFilter]);
+  }, [orderList, searchTerm, orderStatusFilter, returnSubFilter]);
 
   const filteredCategories = useMemo(() => {
     return categoryList.filter((c) =>
@@ -809,6 +1139,11 @@ export default function AdminScreen() {
       .reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0);
   }, [orderList]);
   const pendingOrdersCount = useMemo(() => orderList.filter((o) => o.status === 'pending').length, [orderList]);
+  const allWarrantyOrdersCount = useMemo(() => orderList.filter((o) => Boolean(o.returnStatus)).length, [orderList]);
+  const pendingReturnOrdersCount = useMemo(() => orderList.filter((o) => o.returnStatus === 'pending').length, [orderList]);
+  const approvedReturnOrdersCount = useMemo(() => orderList.filter((o) => o.returnStatus === 'approved').length, [orderList]);
+  const rejectedReturnOrdersCount = useMemo(() => orderList.filter((o) => o.returnStatus === 'rejected').length, [orderList]);
+  const returnOrdersCount = pendingReturnOrdersCount;
   const lowStockProducts = useMemo(() => productList.filter((p) => (p.stock ?? 0) <= 5), [productList]);
   const totalStockCount = useMemo(() => productList.reduce((sum, p) => sum + (p.stock ?? 0), 0), [productList]);
   const totalInventoryValue = useMemo(() => productList.reduce((sum, p) => sum + (p.price * (p.stock ?? 0)), 0), [productList]);
@@ -816,7 +1151,7 @@ export default function AdminScreen() {
   const orderStatusStats = useMemo(() => {
     const total = orderList.length || 1;
     const completed = orderList.filter((o) => o.status === 'completed').length;
-    const shipping = orderList.filter((o) => o.status === 'shipping').length;
+    const shipping = orderList.filter((o) => o.status === 'shipping' || o.status === 'delivered').length;
     const pending = orderList.filter((o) => o.status === 'pending').length;
     const cancelled = orderList.filter((o) => o.status === 'cancelled').length;
     return {
@@ -945,6 +1280,15 @@ export default function AdminScreen() {
             <Ionicons name="add-circle" size={19} color="#ffffff" />
             <Text style={styles.addPrimaryBtnText}>Thêm sản phẩm</Text>
           </Pressable>
+
+          <Pressable
+            style={[styles.logoutBtn, isDark && styles.logoutBtnDark]}
+            onPress={() => setLogoutModalVisible(true)}
+            accessibilityLabel="Đăng xuất tài khoản Admin"
+          >
+            <Ionicons name="log-out-outline" size={17} color="#dc2626" />
+            {isDesktop && <Text style={styles.logoutBtnText}>Đăng xuất</Text>}
+          </Pressable>
         </View>
       </View>
 
@@ -1040,7 +1384,13 @@ export default function AdminScreen() {
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabButtonsScroll}>
             {[
               { id: 'overview', label: 'Tổng quan', icon: 'speedometer-outline', badge: null },
-              { id: 'orders', label: 'Đơn hàng', icon: 'receipt-outline', badge: pendingOrdersCount > 0 ? pendingOrdersCount : null, badgeColor: '#ef4444' },
+              {
+                id: 'orders',
+                label: 'Đơn hàng',
+                icon: 'receipt-outline',
+                badge: (pendingOrdersCount + returnOrdersCount) > 0 ? (pendingOrdersCount + returnOrdersCount) : null,
+                badgeColor: returnOrdersCount > 0 ? '#f59e0b' : '#ef4444',
+              },
               { id: 'support', label: 'Hỗ trợ KH', icon: 'chatbubbles-outline', badge: supportPendingCount > 0 ? supportPendingCount : null, badgeColor: '#7c3aed' },
               { id: 'products', label: 'Sản phẩm', icon: 'hardware-chip-outline', badge: productList.length },
               { id: 'inventory', label: 'Nhập / Xuất kho', icon: 'swap-vertical-outline', badge: null },
@@ -1136,7 +1486,8 @@ export default function AdminScreen() {
                     Xin chào, {user?.name || 'Quản trị viên DANGVINHPC'} 👋
                   </Text>
                   <Text style={styles.welcomeDesc}>
-                    Cửa hàng đang hoạt động bình thường. Hôm nay bạn có {pendingOrdersCount} đơn hàng mới cần xác nhận duyệt.
+                    Cửa hàng đang hoạt động bình thường. Hôm nay bạn có {pendingOrdersCount} đơn hàng mới cần duyệt
+                    {returnOrdersCount > 0 ? ` và ${returnOrdersCount} yêu cầu đổi trả / bảo hành chờ xử lý.` : '.'}
                   </Text>
                 </View>
               </View>
@@ -1317,8 +1668,9 @@ export default function AdminScreen() {
               {[
                 { key: 'all', label: 'Tất cả đơn', count: orderList.length },
                 { key: 'pending', label: 'Chờ duyệt', count: orderList.filter((o) => o.status === 'pending').length },
+                { key: 'returns', label: 'Đổi trả / Bảo hành', count: allWarrantyOrdersCount, isReturn: true },
                 { key: 'confirmed', label: 'Đã xác nhận', count: orderList.filter((o) => o.status === 'confirmed').length },
-                { key: 'shipping', label: 'Đang giao', count: orderList.filter((o) => o.status === 'shipping').length },
+                { key: 'shipping', label: 'Đang giao', count: orderList.filter((o) => o.status === 'shipping' || o.status === 'delivered').length },
                 { key: 'completed', label: 'Hoàn thành', count: orderList.filter((o) => o.status === 'completed').length },
                 { key: 'cancelled', label: 'Đã hủy', count: orderList.filter((o) => o.status === 'cancelled').length },
               ].map((chip) => {
@@ -1330,16 +1682,65 @@ export default function AdminScreen() {
                       styles.filterChip,
                       isDark && styles.filterChipDark,
                       isSelected && styles.filterChipActive,
+                      chip.isReturn && pendingReturnOrdersCount > 0 && !isSelected && styles.filterChipReturnAlert,
                     ]}
                     onPress={() => setOrderStatusFilter(chip.key)}
                   >
-                    <Text style={[styles.filterChipText, isDark && styles.textMutedDark, isSelected && styles.filterChipTextActive]}>
+                    <Text
+                      style={[
+                        styles.filterChipText,
+                        isDark && styles.textMutedDark,
+                        isSelected && styles.filterChipTextActive,
+                        chip.isReturn && pendingReturnOrdersCount > 0 && !isSelected && { color: '#b45309', fontWeight: '800' },
+                      ]}
+                    >
+                      {chip.isReturn && pendingReturnOrdersCount > 0 ? '⚠️ ' : ''}
                       {chip.label} ({chip.count})
                     </Text>
                   </Pressable>
                 );
               })}
             </ScrollView>
+
+            {/* SUB-FILTER FOR RETURNS / WARRANTY */}
+            {orderStatusFilter === 'returns' && (
+              <View style={[styles.returnSubFilterBar, isDark && styles.returnSubFilterBarDark]}>
+                <Text style={[styles.returnSubFilterTitle, isDark && styles.textDark]}>
+                  Lọc hồ sơ bảo hành:
+                </Text>
+                {[
+                  { key: 'all', label: 'Tất cả hồ sơ', count: allWarrantyOrdersCount },
+                  { key: 'pending', label: 'Chờ duyệt', count: pendingReturnOrdersCount, alert: pendingReturnOrdersCount > 0 },
+                  { key: 'approved', label: 'Đã duyệt đổi mới', count: approvedReturnOrdersCount },
+                  { key: 'rejected', label: 'Từ chối', count: rejectedReturnOrdersCount },
+                ].map((sf) => {
+                  const isSel = returnSubFilter === sf.key;
+                  return (
+                    <Pressable
+                      key={sf.key}
+                      style={[
+                        styles.returnSubPill,
+                        isDark && styles.returnSubPillDark,
+                        isSel && styles.returnSubPillActive,
+                        sf.alert && !isSel && { borderColor: '#fde047', backgroundColor: '#fffbeb' },
+                      ]}
+                      onPress={() => setReturnSubFilter(sf.key as any)}
+                    >
+                      <Text
+                        style={[
+                          styles.returnSubPillText,
+                          isDark && styles.textMutedDark,
+                          isSel && styles.returnSubPillTextActive,
+                          sf.alert && !isSel && { color: '#b45309', fontWeight: '800' },
+                        ]}
+                      >
+                        {sf.alert ? '⏳ ' : ''}{sf.label} ({sf.count})
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
 
             {loading ? (
               <ActivityIndicator size="large" color="#2563eb" style={{ marginVertical: 40 }} />
@@ -1392,6 +1793,148 @@ export default function AdminScreen() {
                           <Text style={[styles.orderItemsPreviewText, isDark && styles.textMutedDark]} numberOfLines={2}>
                             🛒 {order.items.map((it) => `${it.name} (x${it.quantity})`).join(' • ')}
                           </Text>
+                        </View>
+                      ) : null}
+
+                      {/* CẢNH BÁO YÊU CẦU ĐỔI TRẢ / BẢO HÀNH TỪ KHÁCH */}
+                      {order.returnStatus ? (
+                        <View
+                          style={[
+                            styles.adminReturnBanner,
+                            order.returnStatus === 'pending'
+                              ? styles.adminReturnPending
+                              : order.returnStatus === 'approved'
+                              ? styles.adminReturnApproved
+                              : styles.adminReturnRejected,
+                            isDark && styles.adminReturnDark,
+                          ]}
+                        >
+                          <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10, flex: 1 }}>
+                            <Ionicons
+                              name={
+                                order.returnStatus === 'pending'
+                                  ? 'alert-circle'
+                                  : order.returnStatus === 'approved'
+                                  ? 'checkmark-circle'
+                                  : 'close-circle'
+                              }
+                              size={20}
+                              color={
+                                order.returnStatus === 'pending'
+                                  ? '#b45309'
+                                  : order.returnStatus === 'approved'
+                                  ? '#15803d'
+                                  : '#b91c1c'
+                              }
+                              style={{ marginTop: 2 }}
+                            />
+                            <View style={{ flex: 1 }}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                <Text
+                                  style={[
+                                    styles.adminReturnTitle,
+                                    {
+                                      color:
+                                        order.returnStatus === 'pending'
+                                          ? '#b45309'
+                                          : order.returnStatus === 'approved'
+                                          ? '#15803d'
+                                          : '#b91c1c',
+                                    },
+                                  ]}
+                                >
+                                  {order.returnStatus === 'pending'
+                                    ? 'Khách gửi yêu cầu Đổi trả / Bảo hành'
+                                    : order.returnStatus === 'approved'
+                                    ? 'Đã duyệt yêu cầu Đổi mới / Bảo hành'
+                                    : 'Đã từ chối yêu cầu đổi trả'}
+                                </Text>
+                                <View
+                                  style={[
+                                    styles.returnBadgeMini,
+                                    order.returnStatus === 'pending'
+                                      ? { backgroundColor: '#fef3c7', borderColor: '#fde047' }
+                                      : order.returnStatus === 'approved'
+                                      ? { backgroundColor: '#dcfce7', borderColor: '#86efac' }
+                                      : { backgroundColor: '#fee2e2', borderColor: '#fca5a5' },
+                                  ]}
+                                >
+                                  <Text
+                                    style={[
+                                      styles.returnBadgeMiniText,
+                                      {
+                                        color:
+                                          order.returnStatus === 'pending'
+                                            ? '#b45309'
+                                            : order.returnStatus === 'approved'
+                                            ? '#15803d'
+                                            : '#b91c1c',
+                                      },
+                                    ]}
+                                  >
+                                    {order.returnStatus === 'pending' ? '⏳ Chờ duyệt' : order.returnStatus === 'approved' ? '✅ Đã duyệt' : '❌ Từ chối'}
+                                  </Text>
+                                </View>
+                              </View>
+                              <Text style={[styles.adminReturnReason, isDark && styles.textMutedDark]}>
+                                Lý do: <Text style={{ fontWeight: '700' }}>{order.returnReason || 'Sản phẩm lỗi nứt vỡ / kỹ thuật'}</Text>
+                              </Text>
+
+                              {/* Minh chứng ảnh/video nếu có */}
+                              {order.returnMedia && order.returnMedia.length > 0 && (
+                                <View style={{ marginTop: 8 }}>
+                                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748b', marginBottom: 4 }}>
+                                    📸 Minh chứng từ khách ({order.returnMedia.length} file - nhấn ảnh để xem):
+                                  </Text>
+                                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexDirection: 'row', gap: 6 }}>
+                                    {order.returnMedia.map((mediaUrl: string, idx: number) => {
+                                      const isVideo = mediaUrl.includes('video') || mediaUrl.endsWith('.mp4');
+                                      return (
+                                        <Pressable
+                                          key={idx}
+                                          style={styles.adminProofThumb}
+                                          onPress={() => setPreviewMediaUrl(mediaUrl)}
+                                        >
+                                          {isVideo ? (
+                                            <View style={styles.adminVideoBox}>
+                                              <Ionicons name="videocam" size={18} color="#ffffff" />
+                                              <Text style={styles.adminVideoText}>Video</Text>
+                                            </View>
+                                          ) : (
+                                            <>
+                                              <Image source={{ uri: mediaUrl }} style={styles.adminProofImg} resizeMode="cover" />
+                                              <View style={styles.adminProofZoomIcon}>
+                                                <Ionicons name="scan-outline" size={12} color="#ffffff" />
+                                              </View>
+                                            </>
+                                          )}
+                                        </Pressable>
+                                      );
+                                    })}
+                                  </ScrollView>
+                                </View>
+                              )}
+                            </View>
+                          </View>
+
+                          {order.returnStatus === 'pending' && (
+                            <View style={styles.adminReturnActions}>
+                              <Pressable
+                                style={styles.btnAdminApproveReturn}
+                                onPress={() => handleUpdateReturnStatus(order.id || order.orderNumber, 'approved')}
+                              >
+                                <Ionicons name="checkmark-circle" size={15} color="#ffffff" style={{ marginRight: 4 }} />
+                                <Text style={styles.btnAdminApproveReturnText}>Duyệt đổi hàng</Text>
+                              </Pressable>
+                              <Pressable
+                                style={styles.btnAdminRejectReturn}
+                                onPress={() => handleUpdateReturnStatus(order.id || order.orderNumber, 'rejected')}
+                              >
+                                <Ionicons name="close-circle" size={15} color="#b91c1c" style={{ marginRight: 4 }} />
+                                <Text style={styles.btnAdminRejectReturnText}>Từ chối</Text>
+                              </Pressable>
+                            </View>
+                          )}
                         </View>
                       ) : null}
 
@@ -1455,6 +1998,16 @@ export default function AdminScreen() {
                         )}
 
                         <View style={styles.orderActionButtons}>
+                          {order.returnStatus ? (
+                            <Pressable
+                              style={styles.btnPrintWarrantyCardBtn}
+                              onPress={() => handlePrintWarrantyReceipt(order)}
+                            >
+                              <Ionicons name="shield-checkmark" size={13} color="#15803d" />
+                              <Text style={styles.btnPrintWarrantyCardBtnText}>In Phiếu BH</Text>
+                            </Pressable>
+                          ) : null}
+
                           <Pressable style={styles.viewDetailBtn} onPress={() => setViewingOrder(order)}>
                             <Ionicons name="eye-outline" size={15} color="#2563eb" />
                             <Text style={styles.viewDetailBtnText}>Chi tiết / In</Text>
@@ -2169,6 +2722,107 @@ export default function AdminScreen() {
                 </View>
               </View>
 
+              {/* THÔNG TIN YÊU CẦU ĐỔI TRẢ NẾU CÓ */}
+              {viewingOrder?.returnStatus ? (
+                <View
+                  style={[
+                    styles.adminReturnBanner,
+                    viewingOrder.returnStatus === 'pending'
+                      ? styles.adminReturnPending
+                      : viewingOrder.returnStatus === 'approved'
+                      ? styles.adminReturnApproved
+                      : styles.adminReturnRejected,
+                    { marginHorizontal: 0, marginTop: 12 },
+                  ]}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10, flex: 1 }}>
+                    <Ionicons
+                      name={
+                        viewingOrder.returnStatus === 'pending'
+                          ? 'alert-circle'
+                          : viewingOrder.returnStatus === 'approved'
+                          ? 'checkmark-circle'
+                          : 'close-circle'
+                      }
+                      size={20}
+                      color={
+                        viewingOrder.returnStatus === 'pending'
+                          ? '#b45309'
+                          : viewingOrder.returnStatus === 'approved'
+                          ? '#15803d'
+                          : '#b91c1c'
+                      }
+                      style={{ marginTop: 2 }}
+                    />
+                    <View style={{ flex: 1 }}>
+                      <Text
+                        style={[
+                          styles.adminReturnTitle,
+                          {
+                            color:
+                              viewingOrder.returnStatus === 'pending'
+                                ? '#b45309'
+                                : viewingOrder.returnStatus === 'approved'
+                                ? '#15803d'
+                                : '#b91c1c',
+                          },
+                        ]}
+                      >
+                        {viewingOrder.returnStatus === 'pending'
+                          ? 'Khách hàng yêu cầu Đổi trả / Bảo hành'
+                          : viewingOrder.returnStatus === 'approved'
+                          ? 'Đã duyệt yêu cầu Đổi mới / Bảo hành'
+                          : 'Đã từ chối yêu cầu đổi trả'}
+                      </Text>
+                      <Text style={[styles.adminReturnReason, isDark && styles.textMutedDark]}>
+                        Lý do: <Text style={{ fontWeight: '700' }}>{viewingOrder.returnReason || 'Sản phẩm lỗi kỹ thuật / nứt vỡ'}</Text>
+                      </Text>
+
+                      {viewingOrder.returnMedia && viewingOrder.returnMedia.length > 0 && (
+                        <View style={{ marginTop: 8 }}>
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748b', marginBottom: 4 }}>
+                            Minh chứng ảnh/video từ khách (nhấn để phóng to):
+                          </Text>
+                          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexDirection: 'row', gap: 6 }}>
+                            {viewingOrder.returnMedia.map((mediaUrl: string, idx: number) => (
+                              <Pressable
+                                key={idx}
+                                style={styles.adminProofThumb}
+                                onPress={() => setPreviewMediaUrl(mediaUrl)}
+                              >
+                                <Image source={{ uri: mediaUrl }} style={styles.adminProofImg} resizeMode="cover" />
+                                <View style={styles.adminProofZoomIcon}>
+                                  <Ionicons name="scan-outline" size={12} color="#ffffff" />
+                                </View>
+                              </Pressable>
+                            ))}
+                          </ScrollView>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+
+                  {viewingOrder.returnStatus === 'pending' && (
+                    <View style={styles.adminReturnActions}>
+                      <Pressable
+                        style={styles.btnAdminApproveReturn}
+                        onPress={() => handleUpdateReturnStatus(viewingOrder.id || viewingOrder.orderNumber, 'approved')}
+                      >
+                        <Ionicons name="checkmark-circle" size={15} color="#ffffff" style={{ marginRight: 4 }} />
+                        <Text style={styles.btnAdminApproveReturnText}>Duyệt đổi hàng</Text>
+                      </Pressable>
+                      <Pressable
+                        style={styles.btnAdminRejectReturn}
+                        onPress={() => handleUpdateReturnStatus(viewingOrder.id || viewingOrder.orderNumber, 'rejected')}
+                      >
+                        <Ionicons name="close-circle" size={15} color="#b91c1c" style={{ marginRight: 4 }} />
+                        <Text style={styles.btnAdminRejectReturnText}>Từ chối</Text>
+                      </Pressable>
+                    </View>
+                  )}
+                </View>
+              ) : null}
+
               {/* DANH SÁCH SẢN PHẨM TRONG ĐƠN */}
               <Text style={[styles.itemsTableHeading, isDark && styles.textDark]}>Danh sách linh kiện đặt mua:</Text>
               <View style={styles.itemsTableWrap}>
@@ -2210,15 +2864,24 @@ export default function AdminScreen() {
             </ScrollView>
 
             <View style={styles.modalFooterActions}>
+              {viewingOrder?.returnStatus ? (
+                <Pressable
+                  style={[styles.btnPrintInvoice, { backgroundColor: '#f0fdf4', borderColor: '#86efac' }]}
+                  onPress={() => viewingOrder && handlePrintWarrantyReceipt(viewingOrder)}
+                >
+                  <Ionicons name="shield-checkmark" size={17} color="#15803d" />
+                  <Text style={[styles.btnPrintInvoiceText, { color: '#15803d', fontWeight: '800' }]}>
+                    In Phiếu BH & Đổi Trả
+                  </Text>
+                </Pressable>
+              ) : null}
+
               <Pressable
                 style={styles.btnPrintInvoice}
-                onPress={() => {
-                  showToast('Đã xuất phiếu giao hàng và hóa đơn bán lẻ');
-                  setInvoicePreview(true);
-                }}
+                onPress={() => viewingOrder && handlePrintSalesInvoice(viewingOrder)}
               >
                 <Ionicons name="print-outline" size={17} color="#2563eb" />
-                <Text style={styles.btnPrintInvoiceText}>In phiếu giao hàng</Text>
+                <Text style={styles.btnPrintInvoiceText}>In Hóa Đơn Bán Hàng</Text>
               </Pressable>
 
               <Pressable style={styles.btnCloseModal} onPress={() => setViewingOrder(null)}>
@@ -2852,6 +3515,103 @@ export default function AdminScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* MODAL 8: XÁC NHẬN ĐĂNG XUẤT ADMIN */}
+      <Modal visible={logoutModalVisible} transparent animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalBoxSmall, { alignItems: 'center', padding: 24 }, isDark && styles.cardDark]}>
+            <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#fee2e2', alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
+              <Ionicons name="log-out-outline" size={26} color="#dc2626" />
+            </View>
+            <Text style={[styles.modalDangerTitle, isDark && styles.textDark, { textAlign: 'center', fontSize: 18 }]}>
+              Đăng xuất khỏi Trang Quản Trị
+            </Text>
+            <Text style={[{ textAlign: 'center', color: '#64748b', fontSize: 13, marginTop: 8, lineHeight: 20 }, isDark && styles.textMutedDark]}>
+              Bạn có chắc chắn muốn đăng xuất phiên làm việc của Quản trị viên <Text style={{ fontWeight: '700', color: isDark ? '#f1f5f9' : '#0f172a' }}>{user?.name || user?.email || 'Admin'}</Text> không?
+            </Text>
+
+            <View style={{ flexDirection: 'row', gap: 12, marginTop: 22, width: '100%' }}>
+              <Pressable
+                style={[styles.btnSecondary, { flex: 1, alignItems: 'center', paddingVertical: 11, borderRadius: 10 }]}
+                onPress={() => setLogoutModalVisible(false)}
+              >
+                <Text style={styles.btnSecondaryText}>Hủy bỏ</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.btnDanger, { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 11, borderRadius: 10 }]}
+                onPress={handleLogout}
+              >
+                <Text style={styles.btnDangerText}>Đăng xuất</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ======================================================== */}
+      {/* MODAL 9: XEM ẢNH / VIDEO MINH CHỨNG LỖI CỦA KHÁCH          */}
+      {/* ======================================================== */}
+      <Modal visible={!!previewMediaUrl} transparent animationType="fade">
+        <View style={styles.lightboxBackdrop}>
+          <View style={[styles.lightboxContainer, isDark && styles.lightboxContainerDark]}>
+            {/* Header toolbar */}
+            <View style={styles.lightboxHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name="image" size={20} color="#ffffff" />
+                <Text style={styles.lightboxTitle}>Ảnh minh chứng lỗi từ khách hàng</Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                {previewMediaUrl && typeof window !== 'undefined' && (
+                  <Pressable
+                    style={styles.lightboxOpenTabBtn}
+                    onPress={() => window.open(previewMediaUrl!, '_blank')}
+                  >
+                    <Ionicons name="open-outline" size={15} color="#ffffff" style={{ marginRight: 4 }} />
+                    <Text style={styles.lightboxOpenTabText}>Mở ảnh gốc</Text>
+                  </Pressable>
+                )}
+                <Pressable
+                  style={styles.lightboxCloseBtn}
+                  onPress={() => setPreviewMediaUrl(null)}
+                >
+                  <Ionicons name="close" size={22} color="#ffffff" />
+                </Pressable>
+              </View>
+            </View>
+
+            {/* Media Body */}
+            <Pressable
+              style={styles.lightboxImageWrap}
+              onPress={() => setPreviewMediaUrl(null)}
+            >
+              {previewMediaUrl ? (
+                previewMediaUrl.includes('video') || previewMediaUrl.endsWith('.mp4') ? (
+                  <View style={{ alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+                    <Ionicons name="videocam" size={64} color="#ffffff" style={{ marginBottom: 16 }} />
+                    <Text style={{ color: '#ffffff', fontSize: 16, fontWeight: '700', marginBottom: 12 }}>
+                      Video minh chứng lỗi từ khách
+                    </Text>
+                    {typeof window !== 'undefined' && (
+                      <Pressable
+                        style={[styles.btnPrimary, { paddingHorizontal: 20 }]}
+                        onPress={() => window.open(previewMediaUrl!, '_blank')}
+                      >
+                        <Text style={styles.btnPrimaryText}>Mở xem video trên tab mới</Text>
+                      </Pressable>
+                    )}
+                  </View>
+                ) : (
+                  <Image
+                    source={{ uri: previewMediaUrl }}
+                    style={styles.lightboxImage}
+                    resizeMode="contain"
+                  />
+                )
+              ) : null}
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -3091,6 +3851,26 @@ const styles = StyleSheet.create({
   addPrimaryBtnText: {
     color: '#ffffff',
     fontSize: 13,
+    fontWeight: '700',
+  },
+  logoutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fee2e2',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  logoutBtnDark: {
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    borderColor: 'rgba(239, 68, 68, 0.25)',
+  },
+  logoutBtnText: {
+    color: '#dc2626',
+    fontSize: 12,
     fontWeight: '700',
   },
 
@@ -3753,6 +4533,263 @@ const styles = StyleSheet.create({
     padding: 7,
     backgroundColor: '#fef2f2',
     borderRadius: 8,
+  },
+
+  /* SUB-FILTER FOR RETURNS / WARRANTY */
+  returnSubFilterBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginBottom: 16,
+  },
+  returnSubFilterBarDark: {
+    backgroundColor: '#0f172a',
+    borderColor: '#1e293b',
+  },
+  returnSubFilterTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
+    marginRight: 4,
+  },
+  returnSubPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  returnSubPillDark: {
+    backgroundColor: '#1e293b',
+    borderColor: '#334155',
+  },
+  returnSubPillActive: {
+    backgroundColor: '#0f172a',
+    borderColor: '#0f172a',
+  },
+  returnSubPillText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748b',
+  },
+  returnSubPillTextActive: {
+    color: '#ffffff',
+    fontWeight: '700',
+  },
+  btnPrintWarrantyCardBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#f0fdf4',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#86efac',
+  },
+  btnPrintWarrantyCardBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#15803d',
+  },
+
+  /* RETURN / WARRANTY BANNER & ACTIONS */
+  filterChipReturnAlert: {
+    backgroundColor: '#fffbeb',
+    borderColor: '#fde047',
+    borderWidth: 1,
+  },
+  adminReturnBanner: {
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    marginBottom: 10,
+    gap: 8,
+  },
+  adminReturnPending: {
+    backgroundColor: '#fffbeb',
+    borderColor: '#fde047',
+  },
+  adminReturnApproved: {
+    backgroundColor: '#f0fdf4',
+    borderColor: '#bbf7d0',
+  },
+  adminReturnRejected: {
+    backgroundColor: '#fef2f2',
+    borderColor: '#fecaca',
+  },
+  adminReturnDark: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  adminReturnTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  adminReturnReason: {
+    fontSize: 12,
+    color: '#475569',
+    marginTop: 2,
+  },
+  returnBadgeMini: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 99,
+    borderWidth: 1,
+  },
+  returnBadgeMiniText: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  adminProofThumb: {
+    width: 52,
+    height: 52,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: '#e2e8f0',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+  },
+  adminProofImg: {
+    width: '100%',
+    height: '100%',
+  },
+  adminVideoBox: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#0f172a',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  adminVideoText: {
+    fontSize: 9,
+    color: '#ffffff',
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  adminReturnActions: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.06)',
+  },
+  btnAdminApproveReturn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#16a34a',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+  },
+  btnAdminApproveReturnText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  btnAdminRejectReturn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#fca5a5',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+  },
+  btnAdminRejectReturnText: {
+    color: '#b91c1c',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  adminProofZoomIcon: {
+    position: 'absolute',
+    right: 3,
+    bottom: 3,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    borderRadius: 4,
+    padding: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  /* LIGHTBOX MODAL STYLES */
+  lightboxBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  lightboxContainer: {
+    width: '100%',
+    maxWidth: 820,
+    backgroundColor: '#0f172a',
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOpacity: 0.35,
+    shadowRadius: 24,
+    elevation: 10,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  lightboxContainerDark: {
+    backgroundColor: '#020617',
+    borderColor: '#1e293b',
+  },
+  lightboxHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1e293b',
+    backgroundColor: '#0f172a',
+  },
+  lightboxTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  lightboxOpenTabBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+  },
+  lightboxOpenTabText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  lightboxCloseBtn: {
+    padding: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    borderRadius: 6,
+  },
+  lightboxImageWrap: {
+    width: '100%',
+    height: 520,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#020617',
+    padding: 8,
+  },
+  lightboxImage: {
+    width: '100%',
+    height: '100%',
   },
 
   /* PRODUCTS TAB STYLES */

@@ -255,9 +255,9 @@ export default function ProductDetailScreen() {
             </Pressable>
 
             <View style={styles.breadcrumbPath}>
-              <Link href="/(tabs)" style={styles.breadcrumbLink}>Trang chủ</Link>
+              <Pressable onPress={() => router.push('/(tabs)')}><Text style={styles.breadcrumbLink}>Trang chủ</Text></Pressable>
               <Text style={styles.breadcrumbSep}>/</Text>
-              <Link href={'/products' as any} style={styles.breadcrumbLink}>Sản phẩm</Link>
+              <Pressable onPress={() => router.push('/products' as any)}><Text style={styles.breadcrumbLink}>Sản phẩm</Text></Pressable>
               <Text style={styles.breadcrumbSep}>/</Text>
               <Text style={styles.breadcrumbCategory}>{product.category}</Text>
               <Text style={styles.breadcrumbSep}>/</Text>
@@ -1127,9 +1127,9 @@ export default function ProductDetailScreen() {
                   <Text style={styles.relatedTitle}>Sản phẩm liên quan</Text>
                   <Text style={styles.relatedSub}>Khách hàng xem sản phẩm này cũng thường chọn mua</Text>
                 </View>
-                <Link href={'/products' as any} style={styles.viewAllRelatedLink}>
-                  Xem tất cả →
-                </Link>
+                <Pressable onPress={() => router.push('/products' as any)}>
+                  <Text style={styles.viewAllRelatedLink}>Xem tất cả →</Text>
+                </Pressable>
               </View>
 
               <View style={styles.relatedGrid}>

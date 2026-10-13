@@ -111,9 +111,9 @@ export default function LoginScreen() {
 
         <View style={styles.row}>
           <Text style={styles.mutedText}>Chưa có tài khoản?</Text>
-          <Link href={'/register' as any} style={styles.linkText}>
-            Đăng ký
-          </Link>
+          <Pressable onPress={() => router.push('/register' as any)}>
+            <Text style={styles.linkText}>Đăng ký</Text>
+          </Pressable>
         </View>
       </View>
     </View>

@@ -59,6 +59,10 @@ export interface Order {
   shippingMethod: string;
   paymentMethod: string;
   status: 'pending' | 'confirmed' | 'shipping' | 'completed' | 'cancelled' | string;
+  returnStatus?: 'pending' | 'approved' | 'rejected' | null;
+  returnReason?: string;
+  returnMedia?: any[];
+  isReviewed?: boolean;
   createdAt: string;
   updatedAt?: string;
 }
@@ -110,6 +114,17 @@ export interface SupportTicket {
   lastSender?: SupportSender | null;
   messageCount?: number;
   messages?: SupportMessage[];
+}
+
+export interface AppNotification {
+  id: number;
+  userId: number;
+  orderId?: number;
+  title: string;
+  message: string;
+  type: string;
+  isRead: boolean;
+  createdAt: string;
 }
 
 export interface Review {
@@ -668,17 +683,19 @@ class ApiService {
   async getOrders(userId?: number): Promise<Order[]> {
     try {
       const query = userId ? `?userId=${userId}` : '';
-      return await this.request<Order[]>(`/orders${query}`);
+      const list = await this.request<Order[]>(`/orders${query}`);
+      return (list || []).sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
     } catch {
-      return userId ? localOrders.filter((o) => o.userId === userId) : localOrders;
+      const list = userId ? localOrders.filter((o) => o.userId === userId) : localOrders;
+      return [...list].sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
     }
   }
 
-  async getOrderById(orderId: number): Promise<Order> {
+  async getOrderById(orderId: number | string): Promise<Order> {
     try {
       return await this.request<Order>(`/orders/${orderId}`);
     } catch {
-      const found = localOrders.find((o) => o.id === Number(orderId));
+      const found = localOrders.find((o) => String(o.id) === String(orderId) || o.orderNumber === String(orderId));
       if (!found) throw new Error('Không tìm thấy đơn hàng');
       return found;
     }
@@ -689,7 +706,7 @@ class ApiService {
     items: OrderItem[];
     totalAmount: number;
     shippingAddress: string;
-    shippingMethod: string;
+    shippingMethod?: string;
     paymentMethod: string;
     voucherCode?: string;
   }): Promise<{ message: string; orderNumber: string; orderId?: number }> {
@@ -705,7 +722,7 @@ class ApiService {
     } catch {
       const orderNumber = `ORD-${Date.now()}`;
       const newOrder: Order = {
-        id: localOrders.length + 1,
+        id: Date.now(),
         userId: Number(orderData.userId) || 1,
         orderNumber,
         items: orderData.items,
@@ -725,8 +742,9 @@ class ApiService {
   }
 
   async updateOrderStatus(orderId: number | string, status: string) {
+    let result: any;
     try {
-      return await this.request(`/orders/${orderId}/status`, {
+      result = await this.request(`/orders/${orderId}/status`, {
         method: 'PUT',
         body: JSON.stringify({ status }),
       });
@@ -739,8 +757,9 @@ class ApiService {
       }
       const ALLOWED_TRANSITIONS: Record<string, string[]> = {
         pending: ['confirmed', 'shipping', 'cancelled'],
-        confirmed: ['shipping', 'completed', 'cancelled'],
-        shipping: ['completed', 'cancelled'],
+        confirmed: ['shipping', 'delivered', 'completed', 'cancelled'],
+        shipping: ['delivered', 'completed', 'cancelled'],
+        delivered: ['completed', 'cancelled'],
         completed: [],
         cancelled: [],
       };
@@ -748,13 +767,52 @@ class ApiService {
         throw new Error(`Không thể chuyển trạng thái từ "${existing.status}" sang "${status}"!`);
       }
       localOrders = localOrders.map((o) => (o.id === Number(orderId) ? { ...o, status } : o));
-      return { message: 'Order status updated', status };
+      result = { message: 'Order status updated', status };
     }
+
+    if (typeof window !== 'undefined') {
+      try {
+        const bc = new BroadcastChannel('dpc_order_sync');
+        bc.postMessage({ type: 'ORDER_STATUS_UPDATED', orderId, status });
+        bc.close();
+      } catch {}
+      try {
+        window.dispatchEvent(new CustomEvent('dpc_order_updated', { detail: { orderId, status } }));
+      } catch {}
+    }
+
+    return result;
+  }
+
+  async confirmOrderReceived(orderId: number | string) {
+    let result: any;
+    try {
+      result = await this.request(`/orders/${orderId}/receive`, {
+        method: 'PUT',
+      });
+    } catch {
+      // Fallback gọi route status thông thường
+      result = await this.updateOrderStatus(orderId, 'completed');
+    }
+
+    if (typeof window !== 'undefined') {
+      try {
+        const bc = new BroadcastChannel('dpc_order_sync');
+        bc.postMessage({ type: 'ORDER_STATUS_UPDATED', orderId, status: 'completed' });
+        bc.close();
+      } catch {}
+      try {
+        window.dispatchEvent(new CustomEvent('dpc_order_updated', { detail: { orderId, status: 'completed' } }));
+      } catch {}
+    }
+
+    return result;
   }
 
   async cancelOrder(orderId: number | string) {
+    let result: any;
     try {
-      return await this.request(`/orders/${orderId}/cancel`, {
+      result = await this.request(`/orders/${orderId}/cancel`, {
         method: 'PUT',
       });
     } catch {
@@ -763,8 +821,21 @@ class ApiService {
         throw new Error('Chỉ có thể hủy đơn hàng đang chờ xác nhận (pending)!');
       }
       localOrders = localOrders.map((o) => (o.id === Number(orderId) ? { ...o, status: 'cancelled' } : o));
-      return { message: 'Đơn hàng đã được hủy thành công' };
+      result = { message: 'Đơn hàng đã được hủy thành công' };
     }
+
+    if (typeof window !== 'undefined') {
+      try {
+        const bc = new BroadcastChannel('dpc_order_sync');
+        bc.postMessage({ type: 'ORDER_STATUS_UPDATED', orderId, status: 'cancelled' });
+        bc.close();
+      } catch {}
+      try {
+        window.dispatchEvent(new CustomEvent('dpc_order_updated', { detail: { orderId, status: 'cancelled' } }));
+      } catch {}
+    }
+
+    return result;
   }
 
   async deleteOrder(orderId: number | string) {
@@ -854,6 +925,24 @@ class ApiService {
   }
 
   // ==================== REVIEWS ====================
+  async getRecentReviews(): Promise<any[]> {
+    try {
+      return await this.request<any[]>('/reviews/recent');
+    } catch {
+      const all: any[] = [];
+      Object.keys(localReviews).forEach((pId) => {
+        localReviews[pId].forEach((r) => {
+          all.push({
+            ...r,
+            productId: pId,
+            productName: fallbackProducts.find((p) => p.id === pId)?.name || 'Sản phẩm DANGVINHPC',
+          });
+        });
+      });
+      return all.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 8);
+    }
+  }
+
   async getProductReviews(productId: string): Promise<Review[]> {
     try {
       return await this.request<Review[]>(`/products/${productId}/reviews`);
@@ -862,25 +951,113 @@ class ApiService {
     }
   }
 
-  async addReview(productId: string, reviewData: { userId?: number; userName: string; rating: number; comment: string }) {
+  async addReview(productId: string, reviewData: {
+    userId?: number;
+    userName: string;
+    userAvatar?: string;
+    rating: number;
+    comment: string;
+    orderId?: number | string;
+    images?: string[];
+  }) {
     try {
-      return await this.request(`/products/${productId}/reviews`, {
+      const res = await this.request(`/products/${productId}/reviews`, {
         method: 'POST',
         body: JSON.stringify(reviewData),
       });
+      if (typeof window !== 'undefined') {
+        try {
+          const bc = new BroadcastChannel('dpc_order_sync');
+          bc.postMessage({ type: 'ORDER_REVIEWED', orderId: reviewData.orderId, productId });
+          bc.close();
+        } catch {}
+        window.dispatchEvent(new CustomEvent('dpc_order_updated', { detail: { orderId: reviewData.orderId } }));
+      }
+      return res;
     } catch {
       const newRev: Review = {
         id: Date.now(),
         productId,
         userId: reviewData.userId,
         userName: reviewData.userName,
+        userAvatar: reviewData.userAvatar,
         rating: reviewData.rating,
         comment: reviewData.comment,
         createdAt: new Date().toISOString(),
       };
       localReviews[productId] = [newRev, ...(localReviews[productId] || [])];
+      if (reviewData.orderId) {
+        localOrders = localOrders.map((o) =>
+          String(o.id) === String(reviewData.orderId) || o.orderNumber === String(reviewData.orderId)
+            ? { ...o, isReviewed: true }
+            : o
+        );
+      }
       return { message: 'Đánh giá đã được ghi nhận' };
     }
+  }
+
+  // ==================== RETURN / WARRANTY ====================
+  async requestReturn(orderId: number | string, returnData: {
+    userId?: number | string;
+    reason: string;
+    description: string;
+    solutionType?: 'exchange' | 'repair' | 'refund' | string;
+    bankInfo?: string;
+    contactPhone: string;
+    mediaUrls?: any[];
+  }) {
+    let result: any;
+    try {
+      result = await this.request(`/orders/${orderId}/return`, {
+        method: 'POST',
+        body: JSON.stringify(returnData),
+      });
+    } catch {
+      localOrders = localOrders.map((o) =>
+        String(o.id) === String(orderId) || o.orderNumber === String(orderId)
+          ? { ...o, returnStatus: 'pending', returnReason: returnData.reason, returnMedia: returnData.mediaUrls }
+          : o
+      );
+      result = { message: 'Yêu cầu đổi trả đã được tiếp nhận', returnStatus: 'pending' };
+    }
+
+    if (typeof window !== 'undefined') {
+      try {
+        const bc = new BroadcastChannel('dpc_order_sync');
+        bc.postMessage({ type: 'RETURN_REQUESTED', orderId });
+        bc.close();
+      } catch {}
+      window.dispatchEvent(new CustomEvent('dpc_order_updated', { detail: { orderId } }));
+    }
+    return result;
+  }
+
+  async updateReturnStatus(orderId: number | string, status: 'approved' | 'rejected', adminNote?: string) {
+    let result: any;
+    try {
+      result = await this.request(`/orders/${orderId}/return-status`, {
+        method: 'PUT',
+        body: JSON.stringify({ status, adminNote }),
+      });
+    } catch {
+      localOrders = localOrders.map((o) =>
+        String(o.id) === String(orderId) || o.orderNumber === String(orderId)
+          ? { ...o, returnStatus: status }
+          : o
+      );
+      result = { message: 'Đã cập nhật trạng thái đổi trả', returnStatus: status };
+    }
+
+    if (typeof window !== 'undefined') {
+      try {
+        const bc = new BroadcastChannel('dpc_order_sync');
+        bc.postMessage({ type: 'RETURN_STATUS_UPDATED', orderId, status });
+        bc.close();
+      } catch {}
+      window.dispatchEvent(new CustomEvent('dpc_order_updated', { detail: { orderId, status } }));
+    }
+    return result;
   }
 
   // ==================== VOUCHERS ====================
@@ -1075,6 +1252,30 @@ class ApiService {
 
   async deleteSupportTicket(id: number): Promise<any> {
     return await this.request(`/support/tickets/${id}`, { method: 'DELETE' });
+  }
+
+  // ==================== NOTIFICATIONS ====================
+  async getNotifications(userId: number): Promise<AppNotification[]> {
+    try {
+      return await this.request<AppNotification[]>(`/notifications?userId=${userId}`);
+    } catch {
+      return [];
+    }
+  }
+
+  async markNotificationAsRead(id: number): Promise<void> {
+    try {
+      await this.request(`/notifications/${id}/read`, { method: 'PUT' });
+    } catch {}
+  }
+
+  async markAllNotificationsAsRead(userId: number): Promise<void> {
+    try {
+      await this.request('/notifications/read-all', {
+        method: 'PUT',
+        body: JSON.stringify({ userId }),
+      });
+    } catch {}
   }
 
   // ==================== ADMIN STATS ====================

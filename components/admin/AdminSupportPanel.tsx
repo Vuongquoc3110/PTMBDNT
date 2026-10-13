@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { apiService, type SupportStatus, type SupportTicket } from '@/services/api';
+import { playNotificationSound } from '@/utils/sound';
 
 type Filter = 'all' | SupportStatus;
 
@@ -55,6 +56,7 @@ export function AdminSupportPanel({ isDark, isDesktop, searchTerm = '', showToas
   const [reply, setReply] = useState('');
   const [sending, setSending] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
+  const prevOpenCountRef = useRef<number | null>(null);
 
   const loadTickets = useCallback(async () => {
     try {
@@ -62,13 +64,19 @@ export function AdminSupportPanel({ isDark, isDesktop, searchTerm = '', showToas
       const list = Array.isArray(data) ? data : [];
       setTickets(list);
       setError('');
-      onPendingChange?.(list.filter((t) => t.status === 'open').length);
+      const openCount = list.filter((t) => t.status === 'open').length;
+      if (prevOpenCountRef.current !== null && openCount > prevOpenCountRef.current) {
+        playNotificationSound();
+        showToast('🔔 Có tin nhắn hỗ trợ mới từ khách hàng!');
+      }
+      prevOpenCountRef.current = openCount;
+      onPendingChange?.(openCount);
     } catch (err: any) {
       setError(err?.message || 'Không kết nối được máy chủ');
     } finally {
       setLoading(false);
     }
-  }, [onPendingChange]);
+  }, [onPendingChange, showToast]);
 
   const loadSelected = useCallback(async () => {
     if (!selectedId) return;

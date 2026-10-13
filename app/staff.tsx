@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
   Modal,
   Platform,
   Pressable,
@@ -26,13 +27,14 @@ export default function StaffScreen() {
   const { width } = useWindowDimensions();
   const isDesktop = width >= 900;
   const isTablet = width >= 600 && width < 900;
-  const { user, isAdmin, isStaff, canManage, isDark } = useAppContext();
+  const { user, isAdmin, isStaff, canManage, isDark, logout } = useAppContext();
 
   const [activeTab, setActiveTab] = useState<StaffTab>('orders');
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [updatingOrderId, setUpdatingOrderId] = useState<number | null>(null);
+  const [logoutModalVisible, setLogoutModalVisible] = useState(false);
 
   // Data lists
   const [orderList, setOrderList] = useState<Order[]>([]);
@@ -46,10 +48,17 @@ export default function StaffScreen() {
 
   // Modals
   const [viewingOrder, setViewingOrder] = useState<Order | null>(null);
+  const [previewMediaUrl, setPreviewMediaUrl] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(''), 3000);
+  };
+
+  const handleLogout = () => {
+    setLogoutModalVisible(false);
+    logout();
+    router.replace('/login');
   };
 
   // Load Data
@@ -71,28 +80,64 @@ export default function StaffScreen() {
 
   useEffect(() => {
     loadData();
+    const interval = setInterval(loadData, 5000);
+    if (typeof window !== 'undefined') {
+      const handleSync = () => loadData();
+      window.addEventListener('focus', handleSync);
+      window.addEventListener('dpc_order_updated', handleSync);
+      let bc: BroadcastChannel | null = null;
+      try {
+        bc = new BroadcastChannel('dpc_order_sync');
+        bc.onmessage = () => loadData();
+      } catch {}
+      return () => {
+        clearInterval(interval);
+        window.removeEventListener('focus', handleSync);
+        window.removeEventListener('dpc_order_updated', handleSync);
+        if (bc) bc.close();
+      };
+    }
+    return () => clearInterval(interval);
   }, [loadData]);
 
   // Handle Order Status Transitions
-  const handleUpdateOrderStatus = async (orderId: number, nextStatus: string) => {
+  const handleUpdateOrderStatus = async (orderId: number | string, nextStatus: string, orderNumber?: string) => {
     try {
-      setUpdatingOrderId(orderId);
-      await apiService.updateOrderStatus(orderId, nextStatus);
+      setUpdatingOrderId(Number(orderId) || (orderId as any));
+      const targetParam = orderId || orderNumber;
+      await apiService.updateOrderStatus(targetParam, nextStatus);
       setOrderList((prev) =>
-        prev.map((o) => (o.id === orderId ? { ...o, status: nextStatus } : o))
+        prev.map((o) =>
+          String(o.id) === String(orderId) || (orderNumber && o.orderNumber === orderNumber) || (o.orderNumber === String(orderId))
+            ? { ...o, status: nextStatus }
+            : o
+        )
       );
-      if (viewingOrder?.id === orderId) {
+      if (
+        viewingOrder &&
+        (String(viewingOrder.id) === String(orderId) || (orderNumber && viewingOrder.orderNumber === orderNumber) || (viewingOrder.orderNumber === String(orderId)))
+      ) {
         setViewingOrder((prev) => (prev ? { ...prev, status: nextStatus } : null));
       }
+
+      // Tự động chuyển tab lọc sang trạng thái kế tiếp để nhân viên nhìn thấy ngay đơn hàng với nút tiếp theo
+      if (orderStatusFilter !== 'all') {
+        const targetTab = nextStatus === 'delivered' ? 'shipping' : nextStatus;
+        setOrderStatusFilter(targetTab);
+      }
+
       const label =
         nextStatus === 'confirmed'
-          ? 'Đã duyệt đơn'
+          ? 'Đã duyệt! Đơn chuyển sang [Đã xác nhận] (Sẵn sàng xuất kho)'
           : nextStatus === 'shipping'
-          ? 'Đang giao hàng'
+          ? 'Đã xuất kho! Đơn chuyển sang [Đang giao hàng]'
+          : nextStatus === 'delivered'
+          ? 'Đã đến nơi! Chờ khách kiểm tra và nhận hàng'
           : nextStatus === 'completed'
-          ? 'Đã hoàn thành'
-          : 'Đã hủy đơn';
-      showToast(`${label} cho đơn hàng #${orderId}`);
+          ? 'Thành công! Đơn hàng đã hoàn tất giao hàng'
+          : 'Đã hủy đơn hàng';
+      showToast(`${label} (#${orderNumber || orderId})`);
+      setTimeout(() => loadData(), 400);
     } catch (err: any) {
       showToast('Lỗi đổi trạng thái đơn: ' + err.message);
     } finally {
@@ -137,7 +182,14 @@ export default function StaffScreen() {
         order.shippingAddress?.toLowerCase().includes(q) ||
         order.items?.some((i) => i.name?.toLowerCase().includes(q)) ||
         order.paymentMethod?.toLowerCase().includes(q);
-      const matchStatus = orderStatusFilter === 'all' || order.status === orderStatusFilter;
+      let matchStatus = true;
+      if (orderStatusFilter === 'returns') {
+        matchStatus = order.returnStatus === 'pending';
+      } else if (orderStatusFilter === 'shipping') {
+        matchStatus = order.status === 'shipping' || order.status === 'delivered';
+      } else if (orderStatusFilter !== 'all') {
+        matchStatus = order.status === orderStatusFilter;
+      }
       return matchSearch && matchStatus;
     });
   }, [orderList, searchTerm, orderStatusFilter]);
@@ -160,10 +212,13 @@ export default function StaffScreen() {
 
   // Metrics
   const pendingOrders = useMemo(() => orderList.filter((o) => o.status === 'pending'), [orderList]);
-  const shippingOrders = useMemo(() => orderList.filter((o) => o.status === 'shipping'), [orderList]);
+  const confirmedOrders = useMemo(() => orderList.filter((o) => o.status === 'confirmed'), [orderList]);
+  const shippingOrders = useMemo(() => orderList.filter((o) => o.status === 'shipping' || o.status === 'delivered'), [orderList]);
+  const completedOrders = useMemo(() => orderList.filter((o) => o.status === 'completed'), [orderList]);
+  const returnOrders = useMemo(() => orderList.filter((o) => o.returnStatus === 'pending'), [orderList]);
   const lowStockCount = useMemo(() => productList.filter((p) => (p.stock ?? 0) <= 5).length, [productList]);
 
-  if (user && user.role === 'customer') {
+  if (!canManage) {
     return (
       <View style={[styles.container, isDark && styles.containerDark, { justifyContent: 'center', alignItems: 'center', padding: 24 }]}>
         <View style={{ backgroundColor: isDark ? '#1e293b' : '#ffffff', padding: 32, borderRadius: 20, maxWidth: 460, width: '100%', alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 16 }}>
@@ -174,20 +229,27 @@ export default function StaffScreen() {
             Khu Vực Nghiệp Vụ Nhân Viên
           </Text>
           <Text style={{ fontSize: 14, color: isDark ? '#94a3b8' : '#64748b', textAlign: 'center', lineHeight: 22, marginBottom: 24 }}>
-            Tài khoản hiện tại của bạn là <Text style={{ fontWeight: '700', color: '#2563eb' }}>Khách Hàng</Text>. Cổng này chỉ dành cho Nhân Viên hoặc Quản Trị Viên để xử lý đơn hàng và điều phối kho hàng.
+            {user ? (
+              <>Tài khoản hiện tại của bạn là <Text style={{ fontWeight: '700', color: '#2563eb' }}>Khách Hàng</Text>. Cổng này chỉ dành cho Nhân Viên hoặc Quản Trị Viên để xử lý đơn hàng và điều phối kho hàng.</>
+            ) : (
+              <>Bạn cần đăng nhập bằng tài khoản <Text style={{ fontWeight: '700', color: '#2563eb' }}>Nhân Viên</Text> hoặc Quản Trị Viên để truy cập bàn làm việc này.</>
+            )}
           </Text>
           <View style={{ flexDirection: 'row', gap: 12, width: '100%' }}>
             <Pressable
-              style={{ flex: 1, backgroundColor: '#f1f5f9', paddingVertical: 12, borderRadius: 10, alignItems: 'center' }}
+              style={{ flex: 1, backgroundColor: isDark ? '#334155' : '#f1f5f9', paddingVertical: 12, borderRadius: 10, alignItems: 'center' }}
               onPress={() => router.push('/(tabs)')}
             >
-              <Text style={{ fontWeight: '700', color: '#475569' }}>Về Cửa Hàng</Text>
+              <Text style={{ fontWeight: '700', color: isDark ? '#cbd5e1' : '#475569' }}>Về Cửa Hàng</Text>
             </Pressable>
             <Pressable
               style={{ flex: 1, backgroundColor: '#2563eb', paddingVertical: 12, borderRadius: 10, alignItems: 'center' }}
-              onPress={() => router.push('/login')}
+              onPress={() => {
+                if (user) logout();
+                router.push('/login');
+              }}
             >
-              <Text style={{ fontWeight: '700', color: '#ffffff' }}>Đổi Tài Khoản</Text>
+              <Text style={{ fontWeight: '700', color: '#ffffff' }}>{user ? 'Đổi Tài Khoản' : 'Đăng Nhập'}</Text>
             </Pressable>
           </View>
         </View>
@@ -229,7 +291,7 @@ export default function StaffScreen() {
 
         <View style={styles.headerRight}>
           {/* User pill */}
-          <View style={styles.userPill}>
+          <View style={[styles.userPill, isDark && styles.userPillDark]}>
             <View style={styles.userAvatar}>
               <Text style={styles.userAvatarText}>
                 {(user?.name ? user.name[0] : user?.email ? user.email[0] : 'S').toUpperCase()}
@@ -253,9 +315,18 @@ export default function StaffScreen() {
             </Pressable>
           )}
 
-          <Pressable style={styles.refreshBtn} onPress={loadData} disabled={loading}>
+          <Pressable style={[styles.refreshBtn, isDark && styles.refreshBtnDark]} onPress={loadData} disabled={loading}>
             <Ionicons name="sync-outline" size={16} color="#2563eb" />
             <Text style={styles.refreshBtnText}>Làm mới</Text>
+          </Pressable>
+
+          <Pressable
+            style={[styles.logoutBtn, isDark && styles.logoutBtnDark]}
+            onPress={() => setLogoutModalVisible(true)}
+            accessibilityLabel="Đăng xuất tài khoản"
+          >
+            <Ionicons name="log-out-outline" size={16} color="#dc2626" />
+            {isDesktop && <Text style={styles.logoutBtnText}>Đăng xuất</Text>}
           </Pressable>
         </View>
       </View>
@@ -399,9 +470,10 @@ export default function StaffScreen() {
               {[
                 { id: 'all', label: 'Tất cả' },
                 { id: 'pending', label: 'Chờ duyệt', count: pendingOrders.length, color: '#ef4444' },
-                { id: 'confirmed', label: 'Đã xác nhận' },
+                { id: 'confirmed', label: 'Đã xác nhận', count: confirmedOrders.length, color: '#0284c7' },
                 { id: 'shipping', label: 'Đang giao hàng', count: shippingOrders.length, color: '#2563eb' },
-                { id: 'completed', label: 'Hoàn thành' },
+                { id: 'completed', label: 'Hoàn thành', count: completedOrders.length, color: '#16a34a' },
+                { id: 'returns', label: 'Yêu cầu đổi trả', count: returnOrders.length, color: '#d97706' },
                 { id: 'cancelled', label: 'Đã hủy' },
               ].map((sf) => {
                 const isSelected = orderStatusFilter === sf.id;
@@ -433,7 +505,9 @@ export default function StaffScreen() {
                       : ord.status === 'confirmed'
                       ? { label: 'Đã xác nhận', color: '#0369a1', bg: '#e0f2fe' }
                       : ord.status === 'shipping'
-                      ? { label: 'Đang giao hàng', color: '#1d4ed8', bg: '#dbeafe' }
+                      ? { label: 'Đang giao hàng', color: '#7c3aed', bg: '#f5f3ff' }
+                      : ord.status === 'delivered'
+                      ? { label: 'Đã giao tới (Chờ khách nhận)', color: '#15803d', bg: '#dcfce7' }
                       : ord.status === 'completed'
                       ? { label: 'Giao thành công', color: '#15803d', bg: '#dcfce7' }
                       : { label: 'Đã hủy', color: '#64748b', bg: '#f1f5f9' };
@@ -465,6 +539,96 @@ export default function StaffScreen() {
                           {ord.shippingMethod === 'fast' ? 'Giao nhanh' : 'Tiêu chuẩn'}
                         </Text>
                       </View>
+
+                      {/* Cảnh báo yêu cầu đổi trả nếu có */}
+                      {ord.returnStatus ? (
+                        <View
+                          style={[
+                            styles.staffReturnBanner,
+                            ord.returnStatus === 'pending' ? styles.staffReturnPending : styles.staffReturnProcessed,
+                          ]}
+                        >
+                          <Ionicons
+                            name={ord.returnStatus === 'pending' ? 'alert-circle' : 'checkmark-circle'}
+                            size={16}
+                            color={ord.returnStatus === 'pending' ? '#b45309' : '#15803d'}
+                          />
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.staffReturnTitle}>
+                              {ord.returnStatus === 'pending'
+                                ? `Khách yêu cầu đổi trả: ${ord.returnReason || 'Lỗi sản phẩm'}`
+                                : `Trạng thái đổi trả: ${ord.returnStatus === 'approved' ? 'Đã duyệt' : 'Từ chối'}`}
+                            </Text>
+
+                            {/* Minh chứng ảnh / video khách gửi */}
+                            {ord.returnMedia && ord.returnMedia.length > 0 && (
+                              <View style={{ marginTop: 6 }}>
+                                <Text style={styles.staffProofLabel}>
+                                  📸 Minh chứng ảnh/video lỗi ({ord.returnMedia.length} file - nhấn để phóng to):
+                                </Text>
+                                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexDirection: 'row', gap: 6, marginTop: 4 }}>
+                                  {ord.returnMedia.map((mediaUrl: string, idx: number) => {
+                                    const isVideo = mediaUrl.includes('video') || mediaUrl.endsWith('.mp4');
+                                    return (
+                                      <Pressable
+                                        key={idx}
+                                        style={styles.staffProofThumb}
+                                        onPress={() => setPreviewMediaUrl(mediaUrl)}
+                                      >
+                                        {isVideo ? (
+                                          <View style={styles.staffVideoBox}>
+                                            <Ionicons name="videocam" size={20} color="#ffffff" />
+                                            <Text style={styles.staffVideoText}>Video lỗi</Text>
+                                          </View>
+                                        ) : (
+                                          <>
+                                            <Image source={{ uri: mediaUrl }} style={styles.staffProofImg} resizeMode="cover" />
+                                            <View style={styles.staffProofZoomIcon}>
+                                              <Ionicons name="scan-outline" size={12} color="#ffffff" />
+                                            </View>
+                                          </>
+                                        )}
+                                      </Pressable>
+                                    );
+                                  })}
+                                </ScrollView>
+                              </View>
+                            )}
+                          </View>
+                          {ord.returnStatus === 'pending' && (
+                            <View style={{ flexDirection: 'column', gap: 6 }}>
+                              <Pressable
+                                style={styles.btnApproveReturn}
+                                onPress={async () => {
+                                  try {
+                                    await apiService.updateReturnStatus(ord.id || ord.orderNumber, 'approved');
+                                    showToast(`Đã duyệt yêu cầu đổi trả cho đơn #${ord.orderNumber}`);
+                                    loadData();
+                                  } catch (e: any) {
+                                    showToast('Lỗi: ' + e.message);
+                                  }
+                                }}
+                              >
+                                <Text style={styles.btnApproveReturnText}>Duyệt đổi hàng</Text>
+                              </Pressable>
+                              <Pressable
+                                style={styles.btnRejectReturn}
+                                onPress={async () => {
+                                  try {
+                                    await apiService.updateReturnStatus(ord.id || ord.orderNumber, 'rejected');
+                                    showToast(`Đã từ chối đổi trả đơn #${ord.orderNumber}`);
+                                    loadData();
+                                  } catch (e: any) {
+                                    showToast('Lỗi: ' + e.message);
+                                  }
+                                }}
+                              >
+                                <Text style={styles.btnRejectReturnText}>Từ chối</Text>
+                              </Pressable>
+                            </View>
+                          )}
+                        </View>
+                      ) : null}
 
                       {/* Danh sách mặt hàng */}
                       <View style={styles.orderItemsWrap}>
@@ -499,16 +663,16 @@ export default function StaffScreen() {
                             <>
                               <Pressable
                                 style={styles.btnConfirmOrder}
-                                onPress={() => handleUpdateOrderStatus(ord.id, 'confirmed')}
-                                disabled={updatingOrderId === ord.id}
+                                onPress={() => handleUpdateOrderStatus(ord.id || ord.orderNumber, 'confirmed', ord.orderNumber)}
+                                disabled={Boolean(updatingOrderId && (String(updatingOrderId) === String(ord.id) || updatingOrderId === ord.orderNumber))}
                               >
                                 <Ionicons name="checkmark-circle" size={15} color="#ffffff" />
-                                <Text style={styles.btnWhiteText}>Duyệt đơn</Text>
+                                <Text style={styles.btnWhiteText}>Xác nhận đơn</Text>
                               </Pressable>
                               <Pressable
                                 style={styles.btnCancelOrder}
-                                onPress={() => handleUpdateOrderStatus(ord.id, 'cancelled')}
-                                disabled={updatingOrderId === ord.id}
+                                onPress={() => handleUpdateOrderStatus(ord.id || ord.orderNumber, 'cancelled', ord.orderNumber)}
+                                disabled={Boolean(updatingOrderId && (String(updatingOrderId) === String(ord.id) || updatingOrderId === ord.orderNumber))}
                               >
                                 <Ionicons name="close-circle" size={15} color="#b91c1c" />
                               </Pressable>
@@ -517,23 +681,34 @@ export default function StaffScreen() {
 
                           {ord.status === 'confirmed' && (
                             <Pressable
-                              style={styles.btnShipOrder}
-                              onPress={() => handleUpdateOrderStatus(ord.id, 'shipping')}
-                              disabled={updatingOrderId === ord.id}
+                              style={[styles.btnShipOrder, { backgroundColor: '#0284c7' }]}
+                              onPress={() => handleUpdateOrderStatus(ord.id || ord.orderNumber, 'shipping', ord.orderNumber)}
+                              disabled={Boolean(updatingOrderId && (String(updatingOrderId) === String(ord.id) || updatingOrderId === ord.orderNumber))}
                             >
                               <Ionicons name="airplane" size={15} color="#ffffff" />
-                              <Text style={styles.btnWhiteText}>Xuất kho giao</Text>
+                              <Text style={styles.btnWhiteText}>Xuất kho giao hàng</Text>
                             </Pressable>
                           )}
 
                           {ord.status === 'shipping' && (
                             <Pressable
-                              style={styles.btnCompleteOrder}
-                              onPress={() => handleUpdateOrderStatus(ord.id, 'completed')}
-                              disabled={updatingOrderId === ord.id}
+                              style={[styles.btnCompleteOrder, { backgroundColor: '#16a34a' }]}
+                              onPress={() => handleUpdateOrderStatus(ord.id || ord.orderNumber, 'delivered', ord.orderNumber)}
+                              disabled={Boolean(updatingOrderId && (String(updatingOrderId) === String(ord.id) || updatingOrderId === ord.orderNumber))}
                             >
                               <Ionicons name="checkmark-done" size={15} color="#ffffff" />
-                              <Text style={styles.btnWhiteText}>Đã giao xong</Text>
+                              <Text style={styles.btnWhiteText}>Báo đã giao xong</Text>
+                            </Pressable>
+                          )}
+
+                          {ord.status === 'delivered' && (
+                            <Pressable
+                              style={[styles.btnCompleteOrder, { backgroundColor: '#059669' }]}
+                              onPress={() => handleUpdateOrderStatus(ord.id || ord.orderNumber, 'completed', ord.orderNumber)}
+                              disabled={Boolean(updatingOrderId && (String(updatingOrderId) === String(ord.id) || updatingOrderId === ord.orderNumber))}
+                            >
+                              <Ionicons name="shield-checkmark" size={15} color="#ffffff" />
+                              <Text style={styles.btnWhiteText}>Chốt hoàn tất</Text>
                             </Pressable>
                           )}
                         </View>
@@ -732,14 +907,131 @@ export default function StaffScreen() {
                 <Text style={styles.btnSecondaryText}>Đóng</Text>
               </Pressable>
               {viewingOrder?.status === 'pending' && (
+                <>
+                  <Pressable
+                    style={[styles.btnPrimary, { backgroundColor: '#16a34a' }]}
+                    onPress={() => handleUpdateOrderStatus(viewingOrder.id || viewingOrder.orderNumber, 'confirmed', viewingOrder.orderNumber)}
+                  >
+                    <Text style={styles.btnPrimaryText}>Xác nhận đơn</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.btnSecondary, { borderColor: '#fca5a5', backgroundColor: '#fef2f2' }]}
+                    onPress={() => handleUpdateOrderStatus(viewingOrder.id || viewingOrder.orderNumber, 'cancelled', viewingOrder.orderNumber)}
+                  >
+                    <Text style={{ color: '#dc2626', fontWeight: '700' }}>Từ chối / Hủy đơn</Text>
+                  </Pressable>
+                </>
+              )}
+              {viewingOrder?.status === 'confirmed' && (
                 <Pressable
-                  style={styles.btnPrimary}
-                  onPress={() => handleUpdateOrderStatus(viewingOrder.id, 'confirmed')}
+                  style={[styles.btnPrimary, { backgroundColor: '#0284c7' }]}
+                  onPress={() => handleUpdateOrderStatus(viewingOrder.id || viewingOrder.orderNumber, 'shipping', viewingOrder.orderNumber)}
                 >
-                  <Text style={styles.btnPrimaryText}>Xác nhận đơn ngay</Text>
+                  <Text style={styles.btnPrimaryText}>Xuất kho giao hàng</Text>
+                </Pressable>
+              )}
+              {viewingOrder?.status === 'shipping' && (
+                <Pressable
+                  style={[styles.btnPrimary, { backgroundColor: '#16a34a' }]}
+                  onPress={() => handleUpdateOrderStatus(viewingOrder.id || viewingOrder.orderNumber, 'completed', viewingOrder.orderNumber)}
+                >
+                  <Text style={styles.btnPrimaryText}>Giao thành công</Text>
                 </Pressable>
               )}
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* MODAL: XÁC NHẬN ĐĂNG XUẤT */}
+      <Modal visible={logoutModalVisible} transparent animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalBox, isDark && styles.modalBoxDark, { maxWidth: 420, alignItems: 'center', padding: 24 }]}>
+            <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#fee2e2', alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
+              <Ionicons name="log-out-outline" size={26} color="#dc2626" />
+            </View>
+            <Text style={[styles.modalTitle, isDark && styles.textDark, { textAlign: 'center', fontSize: 18 }]}>
+              Đăng xuất tài khoản
+            </Text>
+            <Text style={{ textAlign: 'center', color: isDark ? '#94a3b8' : '#64748b', fontSize: 13, marginTop: 8, lineHeight: 20 }}>
+              Bạn có chắc chắn muốn đăng xuất khỏi bàn làm việc nhân viên không?
+            </Text>
+
+            <View style={{ flexDirection: 'row', gap: 12, marginTop: 22, width: '100%' }}>
+              <Pressable
+                style={[styles.btnSecondary, isDark && { backgroundColor: '#334155' }, { flex: 1, alignItems: 'center', paddingVertical: 11, borderRadius: 10 }]}
+                onPress={() => setLogoutModalVisible(false)}
+              >
+                <Text style={[styles.btnSecondaryText, isDark && { color: '#cbd5e1' }]}>Hủy bỏ</Text>
+              </Pressable>
+              <Pressable
+                style={[{ flex: 1, backgroundColor: '#dc2626', alignItems: 'center', justifyContent: 'center', paddingVertical: 11, borderRadius: 10 }]}
+                onPress={handleLogout}
+              >
+                <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 13 }}>Đăng xuất</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* MODAL: XEM ẢNH MINH CHỨNG LỖI CỦA KHÁCH */}
+      <Modal visible={!!previewMediaUrl} transparent animationType="fade">
+        <View style={styles.lightboxBackdrop}>
+          <View style={[styles.lightboxContainer, isDark && styles.lightboxContainerDark]}>
+            <View style={styles.lightboxHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name="image" size={20} color="#ffffff" />
+                <Text style={styles.lightboxTitle}>Ảnh minh chứng lỗi từ khách hàng</Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                {previewMediaUrl && typeof window !== 'undefined' && (
+                  <Pressable
+                    style={styles.lightboxOpenTabBtn}
+                    onPress={() => window.open(previewMediaUrl!, '_blank')}
+                  >
+                    <Ionicons name="open-outline" size={15} color="#ffffff" style={{ marginRight: 4 }} />
+                    <Text style={styles.lightboxOpenTabText}>Mở ảnh gốc</Text>
+                  </Pressable>
+                )}
+                <Pressable
+                  style={styles.lightboxCloseBtn}
+                  onPress={() => setPreviewMediaUrl(null)}
+                >
+                  <Ionicons name="close" size={22} color="#ffffff" />
+                </Pressable>
+              </View>
+            </View>
+
+            <Pressable
+              style={styles.lightboxImageWrap}
+              onPress={() => setPreviewMediaUrl(null)}
+            >
+              {previewMediaUrl ? (
+                previewMediaUrl.includes('video') || previewMediaUrl.endsWith('.mp4') ? (
+                  <View style={{ alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+                    <Ionicons name="videocam" size={64} color="#ffffff" style={{ marginBottom: 16 }} />
+                    <Text style={{ color: '#ffffff', fontSize: 16, fontWeight: '700', marginBottom: 12 }}>
+                      Video minh chứng lỗi từ khách
+                    </Text>
+                    {typeof window !== 'undefined' && (
+                      <Pressable
+                        style={[styles.btnPrimary, { paddingHorizontal: 20 }]}
+                        onPress={() => window.open(previewMediaUrl!, '_blank')}
+                      >
+                        <Text style={styles.btnPrimaryText}>Mở xem video trên tab mới</Text>
+                      </Pressable>
+                    )}
+                  </View>
+                ) : (
+                  <Image
+                    source={{ uri: previewMediaUrl }}
+                    style={styles.lightboxImage}
+                    resizeMode="contain"
+                  />
+                )
+              ) : null}
+            </Pressable>
           </View>
         </View>
       </Modal>
@@ -909,6 +1201,33 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: '#2563eb',
+  },
+  refreshBtnDark: {
+    backgroundColor: '#1e293b',
+    borderColor: '#334155',
+  },
+  logoutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fee2e2',
+  },
+  logoutBtnDark: {
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    borderColor: 'rgba(239, 68, 68, 0.25)',
+  },
+  logoutBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#dc2626',
+  },
+  userPillDark: {
+    backgroundColor: '#1e293b',
   },
   contentScroll: {
     flex: 1,
@@ -1371,6 +1690,11 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     elevation: 8,
   },
+  modalBoxDark: {
+    backgroundColor: '#1e293b',
+    borderColor: '#334155',
+    borderWidth: 1,
+  },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1444,5 +1768,164 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: '#ffffff',
+  },
+  /* STAFF RETURN REQUEST BANNER */
+  staffReturnBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginHorizontal: 14,
+    marginTop: 8,
+    padding: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  staffReturnPending: {
+    backgroundColor: '#fffbeb',
+    borderColor: '#fde68a',
+  },
+  staffReturnProcessed: {
+    backgroundColor: '#f0fdf4',
+    borderColor: '#bbf7d0',
+  },
+  staffReturnTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  btnApproveReturn: {
+    backgroundColor: '#16a34a',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  btnApproveReturnText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  btnRejectReturn: {
+    backgroundColor: '#fee2e2',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  btnRejectReturnText: {
+    color: '#dc2626',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  staffProofLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  staffProofThumb: {
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    backgroundColor: '#0f172a',
+    position: 'relative',
+  },
+  staffProofZoomIcon: {
+    position: 'absolute',
+    right: 3,
+    bottom: 3,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    borderRadius: 4,
+    padding: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  staffProofImg: {
+    width: '100%',
+    height: '100%',
+  },
+  staffVideoBox: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1e293b',
+  },
+  staffVideoText: {
+    fontSize: 9,
+    color: '#ffffff',
+    fontWeight: '700',
+    marginTop: 2,
+  },
+
+  /* LIGHTBOX MODAL STYLES */
+  lightboxBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  lightboxContainer: {
+    width: '100%',
+    maxWidth: 820,
+    backgroundColor: '#0f172a',
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOpacity: 0.35,
+    shadowRadius: 24,
+    elevation: 10,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  lightboxContainerDark: {
+    backgroundColor: '#020617',
+    borderColor: '#1e293b',
+  },
+  lightboxHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1e293b',
+    backgroundColor: '#0f172a',
+  },
+  lightboxTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  lightboxOpenTabBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+  },
+  lightboxOpenTabText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  lightboxCloseBtn: {
+    padding: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    borderRadius: 6,
+  },
+  lightboxImageWrap: {
+    width: '100%',
+    height: 520,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#020617',
+    padding: 8,
+  },
+  lightboxImage: {
+    width: '100%',
+    height: '100%',
   },
 });

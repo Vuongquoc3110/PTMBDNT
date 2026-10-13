@@ -18,6 +18,7 @@ import { formatPrice } from '@/data/products';
 import { VIETNAM_PROVINCES } from '@/data/vietnamLocations';
 import { useAppContext } from '@/context/AppContext';
 import { apiService } from '@/services/api';
+import { playSuccessChime } from '@/utils/sound';
 
 const PAYMENT_METHODS = [
   {
@@ -56,10 +57,10 @@ export default function CheckoutScreen() {
   }, [cartItems]);
 
   const [fullname, setFullname] = useState(user?.name || '');
-  const [phone, setPhone] = useState(() => (user?.phone || '').replace(/[^0-9]/g, '').slice(0, 10));
+  const [phone, setPhone] = useState(() => (user?.phone || '').replace(/[^0-9]/g, '').slice(0, 11));
 
   const handlePhoneChange = (text: string) => {
-    const cleaned = text.replace(/[^0-9]/g, '').slice(0, 10);
+    const cleaned = text.replace(/[^0-9]/g, '').slice(0, 11);
     setPhone(cleaned);
   };
 
@@ -149,6 +150,15 @@ export default function CheckoutScreen() {
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
+  const subtotal = useMemo(() => {
+    return checkoutItems.reduce((sum, item) => sum + item.price * item.qty, 0);
+  }, [checkoutItems]);
+
+  const isFreeShipEligible = subtotal >= 5000000 || appliedVoucher?.code === 'FREESHIP';
+  const shipping = isFreeShipEligible ? 0 : 30000;
+  const voucherDiscount = appliedVoucher && appliedVoucher.code !== 'FREESHIP' ? appliedVoucher.discount : 0;
+  const total = Math.max(0, subtotal + shipping - voucherDiscount);
+
   if (!user) {
     return (
       <View style={styles.page}>
@@ -182,15 +192,6 @@ export default function CheckoutScreen() {
     );
   }
 
-  const subtotal = useMemo(() => {
-    return checkoutItems.reduce((sum, item) => sum + item.price * item.qty, 0);
-  }, [checkoutItems]);
-
-  const isFreeShipEligible = subtotal >= 5000000 || appliedVoucher?.code === 'FREESHIP';
-  const shipping = isFreeShipEligible ? 0 : 30000;
-  const voucherDiscount = appliedVoucher && appliedVoucher.code !== 'FREESHIP' ? appliedVoucher.discount : 0;
-  const total = Math.max(0, subtotal + shipping - voucherDiscount);
-
   const handleOrder = async () => {
     if (checkoutItems.length === 0) {
       alert('Giỏ hàng trống!');
@@ -201,9 +202,9 @@ export default function CheckoutScreen() {
       return;
     }
 
-    const phoneRegex = /^(0[3|5|7|8|9])[0-9]{8}$/;
+    const phoneRegex = /^(0[1-9])[0-9]{8,9}$/;
     if (!phoneRegex.test(phone.trim())) {
-      alert('Số điện thoại nhận hàng không hợp lệ (phải đủ 10 chữ số, bắt đầu bằng 03, 05, 07, 08 hoặc 09)');
+      alert('Số điện thoại nhận hàng không hợp lệ (phải từ 10 - 11 chữ số, bắt đầu bằng số 0)');
       return;
     }
 
@@ -253,6 +254,7 @@ export default function CheckoutScreen() {
         setQrModalVisible(true);
       } else {
         setIsSuccess(true);
+        playSuccessChime();
       }
     } catch (err: any) {
       alert('Lỗi tạo đơn hàng: ' + (err.message || 'Vui lòng thử lại'));
@@ -269,9 +271,9 @@ export default function CheckoutScreen() {
         <View style={styles.inner}>
           {/* BREADCRUMBS */}
           <View style={styles.breadcrumbRow}>
-            <Link href="/(tabs)" style={styles.breadcrumbLink}>Trang chủ</Link>
+            <Pressable onPress={() => router.push('/(tabs)')}><Text style={styles.breadcrumbLink}>Trang chủ</Text></Pressable>
             <Text style={styles.breadcrumbSep}>/</Text>
-            <Link href={'/cart' as any} style={styles.breadcrumbLink}>Giỏ hàng</Link>
+            <Pressable onPress={() => router.push('/cart' as any)}><Text style={styles.breadcrumbLink}>Giỏ hàng</Text></Pressable>
             <Text style={styles.breadcrumbSep}>/</Text>
             <Text style={styles.breadcrumbCurrent}>Thanh toán</Text>
           </View>
@@ -343,15 +345,15 @@ export default function CheckoutScreen() {
                     <View style={styles.fieldCol}>
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                         <Text style={styles.fieldLabel}>Số điện thoại liên hệ *</Text>
-                        <Text style={{ fontSize: 11, color: '#94a3b8', fontWeight: '600' }}>{phone.length}/10 số</Text>
+                        <Text style={{ fontSize: 11, color: '#94a3b8', fontWeight: '600' }}>{phone.length}/11 số</Text>
                       </View>
                       <TextInput
                         style={styles.input}
                         value={phone}
                         onChangeText={handlePhoneChange}
-                        placeholder="Nhập số điện thoại (10 số)..."
+                        placeholder="Nhập số điện thoại (10 - 11 số)..."
                         keyboardType="phone-pad"
-                        maxLength={10}
+                        maxLength={11}
                       />
                     </View>
                   </View>
@@ -491,28 +493,13 @@ export default function CheckoutScreen() {
                                     ]}
                                   >
                                     {method.id === 'vnpay'
-                                      ? 'Tự động tạo mã VNPAY-QR theo số tiền đơn hàng'
-                                      : 'Tự động tạo mã QR MoMo theo số tiền đơn hàng'}
+                                      ? 'Thanh toán tức thì qua VNPAY-QR'
+                                      : 'Thanh toán tức thì qua Ví MoMo'}
                                   </Text>
                                 </View>
                                 <Text style={styles.qrInlineNoticeText}>
-                                  Khi bấm xác nhận đặt hàng, hệ thống sẽ mở mã QR Code kèm cú pháp chuyển khoản để bạn quét thanh toán tức thì.
+                                  Mã QR Code động kèm số tiền và nội dung chuyển khoản theo mã đơn hàng sẽ tự động xuất hiện ngay sau khi bạn bấm &quot;XÁC NHẬN ĐẶT HÀNG&quot;.
                                 </Text>
-                                <Pressable
-                                  style={[
-                                    styles.qrDemoQuickBtn,
-                                    { backgroundColor: method.id === 'vnpay' ? '#0284c7' : '#db2777' },
-                                  ]}
-                                  onPress={(e) => {
-                                    e.stopPropagation?.();
-                                    setQrModalVisible(true);
-                                  }}
-                                >
-                                  <Ionicons name="scan-outline" size={13} color="#ffffff" style={{ marginRight: 4 }} />
-                                  <Text style={styles.qrDemoQuickBtnText}>
-                                    Xem trước mã QR Demo ({method.id === 'vnpay' ? 'VNPAY' : 'MoMo'})
-                                  </Text>
-                                </Pressable>
                               </View>
                             )}
                           </View>
@@ -732,7 +719,13 @@ export default function CheckoutScreen() {
                 </View>
               </View>
 
-              <Pressable onPress={() => setQrModalVisible(false)} hitSlop={10}>
+              <Pressable
+                onPress={() => {
+                  setQrModalVisible(false);
+                  if (createdOrderNumber) setIsSuccess(true);
+                }}
+                hitSlop={10}
+              >
                 <Ionicons name="close" size={24} color="#64748b" />
               </Pressable>
             </View>
@@ -806,14 +799,21 @@ export default function CheckoutScreen() {
                 onPress={() => {
                   setQrModalVisible(false);
                   setIsSuccess(true);
+                  playSuccessChime();
                 }}
               >
                 <Ionicons name="checkmark-circle" size={20} color="#ffffff" style={{ marginRight: 8 }} />
                 <Text style={styles.confirmPaymentBtnText}>TÔI ĐÃ CHUYỂN KHOẢN XONG</Text>
               </Pressable>
 
-              <Pressable style={styles.cancelPaymentBtn} onPress={() => setQrModalVisible(false)}>
-                <Text style={styles.cancelPaymentBtnText}>Đóng mã QR / Thanh toán sau</Text>
+              <Pressable
+                style={styles.cancelPaymentBtn}
+                onPress={() => {
+                  setQrModalVisible(false);
+                  if (createdOrderNumber) setIsSuccess(true);
+                }}
+              >
+                <Text style={styles.cancelPaymentBtnText}>Đóng mã QR / Hoàn tất đặt hàng</Text>
               </Pressable>
             </ScrollView>
           </View>

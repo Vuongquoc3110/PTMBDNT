@@ -162,6 +162,15 @@ export default function TabLayout() {
         },
         tabBarActiveTintColor: '#2563eb',
         tabBarInactiveTintColor: '#64748b',
+        tabBarButton: (buttonProps: any) => {
+          const { href, style, ...otherProps } = buttonProps;
+          return (
+            <Pressable
+              {...otherProps}
+              style={StyleSheet.flatten(style)}
+            />
+          );
+        },
       }}
     >
       <Tabs.Screen
@@ -174,7 +183,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="categories"
         options={{
-          title: 'Phân loại',
+          title: 'Danh mục',
           tabBarIcon: ({ color, size }) => <Ionicons name="grid-outline" size={size} color={color} />,
         }}
       />
