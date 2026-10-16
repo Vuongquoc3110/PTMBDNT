@@ -162,6 +162,19 @@ if (Platform.OS === 'web' && typeof document !== 'undefined') {
         background-size: 200% 100% !important;
         animation: dpcShimmerAnim 1.5s ease-in-out infinite !important;
       }
+
+      /* Fix triệt để chữ tab bar mobile web không bao giờ bị cắt chân */
+      [role="tablist"] {
+        overflow: visible !important;
+      }
+      [role="tab"] {
+        overflow: visible !important;
+        justify-content: center !important;
+        align-items: center !important;
+      }
+      [role="tab"] * {
+        overflow: visible !important;
+      }
     `;
     document.head.appendChild(style);
   }

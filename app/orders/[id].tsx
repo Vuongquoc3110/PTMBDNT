@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 
 import { Header } from '@/components/Header';
+import { InvoiceModal } from '@/components/InvoiceModal';
 import { formatPrice, products as fallbackProducts, getProductFallbackImage, isInvalidOrBlockedImageUrl } from '@/data/products';
 import { apiService, type Order } from '@/services/api';
 import { useAppContext } from '@/context/AppContext';
@@ -43,6 +44,52 @@ const REVIEW_QUICK_TAGS = [
   'Hàng chính hãng tem chuẩn 🛡️',
   'Tư vấn kỹ thuật nhiệt tình 💬',
 ];
+
+export function calculateWarrantyInfo(orderDateStr?: string, item?: any) {
+  const nameLower = (item?.name || '').toLowerCase();
+  let months = item?.warrantyMonths || 24;
+  if (!item?.warrantyMonths) {
+    if (nameLower.includes('laptop') || nameLower.includes('macbook')) {
+      months = 24;
+    } else if (
+      nameLower.includes('màn hình') ||
+      nameLower.includes('monitor') ||
+      nameLower.includes('rtx') ||
+      nameLower.includes('vga') ||
+      nameLower.includes('card') ||
+      nameLower.includes('pc') ||
+      nameLower.includes('cpu') ||
+      nameLower.includes('main')
+    ) {
+      months = 36;
+    } else if (nameLower.includes('chuột') || nameLower.includes('bàn phím') || nameLower.includes('tai nghe')) {
+      months = 12;
+    }
+  }
+
+  const orderDate = orderDateStr ? new Date(orderDateStr) : new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const formatD = (d: Date) => `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+
+  const purchaseStr = item?.purchaseDate || formatD(orderDate);
+  const expiryDate = new Date(orderDate);
+  expiryDate.setMonth(expiryDate.getMonth() + months);
+  const expiryStr = item?.warrantyExpiry || formatD(expiryDate);
+  const range = item?.warrantyRange || `${purchaseStr} đến ${expiryStr}`;
+
+  const diffMs = expiryDate.getTime() - Date.now();
+  const remainingDays = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+
+  return {
+    months,
+    label: `${months} Tháng`,
+    purchaseStr,
+    expiryStr,
+    range,
+    remainingDays,
+    isValid: remainingDays > 0,
+  };
+}
 
 const statusConfig: Record<
   string,
@@ -235,6 +282,7 @@ export default function OrderDetailScreen() {
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState('');
   const [cancelling, setCancelling] = useState(false);
+  const [invoiceModalVisible, setInvoiceModalVisible] = useState(false);
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -576,8 +624,18 @@ export default function OrderDetailScreen() {
               </View>
             </View>
 
-            <View style={styles.orderNumberBadge}>
-              <Text style={styles.orderNumberBadgeText}>MÃ ĐƠN: {order.orderNumber}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <Pressable
+                style={[styles.orderNumberBadge, { backgroundColor: '#f0fdf4', borderColor: '#bbf7d0', flexDirection: 'row', alignItems: 'center' }]}
+                onPress={() => setInvoiceModalVisible(true)}
+              >
+                <Ionicons name="receipt-outline" size={13} color="#16a34a" style={{ marginRight: 4 }} />
+                <Text style={[styles.orderNumberBadgeText, { color: '#16a34a' }]}>IN HÓA ĐƠN VAT</Text>
+              </Pressable>
+
+              <View style={styles.orderNumberBadge}>
+                <Text style={styles.orderNumberBadgeText}>MÃ ĐƠN: {order.orderNumber}</Text>
+              </View>
             </View>
           </View>
 
@@ -794,6 +852,34 @@ export default function OrderDetailScreen() {
                               {item.selectedConfig}
                             </Text>
                           ) : null}
+
+                          {/* THỜI HẠN BẢO HÀNH DỰ KIẾN TỪNG SẢN PHẨM & MÃ SERIAL NUMBER */}
+                          {(() => {
+                            const w = calculateWarrantyInfo(order.createdAt, item);
+                            const rawDigits = (order.orderNumber || String(order.id)).replace(/[^0-9]/g, '');
+                            const serialNum = (item as any).serialNumber || `SN-DPC-${rawDigits.slice(-8) || order.id}-${idx + 1}`;
+                            return (
+                              <View style={{ gap: 4, marginTop: 4, marginBottom: 4 }}>
+                                <View style={styles.itemWarrantyBadge}>
+                                  <Ionicons name="shield-checkmark" size={12} color="#16a34a" />
+                                  <Text style={styles.itemWarrantyText}>
+                                    Thời hạn BH: <Text style={{ fontWeight: '700', color: '#15803d' }}>{w.range}</Text>
+                                  </Text>
+                                </View>
+                                <Pressable
+                                  style={{ flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start' }}
+                                  onPress={() => router.push('/warranty' as any)}
+                                >
+                                  <Ionicons name="barcode-outline" size={13} color="#2563eb" />
+                                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#2563eb' }}>
+                                    Mã S/N: {serialNum}
+                                  </Text>
+                                  <Ionicons name="open-outline" size={11} color="#2563eb" />
+                                </Pressable>
+                              </View>
+                            );
+                          })()}
+
                           <View style={styles.productPriceRow}>
                             <Text style={styles.unitPrice}>
                               {formatPrice(item.price)}
@@ -823,6 +909,52 @@ export default function OrderDetailScreen() {
                 </View>
               </View>
 
+              {/* THÔNG TIN BẢO HÀNH ĐIỆN TỬ CHÍNH HÃNG */}
+              <View style={styles.card}>
+                <View style={styles.cardHeader}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Ionicons name="shield-checkmark" size={20} color="#16a34a" />
+                    <Text style={styles.cardTitle}>Thời hạn bảo hành điện tử chính hãng</Text>
+                  </View>
+                  <Pressable
+                    style={styles.lookupWarrantyBtn}
+                    onPress={() => router.push({ pathname: '/warranty', params: { q: order.orderNumber || order.id } } as any)}
+                  >
+                    <Text style={styles.lookupWarrantyBtnText}>Tra cứu chi tiết →</Text>
+                  </Pressable>
+                </View>
+                <View style={styles.warrantyCardBody}>
+                  <Text style={styles.warrantyCardDesc}>
+                    Thiết bị được kích hoạt bảo hành điện tử chính hãng tại DANGVINHPC ngay khi mua máy. Thời hạn bảo hành được tính chính xác từ ngày mua máy đến ngày hết hạn bảo hành.
+                  </Text>
+                  <View style={{ gap: 10, marginTop: 10 }}>
+                    {order.items.map((it, idx) => {
+                      const w = calculateWarrantyInfo(order.createdAt, it);
+                      return (
+                        <View key={idx} style={styles.warrantyRowItem}>
+                          <View style={{ flex: 1, marginRight: 10 }}>
+                            <Text style={styles.warrantyProdName} numberOfLines={1}>{it.name}</Text>
+                            <Text style={styles.warrantyRangeText}>
+                              Thời hạn bảo hành dự kiến: <Text style={{ fontWeight: '800', color: '#15803d' }}>{w.range}</Text>
+                            </Text>
+                            <Text style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
+                              Thời gian mua: <Text style={{ fontWeight: '700', color: '#334155' }}>{w.purchaseStr}</Text> • Hạn bảo hành: <Text style={{ fontWeight: '700', color: '#334155' }}>{w.expiryStr}</Text> ({w.label})
+                            </Text>
+                          </View>
+                          <View style={{ alignItems: 'flex-end', justifyContent: 'center' }}>
+                            <View style={[styles.warrantyStatusPill, { backgroundColor: w.isValid ? '#dcfce7' : '#fee2e2' }]}>
+                              <Text style={{ fontSize: 11, fontWeight: '800', color: w.isValid ? '#15803d' : '#b91c1c' }}>
+                                {w.isValid ? `Còn ${w.remainingDays} ngày` : 'Hết hạn'}
+                              </Text>
+                            </View>
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
+                </View>
+              </View>
+
               {/* TIMELINE & TRACKING NOTE */}
               <View style={styles.card}>
                 <View style={styles.cardHeader}>
@@ -838,28 +970,61 @@ export default function OrderDetailScreen() {
                 </View>
 
                 {/* SHIPPER & CARRIER STRIP */}
-                <View style={{ backgroundColor: '#f8fafc', padding: 12, borderRadius: 12, marginBottom: 14, borderWidth: 1, borderColor: '#e2e8f0', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: '#eff6ff', alignItems: 'center', justifyContent: 'center' }}>
-                      <Ionicons name="bicycle" size={18} color="#2563eb" />
+                {(() => {
+                  const isCancelled = order.status === 'cancelled';
+                  if (isCancelled) return null;
+
+                  const isShippingOrDelivered = ['shipping', 'delivered', 'completed'].includes(order.status);
+
+                  if (isShippingOrDelivered) {
+                    return (
+                      <View style={{ backgroundColor: '#f0fdf4', padding: 12, borderRadius: 12, marginBottom: 14, borderWidth: 1, borderColor: '#bbf7d0', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: '#dcfce7', alignItems: 'center', justifyContent: 'center' }}>
+                            <Ionicons name="bicycle" size={18} color="#16a34a" />
+                          </View>
+                          <View>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                              <Text style={{ fontSize: 12, fontWeight: '700', color: '#0f172a' }}>
+                                DPC Express • Bưu tá Nguyễn Văn Hưng
+                              </Text>
+                              <View style={{ backgroundColor: '#dcfce7', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 }}>
+                                <Text style={{ fontSize: 10, fontWeight: '700', color: '#15803d' }}>Đang phát</Text>
+                              </View>
+                            </View>
+                            <Text style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>
+                              Hotline shipper: <Text style={{ fontWeight: '700', color: '#16a34a' }}>0912.868.555</Text>
+                            </Text>
+                          </View>
+                        </View>
+                        <Pressable
+                          style={{ backgroundColor: '#16a34a', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                          onPress={() => alert('Liên hệ bưu tá phát hàng: 0912 868 555 (DPC Express)')}
+                        >
+                          <Ionicons name="call" size={13} color="#ffffff" />
+                          <Text style={{ color: '#ffffff', fontSize: 11, fontWeight: '700' }}>Gọi shipper</Text>
+                        </Pressable>
+                      </View>
+                    );
+                  }
+
+                  // Trạng thái pending hoặc confirmed: chưa bàn giao cho shipper
+                  return (
+                    <View style={{ backgroundColor: '#f8fafc', padding: 12, borderRadius: 12, marginBottom: 14, borderWidth: 1, borderColor: '#e2e8f0', flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                      <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: '#eff6ff', alignItems: 'center', justifyContent: 'center' }}>
+                        <Ionicons name="cube-outline" size={18} color="#2563eb" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#0f172a' }}>
+                          {order.status === 'confirmed' ? 'Đang chuẩn bị & Đóng gói tại kho' : 'Chờ xác nhận đơn hàng'}
+                        </Text>
+                        <Text style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>
+                          Thông tin bưu tá và số điện thoại liên hệ sẽ tự động hiển thị khi đơn hàng được bàn giao xuất kho vận chuyển.
+                        </Text>
+                      </View>
                     </View>
-                    <View>
-                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#0f172a' }}>
-                        DPC Express • Bưu tá Nguyễn Văn Hưng
-                      </Text>
-                      <Text style={{ fontSize: 11, color: '#64748b' }}>
-                        Hotline shipper: <Text style={{ fontWeight: '700', color: '#2563eb' }}>0912.868.555</Text>
-                      </Text>
-                    </View>
-                  </View>
-                  <Pressable
-                    style={{ backgroundColor: '#2563eb', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 4 }}
-                    onPress={() => alert('Liên hệ bưu tá phát hàng: 0912 868 555 (DPC Express)')}
-                  >
-                    <Ionicons name="call" size={13} color="#ffffff" />
-                    <Text style={{ color: '#ffffff', fontSize: 11, fontWeight: '700' }}>Gọi shipper</Text>
-                  </Pressable>
-                </View>
+                  );
+                })()}
 
                 <View style={styles.timelineList}>
                   {getOrderTimelineEvents(order).map((ev, idx, arr) => {
@@ -1086,6 +1251,24 @@ export default function OrderDetailScreen() {
                           : order.returnStatus === 'rejected'
                           ? 'Tiến độ đổi trả (Bị từ chối ❌)'
                           : 'Yêu cầu đổi trả / Bảo hành'}
+                      </Text>
+                    </Pressable>
+
+                    <Pressable
+                      style={[
+                        styles.reorderBtn,
+                        { backgroundColor: '#f0fdf4', borderWidth: 1, borderColor: '#bbf7d0', shadowOpacity: 0 }
+                      ]}
+                      onPress={() => setInvoiceModalVisible(true)}
+                    >
+                      <Ionicons
+                        name="receipt-outline"
+                        size={17}
+                        color="#16a34a"
+                        style={{ marginRight: 8 }}
+                      />
+                      <Text style={[styles.reorderBtnText, { color: '#16a34a' }]}>
+                        Xuất / In hóa đơn bán hàng & bảo hành
                       </Text>
                     </Pressable>
                   </View>
@@ -1510,6 +1693,13 @@ export default function OrderDetailScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* ==================== MODAL: IN & XUẤT HÓA ĐƠN BÁN HÀNG ==================== */}
+      <InvoiceModal
+        visible={invoiceModalVisible}
+        onClose={() => setInvoiceModalVisible(false)}
+        order={order}
+      />
     </View>
   );
 }
@@ -1842,6 +2032,71 @@ const styles = StyleSheet.create({
     color: '#2563eb',
     textTransform: 'uppercase',
     marginBottom: 3,
+  },
+  itemWarrantyBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f0fdf4',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    alignSelf: 'flex-start',
+    gap: 4,
+    marginTop: 2,
+    marginBottom: 5,
+  },
+  itemWarrantyText: {
+    fontSize: 11,
+    color: '#166534',
+    fontWeight: '500',
+  },
+  lookupWarrantyBtn: {
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+  },
+  lookupWarrantyBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#2563eb',
+  },
+  warrantyCardBody: {},
+  warrantyCardDesc: {
+    fontSize: 12,
+    color: '#64748b',
+    lineHeight: 18,
+    marginBottom: 4,
+  },
+  warrantyRowItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#f8fafc',
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  warrantyProdName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0f172a',
+    marginBottom: 2,
+  },
+  warrantyRangeText: {
+    fontSize: 12,
+    color: '#475569',
+    marginTop: 2,
+  },
+  warrantyStatusPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
   },
   productName: {
     fontSize: 14,

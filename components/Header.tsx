@@ -53,6 +53,24 @@ export function Header() {
     setNotiOpen(false);
   }, [pathname]);
 
+  const notiDropdownCustomStyle = useMemo(() => {
+    if (isDesktop) {
+      return {
+        right: 0,
+        width: 340,
+      };
+    }
+    // Trên di động, nút chuông nằm cách mép phải màn hình tầm 90-155px.
+    // Nếu để right: 0 thì popup 340px sẽ bị tràn ra khỏi mép trái màn hình khoảng 40-70px.
+    const modalWidth = Math.min(width - 24, 330);
+    const shiftRight = user ? (width >= 420 ? -100 : -85) : -70;
+    return {
+      right: shiftRight,
+      width: modalWidth,
+      maxWidth: '92vw',
+    };
+  }, [isDesktop, width, user]);
+
   // Click outside to close user dropdown on web
   useEffect(() => {
     if (!userMenuOpen) return;
@@ -230,7 +248,7 @@ export function Header() {
         </View>
 
         {/* SEARCH BAR CONTAINER WITH AUTOCOMPLETE DROPDOWN */}
-        <View style={[styles.searchContainer, !isDesktop && styles.searchContainerMobile]}>
+        <View style={[styles.searchContainer, !isDesktop && styles.searchContainerMobile, isFocused && styles.searchContainerFocused]}>
           <View style={[styles.searchWrap, !isDesktop && styles.searchWrapMobile, isFocused && styles.searchWrapFocused]}>
             <Pressable onPress={() => handleSearchSubmit()} hitSlop={8}>
               <Ionicons name="search-outline" size={18} color={isFocused ? '#2563eb' : '#94a3b8'} style={styles.searchIcon} />
@@ -370,9 +388,22 @@ export function Header() {
               )}
             </Pressable>
 
+            {/* BACKDROP OVERLAY FOR CLOSING NOTIFICATIONS */}
+            {notiOpen && (
+              <Pressable
+                style={[
+                  styles.dropdownBackdrop,
+                  Platform.OS === 'web'
+                    ? ({ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9998 } as any)
+                    : { position: 'absolute', top: -1000, bottom: -1000, left: -1000, right: -1000, zIndex: 9998 },
+                ]}
+                onPress={() => setNotiOpen(false)}
+              />
+            )}
+
             {/* NOTIFICATION POPUP */}
             {notiOpen && (
-              <View style={[styles.notiDropdown, isDark && styles.userDropdownDark]}>
+              <View style={[styles.notiDropdown, notiDropdownCustomStyle, isDark && styles.userDropdownDark]}>
                 <View style={styles.notiHeader}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                     <Ionicons name="notifications" size={16} color="#2563eb" />
@@ -789,6 +820,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 16,
+    position: 'relative',
+    zIndex: 100,
   },
   innerMobile: {
     paddingHorizontal: 12,
@@ -797,6 +830,7 @@ const styles = StyleSheet.create({
     gap: 8,
     flexWrap: 'wrap',
     position: 'relative',
+    zIndex: 100,
   },
   brandContainer: {
     flexDirection: 'row',
@@ -887,7 +921,10 @@ const styles = StyleSheet.create({
   },
   searchContainer: {
     position: 'relative',
-    zIndex: 1001,
+    zIndex: 40,
+  },
+  searchContainerFocused: {
+    zIndex: 3000,
   },
   searchContainerMobile: {
     flexBasis: '100%',
@@ -1045,7 +1082,7 @@ const styles = StyleSheet.create({
     gap: 8,
     alignItems: 'center',
     position: 'relative',
-    zIndex: 1002,
+    zIndex: 1000,
   },
   actionRowMobile: {
     gap: 6,
@@ -1053,6 +1090,7 @@ const styles = StyleSheet.create({
     top: 10,
     right: 12,
     alignItems: 'center',
+    zIndex: 1000,
   },
   actionButton: {
     width: 40,
@@ -1115,7 +1153,7 @@ const styles = StyleSheet.create({
   },
   accountWrapper: {
     position: 'relative',
-    zIndex: 1003,
+    zIndex: 2000,
   },
   accountButton: {
     height: 40,
@@ -1191,9 +1229,10 @@ const styles = StyleSheet.create({
   },
   userDropdown: {
     position: 'absolute',
-    top: 48,
+    top: 42,
     right: 0,
-    width: 240,
+    width: 250,
+    maxWidth: '92vw',
     backgroundColor: '#ffffff',
     borderRadius: 16,
     borderWidth: 1,
@@ -1201,10 +1240,10 @@ const styles = StyleSheet.create({
     padding: 8,
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.1,
-    shadowRadius: 20,
-    elevation: 14,
-    zIndex: 9999,
+    shadowOpacity: 0.15,
+    shadowRadius: 24,
+    elevation: 24,
+    zIndex: 99999,
   },
   userDropdownDark: {
     backgroundColor: '#18181b',
@@ -1253,7 +1292,7 @@ const styles = StyleSheet.create({
   },
   dropdownBackdrop: {
     backgroundColor: 'transparent',
-    zIndex: 9998,
+    zIndex: 99990,
   },
   mobileNavStrip: {
     backgroundColor: '#ffffff',
@@ -1266,6 +1305,8 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     gap: 6,
     width: '100%',
+    position: 'relative',
+    zIndex: 1,
   },
   mobileNavStripDark: {
     backgroundColor: '#0f172a',
@@ -1308,13 +1349,14 @@ const styles = StyleSheet.create({
   /* NOTIFICATION CENTER STYLES */
   notiWrapper: {
     position: 'relative',
-    zIndex: 1005,
+    zIndex: 2000,
   },
   notiDropdown: {
     position: 'absolute',
-    top: 48,
+    top: 42,
     right: 0,
     width: 340,
+    maxWidth: '92vw',
     backgroundColor: '#ffffff',
     borderRadius: 16,
     borderWidth: 1,
@@ -1322,10 +1364,10 @@ const styles = StyleSheet.create({
     padding: 10,
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.14,
-    shadowRadius: 20,
-    elevation: 16,
-    zIndex: 9999,
+    shadowOpacity: 0.15,
+    shadowRadius: 24,
+    elevation: 24,
+    zIndex: 99999,
   },
   notiHeader: {
     flexDirection: 'row',

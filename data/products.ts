@@ -79,15 +79,15 @@ const PRODUCT_IMAGE_OVERRIDES: Record<string, string> = {
   'pc-game-013': 'https://os-jo.com/image/cache/catalog/GAMING-PCS/2024/101-1200x630.jpg',
   'pc-game-014': 'https://m.media-amazon.com/images/I/61aFfHFiYSL._AC_SL1500_.jpg',
   'pc-game-015': 'https://m.media-amazon.com/images/I/81c56LXZFPL._AC_SL1500_.jpg',
-  'pc-game-016': 'https://m.media-amazon.com/images/I/71pT1aoLWvL._AC_SL1500_.jpg',
-  'pc-game-017': 'https://m.media-amazon.com/images/I/81Uq5wTC1qL._AC_SL1500_.jpg',
+  'pc-game-016': 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=1000&q=80',
+  'pc-game-017': 'https://images.unsplash.com/photo-1593642702821-c8da6771f0c6?auto=format&fit=crop&w=1000&q=80',
   'pc-game-018': 'https://m.media-amazon.com/images/I/71ySV0CMJJL._AC_SL1500_.jpg',
   'pc-game-019': 'https://m.media-amazon.com/images/I/81sESJbMVUL._AC_SL1500_.jpg',
-  'pc-game-020': 'https://m.media-amazon.com/images/I/618KFfH4LnL._AC_SL1500_.jpg',
-  'pc-game-021': 'https://m.media-amazon.com/images/I/81+J4t3CGGL._AC_SL1500_.jpg',
+  'pc-game-020': 'https://images.unsplash.com/photo-1593640408182-31c70c8268f5?auto=format&fit=crop&w=1000&q=80',
+  'pc-game-021': 'https://images.unsplash.com/photo-1547082299-de196ea013d6?auto=format&fit=crop&w=1000&q=80',
 
   // ===== PC Văn Phòng =====
-  'pc-off-003': 'https://m.media-amazon.com/images/I/71CJZa0iMCL._AC_SL1500_.jpg',
+  'pc-off-003': 'https://images.unsplash.com/photo-1517059224940-d4af9eec41b7?auto=format&fit=crop&w=1000&q=80',
   'pc-off-004': 'https://m.media-amazon.com/images/I/61YFO1F9Y9L._AC_SL1500_.jpg',
   'pc-off-005': 'https://m.media-amazon.com/images/I/61yq1BmN1HL._AC_SL1500_.jpg',
   'pc-off-006': 'https://m.media-amazon.com/images/I/61DP+VvVUCL._AC_SL1500_.jpg',
@@ -142,7 +142,7 @@ const PRODUCT_IMAGE_OVERRIDES: Record<string, string> = {
   'kb-016': 'https://m.media-amazon.com/images/I/71oSn7S3SQL._AC_SL1500_.jpg',
   'kb-017': 'https://m.media-amazon.com/images/I/71rQ4HQSTRL._AC_SL1500_.jpg',
   'kb-018': 'https://m.media-amazon.com/images/I/61mRPWQzZ3L._AC_SL1500_.jpg',
-  'kb-019': 'https://m.media-amazon.com/images/I/51u8dM+p0kL._AC_SL1500_.jpg',
+  'kb-019': 'https://images.unsplash.com/photo-1511467687858-23d96c32e4ae?auto=format&fit=crop&w=1000&q=80',
   'kb-020': 'https://dlcdnwebimgs.asus.com/gain/0D95E0B3-2B6E-4C5A-96A6-6E5ECF26D5A0/w1000/h732',
   'kb-021': 'https://store.storeimages.cdn-apple.com/4982/as-images.apple.com/is/MK2C3?wid=1144&hei=1144&fmt=jpeg&qlt=90',
 
@@ -753,9 +753,15 @@ function getProductImageCategory(product: { name?: string; category?: string; ca
 }
 
 export function isInvalidOrBlockedImageUrl(url?: string): boolean {
-  if (!url || typeof url !== 'string' || !url.startsWith('http')) return true;
+  if (!url || typeof url !== 'string') return true;
+  // Cho phép ảnh tải lên trực tiếp từ thiết bị (Base64 Data URL, Blob, hoặc thư mục /uploads của máy chủ)
+  if (url.startsWith('data:image/') || url.startsWith('blob:') || url.startsWith('/uploads/') || url.includes('/uploads/')) {
+    return false;
+  }
+  if (!url.startsWith('http')) return true;
   const lower = url.toLowerCase();
   return (
+    (lower.includes('media-amazon.com') && url.includes('+')) ||
     lower.includes('cdn.tgdd.vn') ||
     lower.includes('laptop360.net') ||
     lower.includes('picsum.photos') ||

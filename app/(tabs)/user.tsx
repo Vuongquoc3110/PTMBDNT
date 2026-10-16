@@ -70,12 +70,17 @@ export default function UserTabScreen() {
     }
   }, [user]);
 
-  // Load orders
+  // Load orders (Chỉ tải khi người dùng đã đăng nhập, khách vãng lai không có đơn hàng)
   useEffect(() => {
     let isMounted = true;
+    if (!user?.id) {
+      setOrders([]);
+      setLoadingOrders(false);
+      return;
+    }
     setLoadingOrders(true);
     apiService
-      .getOrders(user?.id)
+      .getOrders(user.id)
       .then((data) => {
         if (isMounted) {
           setOrders(data || []);
@@ -335,7 +340,13 @@ export default function UserTabScreen() {
       {!canManage ? (
         <Pressable
           style={[styles.navItem, currentTab === 'orders' && styles.navItemActive]}
-          onPress={() => setCurrentTab('orders')}
+          onPress={() => {
+            if (!user) {
+              router.push('/login' as any);
+            } else {
+              setCurrentTab('orders');
+            }
+          }}
         >
           <Ionicons
             name={currentTab === 'orders' ? 'bag-handle' : 'bag-handle-outline'}
@@ -361,7 +372,13 @@ export default function UserTabScreen() {
 
       <Pressable
         style={[styles.navItem, currentTab === 'warranty' && styles.navItemActive]}
-        onPress={() => setCurrentTab('warranty')}
+        onPress={() => {
+          if (!user) {
+            router.push('/login' as any);
+          } else {
+            setCurrentTab('warranty');
+          }
+        }}
       >
         <Ionicons
           name={currentTab === 'warranty' ? 'shield-checkmark' : 'shield-checkmark-outline'}
@@ -376,7 +393,13 @@ export default function UserTabScreen() {
 
       <Pressable
         style={[styles.navItem, currentTab === 'profile' && styles.navItemActive]}
-        onPress={() => setCurrentTab('profile')}
+        onPress={() => {
+          if (!user) {
+            router.push('/login' as any);
+          } else {
+            setCurrentTab('profile');
+          }
+        }}
       >
         <Ionicons
           name={currentTab === 'profile' ? 'person' : 'person-outline'}
@@ -508,14 +531,22 @@ export default function UserTabScreen() {
       {!canManage && (
         <Pressable
           style={styles.summaryCard}
-          onPress={() => setCurrentTab('orders')}
+          onPress={() => {
+            if (!user) {
+              router.push('/login' as any);
+            } else {
+              setCurrentTab('orders');
+            }
+          }}
         >
           <View style={[styles.summaryIcon, { backgroundColor: '#fee2e2' }]}>
             <Ionicons name="bag-handle" size={20} color="#dc2626" />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.summaryTitle}>Đơn hàng đã đặt</Text>
-            <Text style={styles.summaryValue}>{orders.length} đơn</Text>
+            <Text style={styles.summaryValue}>
+              {user ? `${orders.length} đơn` : 'Đăng nhập để xem'}
+            </Text>
           </View>
           <Ionicons name="chevron-forward" size={16} color="#94a3b8" />
         </Pressable>
@@ -523,7 +554,13 @@ export default function UserTabScreen() {
 
       <Pressable
         style={styles.summaryCard}
-        onPress={() => setCurrentTab('warranty')}
+        onPress={() => {
+          if (!user) {
+            router.push('/login' as any);
+          } else {
+            setCurrentTab('warranty');
+          }
+        }}
       >
         <View style={[styles.summaryIcon, { backgroundColor: '#fef3c7' }]}>
           <Ionicons name="shield-checkmark" size={20} color="#d97706" />
@@ -531,7 +568,7 @@ export default function UserTabScreen() {
         <View style={{ flex: 1 }}>
           <Text style={styles.summaryTitle}>Yêu cầu bảo hành</Text>
           <Text style={styles.summaryValue}>
-            {warrantyOrders.length > 0 ? `${warrantyOrders.length} yêu cầu` : '0 yêu cầu'}
+            {user ? (warrantyOrders.length > 0 ? `${warrantyOrders.length} yêu cầu` : '0 yêu cầu') : 'Đăng nhập để xem'}
           </Text>
         </View>
         <Ionicons name="chevron-forward" size={16} color="#94a3b8" />
@@ -539,22 +576,51 @@ export default function UserTabScreen() {
 
       <Pressable
         style={styles.summaryCard}
-        onPress={() => setCurrentTab('profile')}
+        onPress={() => {
+          if (!user) {
+            router.push('/login' as any);
+          } else {
+            setCurrentTab('profile');
+          }
+        }}
       >
         <View style={[styles.summaryIcon, { backgroundColor: '#e0f2fe' }]}>
           <Ionicons name="person" size={20} color="#0284c7" />
         </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.summaryTitle}>Thông tin tài khoản</Text>
-          <Text style={styles.summaryValue}>Đã cập nhật</Text>
+          <Text style={styles.summaryValue}>{user ? 'Đã cập nhật' : 'Chưa đăng nhập'}</Text>
         </View>
         <Ionicons name="chevron-forward" size={16} color="#94a3b8" />
       </Pressable>
     </View>
   );
 
-  const renderOrdersTab = () => (
-    <View style={styles.tabCard}>
+  const renderOrdersTab = () => {
+    if (!user) {
+      return (
+        <View style={[styles.tabCard, { alignItems: 'center', paddingVertical: 48, paddingHorizontal: 20 }]}>
+          <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: '#eff6ff', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+            <Ionicons name="bag-handle-outline" size={36} color="#2563eb" />
+          </View>
+          <Text style={[styles.tabCardTitle, isDark && styles.textDark, { textAlign: 'center', marginBottom: 8 }]}>
+            Bạn chưa đăng nhập
+          </Text>
+          <Text style={{ fontSize: 13, color: isDark ? '#94a3b8' : '#64748b', textAlign: 'center', maxWidth: 360, lineHeight: 20, marginBottom: 20 }}>
+            Khách vãng lai chỉ có thể xem sản phẩm. Vui lòng đăng nhập tài khoản để đặt hàng và theo dõi đơn hàng của bạn.
+          </Text>
+          <Pressable
+            style={{ backgroundColor: '#2563eb', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 10 }}
+            onPress={() => router.push('/login' as any)}
+          >
+            <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 14 }}>Đăng nhập ngay</Text>
+          </Pressable>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.tabCard}>
       {/* TOP HEADER & SEARCH */}
       <View style={[styles.tabCardHeader, !isDesktop && { flexDirection: 'column', alignItems: 'flex-start', gap: 12 }]}>
         <Text style={styles.tabCardTitle}>Đơn hàng của tôi</Text>
@@ -685,9 +751,33 @@ export default function UserTabScreen() {
       )}
     </View>
   );
+};
 
-  const renderWarrantyTab = () => (
-    <View style={styles.tabCard}>
+  const renderWarrantyTab = () => {
+    if (!user) {
+      return (
+        <View style={[styles.tabCard, { alignItems: 'center', paddingVertical: 48, paddingHorizontal: 20 }]}>
+          <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: '#fef3c7', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+            <Ionicons name="shield-checkmark-outline" size={36} color="#d97706" />
+          </View>
+          <Text style={[styles.tabCardTitle, isDark && styles.textDark, { textAlign: 'center', marginBottom: 8 }]}>
+            Yêu cầu đăng nhập
+          </Text>
+          <Text style={{ fontSize: 13, color: isDark ? '#94a3b8' : '#64748b', textAlign: 'center', maxWidth: 360, lineHeight: 20, marginBottom: 20 }}>
+            Vui lòng đăng nhập tài khoản để gửi yêu cầu và theo dõi tiến độ bảo hành, đổi trả sản phẩm.
+          </Text>
+          <Pressable
+            style={{ backgroundColor: '#2563eb', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 10 }}
+            onPress={() => router.push('/login' as any)}
+          >
+            <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 14 }}>Đăng nhập ngay</Text>
+          </Pressable>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.tabCard}>
       <View style={styles.tabCardHeader}>
         <View>
           <Text style={styles.tabCardTitle}>Yêu cầu bảo hành & Đổi trả</Text>
@@ -841,9 +931,33 @@ export default function UserTabScreen() {
       </View>
     </View>
   );
+};
 
-  const renderProfileTab = () => (
-    <View style={styles.tabCard}>
+  const renderProfileTab = () => {
+    if (!user) {
+      return (
+        <View style={[styles.tabCard, { alignItems: 'center', paddingVertical: 48, paddingHorizontal: 20 }]}>
+          <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: '#e0f2fe', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+            <Ionicons name="person-outline" size={36} color="#0284c7" />
+          </View>
+          <Text style={[styles.tabCardTitle, isDark && styles.textDark, { textAlign: 'center', marginBottom: 8 }]}>
+            Thông tin tài khoản
+          </Text>
+          <Text style={{ fontSize: 13, color: isDark ? '#94a3b8' : '#64748b', textAlign: 'center', maxWidth: 360, lineHeight: 20, marginBottom: 20 }}>
+            Bạn đang truy cập dưới danh nghĩa Khách vãng lai. Vui lòng đăng nhập để cập nhật hồ sơ và nhận ưu đãi độc quyền.
+          </Text>
+          <Pressable
+            style={{ backgroundColor: '#2563eb', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 10 }}
+            onPress={() => router.push('/login' as any)}
+          >
+            <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 14 }}>Đăng nhập ngay</Text>
+          </Pressable>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.tabCard}>
       <Text style={styles.tabCardTitle}>Thông tin cá nhân</Text>
       <Text style={styles.tabCardSubtitle}>Quản lý thông tin hồ sơ để bảo mật tài khoản và giao nhận hàng thuận tiện.</Text>
 
@@ -922,6 +1036,7 @@ export default function UserTabScreen() {
       </View>
     </View>
   );
+};
 
   return (
     <View style={[styles.page, isDark && styles.pageDark]}>
@@ -1554,6 +1669,12 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#0f172a',
     letterSpacing: -0.3,
+  },
+  textDark: {
+    color: '#f8fafc',
+  },
+  textMutedDark: {
+    color: '#94a3b8',
   },
   tabCardSubtitle: {
     fontSize: 13,

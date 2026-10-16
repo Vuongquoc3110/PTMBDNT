@@ -26,6 +26,8 @@ interface WarrantyItem {
   category: string;
   serialNumber: string;
   purchaseDate: string;
+  expiryDate?: string;
+  warrantyRange?: string;
   warrantyPeriod: string;
   status: 'valid' | 'expiring' | 'expired';
   remainingDays: number;
@@ -91,10 +93,12 @@ const MOCK_WARRANTY_DATA: Record<string, WarrantyItem[]> = {
       name: 'Pro Gaming Laptop X15 (RTX 4070 / i7-13700H)',
       category: 'Laptop',
       serialNumber: 'SN-LAP-X15-99281',
-      purchaseDate: '15/01/2026',
+      purchaseDate: '01/10/2026',
+      expiryDate: '01/10/2028',
+      warrantyRange: '01/10/2026 đến 01/10/2028',
       warrantyPeriod: '24 tháng',
       status: 'valid',
-      remainingDays: 650,
+      remainingDays: 715,
       showroom: '191 Nguyễn Thị Duệ, TP. Hải Dương',
     },
     {
@@ -103,6 +107,8 @@ const MOCK_WARRANTY_DATA: Record<string, WarrantyItem[]> = {
       category: 'Màn hình',
       serialNumber: 'SN-MON-27U-10294',
       purchaseDate: '10/02/2026',
+      expiryDate: '10/02/2029',
+      warrantyRange: '10/02/2026 đến 10/02/2029',
       warrantyPeriod: '36 tháng',
       status: 'valid',
       remainingDays: 1040,
@@ -116,6 +122,8 @@ const MOCK_WARRANTY_DATA: Record<string, WarrantyItem[]> = {
       category: 'Linh kiện',
       serialNumber: 'SN-VGA-ROG-4080-88',
       purchaseDate: '20/12/2025',
+      expiryDate: '20/12/2028',
+      warrantyRange: '20/12/2025 đến 20/12/2028',
       warrantyPeriod: '36 tháng',
       status: 'valid',
       remainingDays: 980,
@@ -215,6 +223,7 @@ const WARRANTY_CATEGORIES = [
 export default function WarrantyScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
+  const isMobile = width < 768;
   const { user, isDark } = useAppContext();
 
   // Search input & lookup state
@@ -286,38 +295,63 @@ export default function WarrantyScreen() {
         const matchAddressOrName = address.includes(cleanQuery);
         const matchItems = order.items?.some((it) => it.name?.toLowerCase().includes(cleanQuery));
 
-        if (matchOrderCode || matchPhone || matchAddressOrName || matchItems) {
+        // Khớp mã Serial Number (ví dụ: SN-DPC-7088214-1 hoặc serial nhập riêng)
+        const rawDigits = (order.orderNumber || String(order.id)).replace(/[^0-9]/g, '');
+        const matchSerial = (order.items || []).some((it: any, idx: number) => {
+          const sn = (it.serialNumber || `SN-DPC-${rawDigits.slice(-8) || order.id}-${idx + 1}`).toLowerCase();
+          return sn.includes(cleanQuery) || cleanQuery.includes(sn);
+        });
+
+        if (matchOrderCode || matchPhone || matchAddressOrName || matchItems || matchSerial) {
           const orderDate = order.createdAt ? new Date(order.createdAt) : new Date();
-          const purchaseDateStr = orderDate.toLocaleDateString('vi-VN');
-
-          // Mặc định bảo hành 36 tháng đối với linh kiện DANGVINHPC
-          const expiryDate = new Date(orderDate);
-          expiryDate.setFullYear(expiryDate.getFullYear() + 3);
-          const diffMs = expiryDate.getTime() - new Date().getTime();
-          const remainingDays = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
-
           const phoneOnOrder = address.match(/0[0-9]{8,10}/)?.[0];
 
           (order.items || []).forEach((prodItem, idx) => {
             const nameLower = (prodItem.name || '').toLowerCase();
             let cat = 'Linh kiện PC';
-            let period = '36 Tháng';
-            if (nameLower.includes('laptop') || nameLower.includes('macbook')) {
-              cat = 'Laptop';
-              period = '24 Tháng';
-            } else if (nameLower.includes('màn hình') || nameLower.includes('monitor')) {
-              cat = 'Màn hình';
-              period = '36 Tháng';
-            } else if (nameLower.includes('rtx') || nameLower.includes('vga') || nameLower.includes('card')) {
-              cat = 'VGA / Card đồ họa';
-              period = '36 Tháng';
-            } else if (nameLower.includes('cpu') || nameLower.includes('ram') || nameLower.includes('ssd') || nameLower.includes('mainboard')) {
-              cat = 'Linh kiện máy tính';
-              period = '36 Tháng';
-            } else if (nameLower.includes('chuột') || nameLower.includes('bàn phím') || nameLower.includes('tai nghe')) {
-              cat = 'Gaming Gear';
-              period = '24 Tháng';
+            let months = prodItem.warrantyMonths || 36;
+            let period = `${months} Tháng`;
+
+            if (!prodItem.warrantyMonths) {
+              if (nameLower.includes('laptop') || nameLower.includes('macbook')) {
+                cat = 'Laptop & Máy tính xách tay';
+                period = '24 Tháng';
+                months = 24;
+              } else if (nameLower.includes('màn hình') || nameLower.includes('monitor')) {
+                cat = 'Màn hình Gaming';
+                period = '36 Tháng';
+                months = 36;
+              } else if (nameLower.includes('rtx') || nameLower.includes('vga') || nameLower.includes('card')) {
+                cat = 'VGA / Card đồ họa';
+                period = '36 Tháng';
+                months = 36;
+              } else if (nameLower.includes('cpu') || nameLower.includes('ram') || nameLower.includes('ssd') || nameLower.includes('mainboard') || nameLower.includes('pc')) {
+                cat = 'Linh kiện máy tính';
+                period = '36 Tháng';
+                months = 36;
+              } else if (nameLower.includes('chuột') || nameLower.includes('bàn phím') || nameLower.includes('tai nghe')) {
+                cat = 'Gaming Gear';
+                period = '12 Tháng';
+                months = 12;
+              }
+            } else {
+              period = `${months} Tháng`;
+              if (nameLower.includes('laptop') || nameLower.includes('macbook')) cat = 'Laptop & Máy tính xách tay';
+              else if (nameLower.includes('màn hình')) cat = 'Màn hình Gaming';
             }
+
+            const itemExpiryDate = new Date(orderDate);
+            itemExpiryDate.setMonth(itemExpiryDate.getMonth() + months);
+
+            const pad = (n: number) => String(n).padStart(2, '0');
+            const formatD = (d: Date) => `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+
+            const itemPurchaseStr = prodItem.purchaseDate || formatD(orderDate);
+            const itemExpiryStr = prodItem.warrantyExpiry || formatD(itemExpiryDate);
+            const itemWarrantyRange = prodItem.warrantyRange || `${itemPurchaseStr} đến ${itemExpiryStr}`;
+
+            const diffMs = itemExpiryDate.getTime() - Date.now();
+            const remainingDays = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
 
             const rawDigits = (order.orderNumber || String(order.id)).replace(/[^0-9]/g, '');
             const serialNumber = `SN-DPC-${rawDigits.slice(-8) || order.id}-${idx + 1}`;
@@ -327,7 +361,9 @@ export default function WarrantyScreen() {
               name: prodItem.name,
               category: cat,
               serialNumber,
-              purchaseDate: purchaseDateStr,
+              purchaseDate: itemPurchaseStr,
+              expiryDate: itemExpiryStr,
+              warrantyRange: itemWarrantyRange,
               warrantyPeriod: period,
               status: remainingDays > 0 ? 'valid' : 'expired',
               remainingDays,
@@ -398,13 +434,13 @@ export default function WarrantyScreen() {
         </View>
 
         {/* ==================== HERO SECTION BANNER ==================== */}
-        <View style={StyleSheet.flatten([styles.heroCard, isDark ? styles.heroCardDark : null])}>
+        <View style={StyleSheet.flatten([styles.heroCard, isMobile ? styles.heroCardMobile : null, isDark ? styles.heroCardDark : null])}>
           <View style={styles.heroTextContent}>
             <View style={styles.heroBadge}>
               <Ionicons name="shield-checkmark" size={15} color="#2563eb" style={{ marginRight: 6 }} />
               <Text style={styles.heroBadgeText}>DANGVINHPC CARE & WARRANTY</Text>
             </View>
-            <Text style={StyleSheet.flatten([styles.heroTitle, isDark ? styles.textDark : null])}>
+            <Text style={StyleSheet.flatten([styles.heroTitle, isMobile ? styles.heroTitleMobile : null, isDark ? styles.textDark : null])}>
               CHÍNH SÁCH BẢO HÀNH CHÍNH HÃNG
             </Text>
             <Text style={StyleSheet.flatten([styles.heroSubtitle, isDark ? styles.textMutedDark : null])}>
@@ -433,16 +469,16 @@ export default function WarrantyScreen() {
         </View>
 
         {/* ==================== TOOL TRA CỨU BẢO HÀNH ONLINE ==================== */}
-        <View style={StyleSheet.flatten([styles.lookupCard, isDark ? styles.lookupCardDark : null])}>
+        <View style={StyleSheet.flatten([styles.lookupCard, isMobile ? styles.lookupCardMobile : null, isDark ? styles.lookupCardDark : null])}>
           <View style={styles.lookupHeader}>
             <View style={styles.lookupIconWrap}>
               <Ionicons name="search" size={20} color="#2563eb" />
             </View>
-            <View>
-              <Text style={StyleSheet.flatten([styles.lookupTitle, isDark ? styles.textDark : null])}>
+            <View style={styles.lookupHeaderTextWrap}>
+              <Text style={StyleSheet.flatten([styles.lookupTitle, isMobile ? styles.lookupTitleMobile : null, isDark ? styles.textDark : null])}>
                 TRA CỨU THÔNG TIN BẢO HÀNH TRỰC TUYẾN
               </Text>
-              <Text style={StyleSheet.flatten([styles.lookupSub, isDark ? styles.textMutedDark : null])}>
+              <Text style={StyleSheet.flatten([styles.lookupSub, isMobile ? styles.lookupSubMobile : null, isDark ? styles.textMutedDark : null])}>
                 Nhập số điện thoại mua hàng, số Serial Number hoặc mã đơn hàng để kiểm tra thời hạn
               </Text>
             </View>
@@ -644,19 +680,63 @@ export default function WarrantyScreen() {
                         </View>
                       ) : null}
 
+                      {/* BANNER THỜI HẠN BẢO HÀNH DỰ KIẾN */}
+                      <View
+                        style={{
+                          backgroundColor: isDark ? '#1e293b' : '#f0fdf4',
+                          borderWidth: 1,
+                          borderColor: isDark ? '#334155' : '#bbf7d0',
+                          borderRadius: 10,
+                          padding: 10,
+                          marginHorizontal: 14,
+                          marginBottom: 10,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          flexWrap: 'wrap',
+                          gap: 8,
+                        }}
+                      >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: '#dcfce7', alignItems: 'center', justifyContent: 'center' }}>
+                            <Ionicons name="shield-checkmark" size={16} color="#16a34a" />
+                          </View>
+                          <View>
+                            <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>
+                              Thời hạn bảo hành dự kiến
+                            </Text>
+                            <Text style={{ fontSize: 13, fontWeight: '800', color: isDark ? '#4ade80' : '#15803d' }}>
+                              {item.warrantyRange || `${item.purchaseDate} đến ${item.expiryDate || 'N/A'}`}
+                            </Text>
+                          </View>
+                        </View>
+                        <View
+                          style={{
+                            backgroundColor: item.remainingDays > 0 ? '#16a34a' : '#dc2626',
+                            paddingHorizontal: 10,
+                            paddingVertical: 4,
+                            borderRadius: 20,
+                          }}
+                        >
+                          <Text style={{ fontSize: 12, fontWeight: '800', color: '#ffffff' }}>
+                            {item.remainingDays > 0 ? `Còn ${item.remainingDays} ngày` : 'Hết hạn bảo hành'}
+                          </Text>
+                        </View>
+                      </View>
+
                       <View style={styles.resultItemBottom}>
                         <View style={styles.infoCol}>
-                          <Text style={styles.infoLabel}>Ngày mua hàng</Text>
+                          <Text style={styles.infoLabel}>Ngày mua máy</Text>
                           <Text style={StyleSheet.flatten([styles.infoValue, isDark ? styles.textDark : null])}>{item.purchaseDate}</Text>
                         </View>
                         <View style={styles.infoCol}>
-                          <Text style={styles.infoLabel}>Thời hạn bảo hành</Text>
+                          <Text style={styles.infoLabel}>Gói bảo hành</Text>
                           <Text style={StyleSheet.flatten([styles.infoValue, isDark ? styles.textDark : null])}>{item.warrantyPeriod}</Text>
                         </View>
                         <View style={styles.infoCol}>
-                          <Text style={styles.infoLabel}>Thời gian còn lại</Text>
-                          <Text style={{ fontSize: 13, color: '#2563eb', fontWeight: '800' }}>
-                            {item.remainingDays} ngày
+                          <Text style={styles.infoLabel}>Hạn đến ngày</Text>
+                          <Text style={{ fontSize: 13, color: '#0284c7', fontWeight: '800' }}>
+                            {item.expiryDate || 'Chính hãng'}
                           </Text>
                         </View>
                         <View style={styles.infoColWide}>
@@ -789,7 +869,7 @@ export default function WarrantyScreen() {
         </ScrollView>
 
         {/* Selected Category Policy Content */}
-        <View style={StyleSheet.flatten([styles.policyDetailCard, isDark ? styles.cardDark : null])}>
+        <View style={StyleSheet.flatten([styles.policyDetailCard, isMobile ? styles.policyDetailCardMobile : null, isDark ? styles.cardDark : null])}>
           <View style={styles.policyHeader}>
             <View style={{ flex: 1 }}>
               <View style={styles.policyBadgeRow}>
@@ -907,7 +987,7 @@ export default function WarrantyScreen() {
         </View>
 
         {/* ==================== TRUNG TÂM TIẾP NHẬN BẢO HÀNH ==================== */}
-        <View style={StyleSheet.flatten([styles.centerCard, isDark ? styles.cardDark : null])}>
+        <View style={StyleSheet.flatten([styles.centerCard, isMobile ? styles.centerCardMobile : null, isDark ? styles.cardDark : null])}>
           <Text style={StyleSheet.flatten([styles.centerCardTitle, isDark ? styles.textDark : null])}>
             ĐỊA ĐIỂM TIẾP NHẬN BẢO HÀNH DANGVINHPC
           </Text>
@@ -1058,6 +1138,11 @@ const styles = StyleSheet.create({
     borderColor: '#dbeafe',
     padding: 28,
   },
+  heroCardMobile: {
+    marginHorizontal: 12,
+    padding: 16,
+    borderRadius: 16,
+  },
   heroCardDark: {
     backgroundColor: '#1e293b',
     borderColor: '#334155',
@@ -1089,6 +1174,11 @@ const styles = StyleSheet.create({
     color: '#0f172a',
     letterSpacing: -0.5,
     marginBottom: 10,
+  },
+  heroTitleMobile: {
+    fontSize: 20,
+    lineHeight: 26,
+    letterSpacing: -0.3,
   },
   heroSubtitle: {
     fontSize: 14,
@@ -1142,15 +1232,20 @@ const styles = StyleSheet.create({
     borderColor: '#bfdbfe',
     padding: 24,
   },
+  lookupCardMobile: {
+    marginHorizontal: 12,
+    padding: 16,
+    borderRadius: 16,
+  },
   lookupCardDark: {
     backgroundColor: '#1e293b',
     borderColor: '#3b82f6',
   },
   lookupHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    marginBottom: 18,
+    alignItems: 'flex-start',
+    gap: 12,
+    marginBottom: 16,
   },
   lookupIconWrap: {
     width: 44,
@@ -1159,16 +1254,31 @@ const styles = StyleSheet.create({
     backgroundColor: '#eff6ff',
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
+  },
+  lookupHeaderTextWrap: {
+    flex: 1,
+    minWidth: 0,
   },
   lookupTitle: {
     fontSize: 18,
     fontWeight: '800',
     color: '#0f172a',
+    lineHeight: 24,
+  },
+  lookupTitleMobile: {
+    fontSize: 15,
+    lineHeight: 21,
   },
   lookupSub: {
     fontSize: 13,
     color: '#64748b',
-    marginTop: 2,
+    marginTop: 3,
+    lineHeight: 18,
+  },
+  lookupSubMobile: {
+    fontSize: 12,
+    lineHeight: 16,
   },
   searchBarRow: {
     flexDirection: 'row',
@@ -1178,7 +1288,7 @@ const styles = StyleSheet.create({
   },
   inputBox: {
     flex: 1,
-    minWidth: 280,
+    minWidth: 220,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#f8fafc',
@@ -1478,6 +1588,11 @@ const styles = StyleSheet.create({
     padding: 24,
     marginBottom: 36,
   },
+  policyDetailCardMobile: {
+    marginHorizontal: 12,
+    padding: 16,
+    borderRadius: 16,
+  },
   policyHeader: {
     marginBottom: 18,
     borderBottomWidth: 1,
@@ -1639,6 +1754,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e2e8f0',
     padding: 24,
+  },
+  centerCardMobile: {
+    marginHorizontal: 12,
+    padding: 16,
+    borderRadius: 16,
   },
   centerCardTitle: {
     fontSize: 18,

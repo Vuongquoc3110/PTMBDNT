@@ -23,7 +23,7 @@ const FILTERS: { id: Filter; label: string; color: string }[] = [
 ];
 
 const QUICK_REPLIES = [
-  'Chào bạn, mình là nhân viên DANGVINHPC. Mình có thể giúp gì cho bạn ạ?',
+  'Chào bạn, mình là nhân viên tư vấn DANGVINHPC. Mình có thể giúp gì cho bạn ạ?',
   'Bạn vui lòng cho mình xin mã đơn hàng / số điện thoại đặt hàng để kiểm tra nhé.',
   'Sản phẩm này hiện còn hàng, bạn có thể đặt ngay trên website ạ.',
   'Cảm ơn bạn đã liên hệ! Nếu cần hỗ trợ thêm, bạn cứ nhắn tại đây nhé.',
@@ -172,7 +172,7 @@ export function AdminSupportPanel({ isDark, isDesktop, searchTerm = '', showToas
         <View style={{ flex: 1 }}>
           <Text style={[styles.title, c.text]}>Tin nhắn hỗ trợ khách hàng</Text>
           <Text style={[styles.subtitle, c.muted]}>
-            Các câu hỏi chatbot không trả lời được sẽ được chuyển về đây để Admin phản hồi trực tiếp
+            Các câu hỏi chatbot không trả lời được sẽ được chuyển về đây để Nhân viên / Admin phản hồi trực tiếp
           </Text>
         </View>
         <Pressable style={[styles.refreshBtn, c.chip]} onPress={() => { loadTickets(); loadSelected(); }}>
@@ -246,7 +246,7 @@ export function AdminSupportPanel({ isDark, isDesktop, searchTerm = '', showToas
                           <Text style={[styles.ticketTime, c.muted]}>{timeAgo(t.updatedAt)}</Text>
                         </View>
                         <Text numberOfLines={1} style={[styles.ticketPreview, c.muted, unread > 0 && c.text]}>
-                          {t.lastSender === 'admin' ? 'Bạn: ' : ''}
+                          {t.lastSender === 'admin' || t.lastSender === 'staff' ? 'Bạn: ' : ''}
                           {t.lastMessage || '...'}
                         </Text>
                         <View style={styles.rowBottom}>
@@ -318,12 +318,12 @@ export function AdminSupportPanel({ isDark, isDesktop, searchTerm = '', showToas
                   onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
                 >
                   {(selected.messages || []).map((m) => {
-                    const isAdminMsg = m.sender === 'admin';
+                    const isAdminMsg = m.sender === 'admin' || m.sender === 'staff';
                     const isBot = m.sender === 'bot';
                     return (
                       <View key={m.id} style={[styles.msgGroup, isAdminMsg && { alignSelf: 'flex-end', alignItems: 'flex-end' }]}>
                         <Text style={[styles.msgMeta, c.muted]}>
-                          {isAdminMsg ? 'Admin' : isBot ? '🤖 Chatbot' : selected.customerName || 'Khách'} •{' '}
+                          {isAdminMsg ? 'Nhân viên hỗ trợ' : isBot ? '🤖 Chatbot' : selected.customerName || 'Khách'} •{' '}
                           {new Date(m.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
                         </Text>
                         <View

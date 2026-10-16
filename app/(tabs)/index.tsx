@@ -138,12 +138,20 @@ export default function HomeScreen() {
 
 		// 3. Sản phẩm mới: Tuyệt đối KHÔNG TRÙNG với Flash Sale VÀ Nổi Bật!
 		const newCandidates = products.filter(
-			(p: any) => !flashSaleIds.has(p.id) && !featuredIds.has(p.id) && p.isNew
+			(p: any) => p.id?.startsWith('prod-') || (!flashSaleIds.has(p.id) && !featuredIds.has(p.id) && p.isNew)
 		);
 		const newPool = newCandidates.length >= 8
 			? newCandidates
-			: products.filter((p: any) => !flashSaleIds.has(p.id) && !featuredIds.has(p.id));
-		const arrivals = seededShuffle(newPool, todaySeed + 202).slice(0, 8);
+			: products.filter((p: any) => p.id?.startsWith('prod-') || (!flashSaleIds.has(p.id) && !featuredIds.has(p.id)));
+		const arrivals = [...newPool].sort((a: any, b: any) => {
+				const isCustomA = a.id?.startsWith('prod-') ? 1 : 0;
+				const isCustomB = b.id?.startsWith('prod-') ? 1 : 0;
+				if (isCustomA !== isCustomB) return isCustomB - isCustomA;
+				const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+				const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+				if (timeA !== timeB) return timeB - timeA;
+				return (b.isNew ? 1 : 0) - (a.isNew ? 1 : 0);
+			}).slice(0, 8);
 
 		return {
 			flashSaleProducts: flashSale,
@@ -201,7 +209,7 @@ export default function HomeScreen() {
 
 						{/* PRODUCTS GRID */}
 						{filteredProducts.length > 0 ? (
-							<View style={styles.gridList}>
+							<View style={styles.gridContainer}>
 								{filteredProducts.map((product) => (
 									<View key={product.id} style={isDesktop ? styles.gridItemDesktop : styles.gridItemMobile}>
 										<ProductCard product={product} />
@@ -271,7 +279,7 @@ export default function HomeScreen() {
 							<FlashSaleCountdown />
 						</View>
 
-						<View style={styles.gridList}>
+						<View style={styles.gridContainer}>
 							{flashSaleProducts.map((product) => (
 								<View key={product.id} style={isDesktop ? styles.gridItemDesktop : styles.gridItemMobile}>
 									<ProductCard product={product} />
@@ -285,7 +293,7 @@ export default function HomeScreen() {
 							<Pressable onPress={() => router.push('/products' as any)}><Text style={styles.sectionLink}>Xem tất cả</Text></Pressable>
 						</View>
 
-						<View style={styles.gridList}>
+						<View style={styles.gridContainer}>
 							{featuredProducts.map((product) => (
 								<View key={product.id} style={isDesktop ? styles.gridItemDesktop : styles.gridItemMobile}>
 									<ProductCard product={product} />
@@ -299,7 +307,7 @@ export default function HomeScreen() {
 							<Pressable onPress={() => router.push('/products' as any)}><Text style={styles.sectionLink}>Xem tất cả</Text></Pressable>
 						</View>
 
-						<View style={styles.gridList}>
+						<View style={styles.gridContainer}>
 							{newArrivals.map((product) => (
 								<View key={product.id} style={isDesktop ? styles.gridItemDesktop : styles.gridItemMobile}>
 									<ProductCard product={product} />
@@ -434,7 +442,8 @@ const styles = StyleSheet.create({
 		paddingBottom: 4,
 	},
 	promoStripMobile: {
-		paddingHorizontal: 4,
+		paddingHorizontal: 2,
+		paddingRight: 20,
 	},
 	promoItem: {
 		minWidth: 220,
@@ -449,7 +458,9 @@ const styles = StyleSheet.create({
 		borderRadius: 8,
 	},
 	promoItemMobile: {
-		minWidth: 236,
+		minWidth: 215,
+		paddingHorizontal: 12,
+		paddingVertical: 12,
 	},
 	promoItemDesktop: {
 		flex: 1,
@@ -591,8 +602,17 @@ const styles = StyleSheet.create({
 		justifyContent: 'space-between',
 		paddingVertical: 4,
 	},
+	gridContainer: {
+		flexDirection: 'row',
+		flexWrap: 'wrap',
+		justifyContent: 'flex-start',
+		gap: 16,
+		paddingVertical: 4,
+	},
 	gridItemDesktop: {
-		width: '23.8%', // 4 items per row on PC
+		width: '23.8%',
+			maxWidth: '23.8%',
+			flexBasis: '23.8%',
 		marginBottom: 16,
 	},
 	gridItemMobile: {

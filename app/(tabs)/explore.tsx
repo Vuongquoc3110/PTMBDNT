@@ -213,11 +213,17 @@ export default function OrdersTabScreen() {
   const [activeFilter, setActiveFilter] = useState('all');
 
   const loadOrders = useCallback(async (isRefresh = false) => {
+    if (!user?.id) {
+      setOrders([]);
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
     try {
       if (isRefresh) setRefreshing(true);
       else setLoading(true);
       setError(null);
-      const data = await apiService.getOrders(user?.id);
+      const data = await apiService.getOrders(user.id);
       setOrders(Array.isArray(data) ? data : []);
     } catch (err: any) {
       setError('Không thể tải danh sách đơn hàng. Vui lòng thử lại.');
@@ -580,6 +586,39 @@ export default function OrdersTabScreen() {
           <Ionicons name="construct-outline" size={18} color="#ffffff" />
           <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 15 }}>Chuyển đến Bảng Quản trị (Admin Panel)</Text>
         </Pressable>
+      </View>
+    );
+  }
+
+  if (!user) {
+    return (
+      <View style={[styles.pageWrapper, isDark && styles.pageDark]}>
+        <Header />
+        <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 24, minHeight: 460 }]}>
+          <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: isDark ? '#1e293b' : '#eff6ff', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+            <Ionicons name="receipt-outline" size={36} color="#2563eb" />
+          </View>
+          <Text style={{ fontSize: 20, fontWeight: '800', color: isDark ? '#f8fafc' : '#0f172a', marginBottom: 8, textAlign: 'center' }}>
+            Bạn chưa đăng nhập
+          </Text>
+          <Text style={{ fontSize: 14, color: isDark ? '#94a3b8' : '#64748b', textAlign: 'center', maxWidth: 360, lineHeight: 22, marginBottom: 24 }}>
+            Khách vãng lai chỉ có quyền xem sản phẩm. Vui lòng đăng nhập tài khoản để đặt hàng và theo dõi đơn hàng của bạn.
+          </Text>
+          <View style={{ flexDirection: 'row', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
+            <Pressable
+              style={{ backgroundColor: '#2563eb', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 10 }}
+              onPress={() => router.push('/login' as any)}
+            >
+              <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 14 }}>Đăng nhập ngay</Text>
+            </Pressable>
+            <Pressable
+              style={{ backgroundColor: isDark ? '#1e293b' : '#f1f5f9', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 10 }}
+              onPress={() => router.push('/(tabs)')}
+            >
+              <Text style={{ color: isDark ? '#cbd5e1' : '#475569', fontWeight: '600', fontSize: 14 }}>Khám phá sản phẩm</Text>
+            </Pressable>
+          </View>
+        </View>
       </View>
     );
   }

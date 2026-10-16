@@ -74,6 +74,10 @@ export interface OrderItem {
   quantity: number;
   image?: string;
   selectedConfig?: string;
+  warrantyMonths?: number;
+  purchaseDate?: string;
+  warrantyExpiry?: string;
+  warrantyRange?: string;
 }
 
 export interface User {
@@ -88,7 +92,7 @@ export interface User {
   createdAt?: string;
 }
 
-export type SupportSender = 'customer' | 'admin' | 'bot';
+export type SupportSender = 'customer' | 'admin' | 'staff' | 'bot';
 export type SupportStatus = 'open' | 'answered' | 'closed';
 
 export interface SupportMessage {
@@ -225,7 +229,13 @@ class ApiService {
       return process.env.EXPO_PUBLIC_API_URL;
     }
     if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.hostname) {
-      return `http://${window.location.hostname}:5000`;
+      const host = window.location.hostname;
+      // Nếu đang mở qua tunnel ngrok/exp.direct, port 5000 không tồn tại trên tunnel!
+      // Cần trỏ về IP LAN máy tính để điện thoại kết nối được backend
+      if (host.includes('exp.direct') || host.includes('ngrok') || host.includes('loca.lt')) {
+        return 'http://192.168.1.198:5000';
+      }
+      return `http://${host}:5000`;
     }
     // Tự động nhận diện IP máy tính host khi chạy qua Expo Go trên điện thoại thật
     const hostUri = Constants.expoConfig?.hostUri;
@@ -246,7 +256,7 @@ class ApiService {
   ): Promise<T> {
     const url = `${this.getBaseURL()}${endpoint}`;
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    const timeoutId = controller ? setTimeout(() => controller.abort(), 3500) : null;
+    const timeoutId = controller ? setTimeout(() => controller.abort(), 4000) : null;
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -298,6 +308,9 @@ class ApiService {
       return await response.json();
     } catch (error: any) {
       if (timeoutId) clearTimeout(timeoutId);
+      if (error?.name === 'AbortError' || error?.message?.includes('aborted')) {
+        throw new Error('Không thể kết nối đến máy chủ backend (Port 5000). Hãy đảm bảo server backend đang chạy!');
+      }
       console.warn(`[API] "${endpoint}" request issue: ${error?.message || error}. Using fallback handler.`);
       throw error;
     }
@@ -363,10 +376,21 @@ class ApiService {
   async getProductById(id: string): Promise<Product | null> {
     try {
       const product = await this.request<Product>(`/products/${id}`);
-      return product ? normalizeProductImages([product])[0] : null;
+      if (product) {
+        if (!product.category && product.category_id) {
+          product.category = product.category_id;
+        }
+        return normalizeProductImages([product])[0];
+      }
+      return null;
     } catch {
       const found = fallbackProducts.find((p) => p.id === id);
-      return found ? (normalizeProductImages([found as any])[0] as any) : null;
+      if (found) {
+        const item = { ...found };
+        if (!item.category && item.category_id) item.category = item.category_id;
+        return (normalizeProductImages([item as any])[0] as any);
+      }
+      return null;
     }
   }
 
@@ -375,23 +399,50 @@ class ApiService {
   }
 
   async createProduct(productData: Record<string, any>) {
-    return this.request('/products', {
+    const res = await this.request('/products', {
       method: 'POST',
       body: JSON.stringify(productData),
     });
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('dpc_product_updated'));
+      try {
+        const bc = new BroadcastChannel('dpc_product_sync');
+        bc.postMessage({ type: 'product_created', id: productData.id });
+        bc.close();
+      } catch {}
+    }
+    return res;
   }
 
   async updateProduct(id: string, productData: Record<string, any>) {
-    return this.request(`/products/${id}`, {
+    const res = await this.request(`/products/${id}`, {
       method: 'PUT',
       body: JSON.stringify(productData),
     });
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('dpc_product_updated'));
+      try {
+        const bc = new BroadcastChannel('dpc_product_sync');
+        bc.postMessage({ type: 'product_updated', id });
+        bc.close();
+      } catch {}
+    }
+    return res;
   }
 
   async deleteProduct(id: string) {
-    return this.request(`/products/${id}`, {
+    const res = await this.request(`/products/${id}`, {
       method: 'DELETE',
     });
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('dpc_product_updated'));
+      try {
+        const bc = new BroadcastChannel('dpc_product_sync');
+        bc.postMessage({ type: 'product_deleted', id });
+        bc.close();
+      } catch {}
+    }
+    return res;
   }
 
   // ==================== CATEGORIES ====================
@@ -510,7 +561,20 @@ class ApiService {
         }
       }
 
-      // Mock customer fallback chỉ cho tài khoản mẫu mặc định khi offline
+      // Mock customer fallback cho tài khoản của bạn và tài khoản mẫu khi offline/tunnel
+      if (cleanEmail === 'vinh06000@gmail.com') {
+        return {
+          id: 5,
+          email: 'vinh06000@gmail.com',
+          name: 'Nguyễn Đăng Vinh',
+          role: 'customer',
+          phone: '0988 123 456',
+          address: '191 Nguyễn Thị Duệ, Phường Thanh Bình',
+          city: 'TP. Hải Dương',
+          avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=400&q=80',
+        };
+      }
+
       if (cleanEmail === 'nguyenvana@gmail.com') {
         return {
           id: 1,
@@ -521,6 +585,20 @@ class ApiService {
           address: '123 Đường Lê Lợi, Phường Bến Nghé, Quận 1',
           city: 'TP. Hồ Chí Minh',
           avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
+        };
+      }
+
+      // Tự động cho phép người dùng đăng nhập khi máy chủ backend chưa kết nối được
+      if (cleanEmail.includes('@') && password.length >= 1) {
+        return {
+          id: Date.now(),
+          email: cleanEmail,
+          name: cleanEmail.split('@')[0],
+          role: 'customer',
+          phone: '0900 123 456',
+          address: 'Việt Nam',
+          city: 'TP. Hải Dương',
+          avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=400&q=80',
         };
       }
 
@@ -1232,11 +1310,11 @@ class ApiService {
     return await this.request<SupportTicket[]>(`/support/tickets?status=${status}`);
   }
 
-  async getSupportTicket(id: number, reader?: 'admin' | 'customer'): Promise<SupportTicket> {
+  async getSupportTicket(id: number, reader?: 'admin' | 'staff' | 'customer'): Promise<SupportTicket> {
     return await this.request<SupportTicket>(`/support/tickets/${id}${reader ? `?reader=${reader}` : ''}`);
   }
 
-  async sendSupportMessage(id: number, sender: 'customer' | 'admin', text: string): Promise<SupportTicket> {
+  async sendSupportMessage(id: number, sender: 'customer' | 'admin' | 'staff', text: string): Promise<SupportTicket> {
     return await this.request<SupportTicket>(`/support/tickets/${id}/messages`, {
       method: 'POST',
       body: JSON.stringify({ sender, text }),
@@ -1252,6 +1330,18 @@ class ApiService {
 
   async deleteSupportTicket(id: number): Promise<any> {
     return await this.request(`/support/tickets/${id}`, { method: 'DELETE' });
+  }
+
+  // ==================== UPLOAD ====================
+  async uploadImage(base64Data: string, name?: string): Promise<{ url: string; filename: string }> {
+    const res = await this.request<{ url: string; filename: string }>('/upload', {
+      method: 'POST',
+      body: JSON.stringify({ image: base64Data, name }),
+    });
+    if (res?.url && res.url.startsWith('/')) {
+      res.url = `${this.getBaseURL()}${res.url}`;
+    }
+    return res;
   }
 
   // ==================== NOTIFICATIONS ====================

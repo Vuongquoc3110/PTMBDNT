@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { usePathname, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
@@ -93,6 +93,7 @@ const GREETING: ChatMessage = {
 
 export function SupportChatWidget() {
   const router = useRouter();
+  const pathname = usePathname();
   const { user } = useAppContext();
   const { width, height } = useWindowDimensions();
   const isMobile = width < 768;
@@ -144,7 +145,7 @@ export function SupportChatWidget() {
     const total = (ticket?.messages?.length || 0);
     if (prevMsgCountRef.current > 0 && total > prevMsgCountRef.current) {
       const last = ticket?.messages?.[ticket.messages.length - 1];
-      if (last && (last.sender === 'admin' || last.sender === 'bot')) {
+      if (last && (last.sender === 'admin' || last.sender === 'staff' || last.sender === 'bot')) {
         playNotificationSound();
       }
     }
@@ -224,7 +225,7 @@ export function SupportChatWidget() {
     } catch {}
     // Giữ lại lịch sử trên màn hình rồi quay về trợ lý tự động
     const history: Omit<ChatMessage, 'id'>[] = (ticket.messages || []).map((m) => ({
-      role: m.sender === 'bot' ? 'assistant' : m.sender,
+      role: m.sender === 'bot' ? 'assistant' : m.sender === 'staff' ? 'admin' : m.sender,
       text: m.text,
     }));
     setTicket(null);
@@ -233,7 +234,7 @@ export function SupportChatWidget() {
 
   const ticketMessages: ChatMessage[] = (ticket?.messages || []).map((m) => ({
     id: `t-${m.id}`,
-    role: m.sender === 'bot' ? 'assistant' : m.sender,
+    role: m.sender === 'bot' ? 'assistant' : m.sender === 'staff' ? 'admin' : m.sender,
     text: m.text,
   }));
   const displayMessages: ChatMessage[] = [
@@ -242,6 +243,14 @@ export function SupportChatWidget() {
     ...(pendingText ? [{ id: 'pending', role: 'customer' as const, text: pendingText, pending: true }] : []),
   ];
   const showQuickPrompts = !ticket && messages.length === 1 && !pendingText;
+
+  // Ẩn hoàn toàn widget bot chat khách hàng nếu là tài khoản nhân viên / admin, hoặc đang ở trang quản trị
+  const isStaffOrAdmin = user?.role === 'staff' || user?.role === 'admin';
+  const isManagementRoute = pathname?.startsWith('/staff') || pathname?.startsWith('/admin');
+
+  if (isStaffOrAdmin || isManagementRoute) {
+    return null;
+  }
 
   return (
     <View pointerEvents="box-none" style={[styles.anchor, { bottom: bottomOffset }]}>

@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 
 import { Header } from '@/components/Header';
+import { InvoiceModal } from '@/components/InvoiceModal';
 import { formatPrice } from '@/data/products';
 import { VIETNAM_PROVINCES } from '@/data/vietnamLocations';
 import { useAppContext } from '@/context/AppContext';
@@ -91,9 +92,24 @@ export default function CheckoutScreen() {
     return selectedProvince.districts[0] || 'Quận 1';
   });
 
+  const cleanStreetAddress = (raw: string): string => {
+    if (!raw) return '';
+    const parts = raw.split(',').map((p) => p.trim()).filter(Boolean);
+    const seen = new Set<string>();
+    const uniqueParts: string[] = [];
+    for (const part of parts) {
+      const lower = part.toLowerCase();
+      if (!seen.has(lower)) {
+        seen.add(lower);
+        uniqueParts.push(part);
+      }
+    }
+    return uniqueParts.join(', ');
+  };
+
   const [streetAddress, setStreetAddress] = useState(() => {
     if (user?.address) {
-      return user.address;
+      return cleanStreetAddress(user.address);
     }
     return '';
   });
@@ -104,10 +120,20 @@ export default function CheckoutScreen() {
   const [districtSearch, setDistrictSearch] = useState('');
 
   const fullAddress = useMemo(() => {
-    const parts = [];
-    if (streetAddress.trim()) parts.push(streetAddress.trim());
-    if (selectedDistrict) parts.push(selectedDistrict);
-    if (selectedProvince?.name) parts.push(selectedProvince.name);
+    const raw = streetAddress.trim();
+    if (!raw) {
+      return [selectedDistrict, selectedProvince?.name].filter(Boolean).join(', ');
+    }
+    const dist = selectedDistrict?.trim();
+    const prov = selectedProvince?.name?.trim();
+
+    const parts = raw.split(',').map((p) => p.trim()).filter(Boolean);
+    const hasDist = dist ? parts.some((p) => p.toLowerCase() === dist.toLowerCase()) : false;
+    const hasProv = prov ? parts.some((p) => p.toLowerCase() === prov.toLowerCase()) : false;
+
+    if (dist && !hasDist) parts.push(dist);
+    if (prov && !hasProv) parts.push(prov);
+
     return parts.join(', ');
   }, [streetAddress, selectedDistrict, selectedProvince]);
 
@@ -132,6 +158,8 @@ export default function CheckoutScreen() {
   const [isSuccess, setIsSuccess] = useState(false);
   const [createdOrderNumber, setCreatedOrderNumber] = useState('');
   const [createdOrderId, setCreatedOrderId] = useState<number | null>(null);
+  const [createdOrderData, setCreatedOrderData] = useState<any>(null);
+  const [invoiceModalVisible, setInvoiceModalVisible] = useState(false);
   const [qrModalVisible, setQrModalVisible] = useState(false);
   const [qrCountdown, setQrCountdown] = useState(900);
 
@@ -229,6 +257,27 @@ export default function CheckoutScreen() {
       setCreatedOrderNumber(res.orderNumber);
       if (res.orderId) setCreatedOrderId(res.orderId);
 
+      const orderSnapshot = {
+        id: res.orderId || Date.now(),
+        orderNumber: res.orderNumber,
+        userId: user?.id,
+        items: checkoutItems.map((it) => ({
+          productId: it.id,
+          name: it.name,
+          price: it.price,
+          quantity: it.qty,
+          image: it.image,
+          selectedConfig: it.spec,
+        })),
+        totalAmount: total,
+        shippingAddress: `${fullname.trim()} - ${phone.trim()}, ${fullAddress} (Ghi chú: ${note.trim()})`,
+        shippingMethod: 'standard',
+        paymentMethod,
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+      };
+      setCreatedOrderData(orderSnapshot);
+
       // Nếu đã chọn và dùng voucher thì ghi nhận đã sử dụng để tài khoản đó không còn voucher đó
       if (appliedVoucher) {
         try {
@@ -268,9 +317,9 @@ export default function CheckoutScreen() {
       <Header />
 
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-        <View style={styles.inner}>
+        <View style={[styles.inner, !isDesktop && styles.innerMobile]}>
           {/* BREADCRUMBS */}
-          <View style={styles.breadcrumbRow}>
+          <View style={[styles.breadcrumbRow, !isDesktop && { marginBottom: 8 }]}>
             <Pressable onPress={() => router.push('/(tabs)')}><Text style={styles.breadcrumbLink}>Trang chủ</Text></Pressable>
             <Text style={styles.breadcrumbSep}>/</Text>
             <Pressable onPress={() => router.push('/cart' as any)}><Text style={styles.breadcrumbLink}>Giỏ hàng</Text></Pressable>
@@ -278,7 +327,9 @@ export default function CheckoutScreen() {
             <Text style={styles.breadcrumbCurrent}>Thanh toán</Text>
           </View>
 
-          <Text style={styles.pageTitle}>Xác nhận & Thanh toán đơn hàng</Text>
+          <Text style={[styles.pageTitle, !isDesktop && styles.pageTitleMobile]}>
+            Xác nhận & Thanh toán đơn hàng
+          </Text>
 
           {isSuccess ? (
             <View style={styles.successCard}>
@@ -291,16 +342,16 @@ export default function CheckoutScreen() {
                 <Text style={{ fontWeight: '800', color: '#0f172a' }}>#{createdOrderNumber || 'ORD-NEW'}</Text>.
                 Hệ thống đã ghi nhận và chuyển thông tin đến bộ phận giao vận.
               </Text>
-              <View style={styles.successBtnRow}>
+              <View style={[styles.successBtnRow, { flexWrap: 'wrap', gap: 10 }]}>
                 <Pressable
-                  style={styles.homeBtn}
-                  onPress={() => router.push('/(tabs)')}
+                  style={[styles.ordersBtn, { backgroundColor: '#059669', flex: 1, minWidth: 160 }]}
+                  onPress={() => setInvoiceModalVisible(true)}
                 >
-                  <Ionicons name="home-outline" size={18} color="#ffffff" style={{ marginRight: 6 }} />
-                  <Text style={styles.homeBtnText}>Về trang chủ</Text>
+                  <Ionicons name="receipt-outline" size={18} color="#ffffff" style={{ marginRight: 6 }} />
+                  <Text style={styles.ordersBtnText}>In / Xuất hóa đơn</Text>
                 </Pressable>
                 <Pressable
-                  style={styles.ordersBtn}
+                  style={[styles.ordersBtn, { flex: 1, minWidth: 160 }]}
                   onPress={() => {
                     if (createdOrderId) {
                       router.push({ pathname: '/orders/[id]', params: { id: String(createdOrderId) } } as any);
@@ -309,7 +360,15 @@ export default function CheckoutScreen() {
                     }
                   }}
                 >
-                  <Text style={styles.ordersBtnText}>Xem chi tiết đơn hàng</Text>
+                  <Ionicons name="document-text-outline" size={17} color="#ffffff" style={{ marginRight: 6 }} />
+                  <Text style={styles.ordersBtnText}>Chi tiết đơn hàng</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.homeBtn, { flex: 1, minWidth: 140 }]}
+                  onPress={() => router.push('/(tabs)')}
+                >
+                  <Ionicons name="home-outline" size={18} color="#ffffff" style={{ marginRight: 6 }} />
+                  <Text style={styles.homeBtnText}>Về trang chủ</Text>
                 </Pressable>
               </View>
             </View>
@@ -318,7 +377,7 @@ export default function CheckoutScreen() {
               {/* LEFT COLUMN: FORM */}
               <View style={styles.leftCol}>
                 {/* SHIPPING INFO */}
-                <View style={styles.card}>
+                <View style={[styles.card, !isDesktop && styles.cardMobile]}>
                   <View style={styles.cardHeader}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                       <Ionicons name="location-outline" size={20} color="#2563eb" />
@@ -332,7 +391,7 @@ export default function CheckoutScreen() {
                     ) : null}
                   </View>
 
-                  <View style={styles.formRow}>
+                  <View style={[styles.formRow, !isDesktop && styles.formRowMobile]}>
                     <View style={styles.fieldCol}>
                       <Text style={styles.fieldLabel}>Họ và tên người nhận *</Text>
                       <TextInput
@@ -359,7 +418,7 @@ export default function CheckoutScreen() {
                   </View>
 
                   {/* VIETNAM REGION SELECTION ROW */}
-                  <View style={styles.formRow}>
+                  <View style={[styles.formRow, !isDesktop && styles.formRowMobile]}>
                     {/* Tỉnh / Thành phố */}
                     <View style={styles.fieldCol}>
                       <Text style={styles.fieldLabel}>Tỉnh / Thành phố *</Text>
@@ -444,10 +503,12 @@ export default function CheckoutScreen() {
                 </View>
 
                 {/* PAYMENT METHODS */}
-                <View style={styles.card}>
+                <View style={[styles.card, !isDesktop && styles.cardMobile]}>
                   <View style={styles.cardHeader}>
-                    <Ionicons name="wallet-outline" size={22} color="#2563eb" />
-                    <Text style={styles.cardTitle}>Phương thức thanh toán</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Ionicons name="wallet-outline" size={20} color="#2563eb" />
+                      <Text style={styles.cardTitle}>Phương thức thanh toán</Text>
+                    </View>
                   </View>
 
                   <View style={styles.paymentList}>
@@ -466,7 +527,7 @@ export default function CheckoutScreen() {
                             <Ionicons name={method.icon as any} size={22} color={isSelected ? '#2563eb' : '#64748b'} />
                           </View>
                           <View style={styles.paymentInfo}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                               <Text style={[styles.paymentName, isSelected && styles.paymentNameActive]}>
                                 {method.name}
                               </Text>
@@ -511,8 +572,8 @@ export default function CheckoutScreen() {
               </View>
 
               {/* RIGHT COLUMN: ORDER SUMMARY */}
-              <View style={styles.rightCol}>
-                <View style={styles.summaryCard}>
+              <View style={[styles.rightCol, !isDesktop && styles.rightColMobile]}>
+                <View style={[styles.summaryCard, !isDesktop && styles.cardMobile]}>
                   <Text style={styles.summaryCardTitle}>Đơn hàng của bạn ({checkoutItems.length})</Text>
 
                   <View style={styles.summaryItemsList}>
@@ -819,6 +880,15 @@ export default function CheckoutScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* MODAL: XUẤT HÓA ĐƠN BÁN HÀNG ĐIỆN TỬ */}
+      <InvoiceModal
+        visible={invoiceModalVisible}
+        onClose={() => setInvoiceModalVisible(false)}
+        order={createdOrderData}
+        customerName={fullname}
+        customerPhone={phone}
+      />
     </View>
   );
 }
@@ -828,25 +898,33 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { paddingBottom: 60 },
   inner: { maxWidth: 1140, width: '100%', alignSelf: 'center', paddingHorizontal: 20, paddingTop: 24 },
+  innerMobile: { paddingHorizontal: 12, paddingTop: 14 },
   breadcrumbRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
   breadcrumbLink: { fontSize: 13, color: '#64748b' },
   breadcrumbSep: { fontSize: 13, color: '#94a3b8' },
   breadcrumbCurrent: { fontSize: 13, color: '#0f172a', fontWeight: '700' },
-  pageTitle: { fontSize: 26, fontWeight: '900', color: '#0f172a', marginBottom: 24 },
+  pageTitle: { fontSize: 24, fontWeight: '900', color: '#0f172a', marginBottom: 20 },
+  pageTitleMobile: { fontSize: 18, lineHeight: 24, marginBottom: 14 },
 
   grid: { flexDirection: 'row', gap: 24, alignItems: 'flex-start' },
-  gridMobile: { flexDirection: 'column' },
-  leftCol: { flex: 1, gap: 18 },
+  gridMobile: { flexDirection: 'column', alignItems: 'stretch', gap: 16, width: '100%' },
+  leftCol: { flex: 1, gap: 16, width: '100%' },
   rightCol: { width: 380 },
+  rightColMobile: { width: '100%' },
 
   card: {
     backgroundColor: '#ffffff',
     borderRadius: 18,
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    padding: 20,
+    padding: 18,
+    width: '100%',
   },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 },
+  cardMobile: {
+    padding: 14,
+    borderRadius: 14,
+  },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   cardTitle: { fontSize: 16, fontWeight: '800', color: '#0f172a' },
   defaultBadge: {
     flexDirection: 'row',
@@ -902,7 +980,8 @@ const styles = StyleSheet.create({
   },
 
   formRow: { flexDirection: 'row', gap: 14, marginBottom: 14 },
-  fieldCol: { flex: 1 },
+  formRowMobile: { flexDirection: 'column', gap: 12, marginBottom: 12 },
+  fieldCol: { flex: 1, width: '100%' },
   formGroup: { marginBottom: 14 },
   fieldLabel: { fontSize: 13, fontWeight: '600', color: '#334155', marginBottom: 6 },
   input: {
@@ -1034,16 +1113,17 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  paymentList: { gap: 10 },
+  paymentList: { gap: 10, width: '100%' },
   paymentItem: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     padding: 14,
-    borderRadius: 12,
-    borderWidth: 1,
+    borderRadius: 14,
+    borderWidth: 1.5,
     borderColor: '#e2e8f0',
     backgroundColor: '#ffffff',
     gap: 12,
+    width: '100%',
   },
   paymentItemActive: {
     borderColor: '#2563eb',

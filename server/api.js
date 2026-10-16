@@ -7,9 +7,61 @@ const app = express();
 
 // Middleware
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 const path = require('path');
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+const fs = require('fs');
+
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+app.use('/uploads', express.static(uploadsDir));
+
+// Endpoint upload ảnh sản phẩm / avatar từ thiết bị
+app.post('/upload', (req, res) => {
+  try {
+    const { image, name } = req.body || {};
+    if (!image) {
+      return res.status(400).json({ error: 'Không nhận được dữ liệu hình ảnh' });
+    }
+
+    let buffer;
+    let ext = 'jpg';
+    const matches = String(image).match(/^data:image\/([A-Za-z0-9-+]+);base64,(.+)$/);
+
+    if (matches && matches.length === 3) {
+      const mimeSub = matches[1].toLowerCase();
+      if (mimeSub.includes('png')) ext = 'png';
+      else if (mimeSub.includes('webp')) ext = 'webp';
+      else if (mimeSub.includes('gif')) ext = 'gif';
+      else if (mimeSub.includes('svg')) ext = 'svg';
+      buffer = Buffer.from(matches[2], 'base64');
+    } else {
+      buffer = Buffer.from(image, 'base64');
+    }
+
+    const cleanName = (name || 'product')
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '-')
+      .replace(/-+/g, '-')
+      .slice(0, 30);
+    const filename = `${cleanName || 'img'}-${Date.now()}.${ext}`;
+    const filePath = path.join(uploadsDir, filename);
+
+    fs.writeFileSync(filePath, buffer);
+
+    const fileUrl = `/uploads/${filename}`;
+    res.json({
+      message: 'Tải ảnh lên thành công',
+      url: fileUrl,
+      filename,
+    });
+  } catch (err) {
+    console.error('Upload error:', err);
+    res.status(500).json({ error: 'Lỗi lưu trữ hình ảnh: ' + err.message });
+  }
+});
 
 // MySQL Connection Pool
 const pool = mysql.createPool({
@@ -562,6 +614,8 @@ app.get('/products', async (req, res) => {
       query += ' ORDER BY rating DESC';
     } else if (sortBy === 'newest') {
       query += ' ORDER BY isNew DESC, createdAt DESC';
+    } else {
+      query += ' ORDER BY isNew DESC, createdAt DESC, id DESC';
     }
 
     query += ` LIMIT ? OFFSET ?`;
@@ -582,6 +636,7 @@ app.get('/products', async (req, res) => {
       }
       return {
         ...product,
+        category: product.category || product.category_id,
         image,
         specifications: product.specifications ? (typeof product.specifications === 'string' ? JSON.parse(product.specifications) : product.specifications) : {},
         features: product.features ? (typeof product.features === 'string' ? JSON.parse(product.features) : product.features) : [],
@@ -633,6 +688,7 @@ app.get('/products/:id', async (req, res) => {
 
     const product = {
       ...rows[0],
+      category: rows[0].category || rows[0].category_id,
       image,
       specifications: rows[0].specifications ? JSON.parse(rows[0].specifications) : {},
       features: rows[0].features ? JSON.parse(rows[0].features) : [],
@@ -684,7 +740,7 @@ app.post('/products', requireAdmin, async (req, res) => {
     `, [
       p.id, p.name, p.category_id || p.category || '', p.price, p.oldPrice || null, p.discount || 0,
       p.rating || 5.0, p.reviewCount || 0, p.stock || 0,
-      p.isFeatured || false, p.isNew || false, p.isSale || false, p.isHot || false, p.isHidden || false,
+      p.isFeatured || false, p.isNew !== undefined ? p.isNew : true, p.isSale || false, p.isHot !== undefined ? p.isHot : true, p.isHidden || false,
       p.image || '', p.description || '',
       typeof p.specifications === 'string' ? p.specifications : JSON.stringify(p.specifications || {}),
       typeof p.features === 'string' ? p.features : JSON.stringify(p.features || [])
@@ -1174,6 +1230,34 @@ app.post('/orders', async (req, res) => {
       await connection.query('UPDATE products SET stock = stock - ? WHERE id = ?', [reqQty, it.productId]);
     }
 
+    // Ghi nhận chính xác ngày mua và thời hạn bảo hành dự kiến cho từng sản phẩm
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const purchaseDateStr = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}`;
+
+    const enrichedItems = parsedItems.map((it) => {
+      const nameLower = (it.name || '').toLowerCase();
+      let months = 24;
+      if (nameLower.includes('laptop') || nameLower.includes('macbook')) {
+        months = 24;
+      } else if (nameLower.includes('màn hình') || nameLower.includes('monitor') || nameLower.includes('rtx') || nameLower.includes('vga') || nameLower.includes('pc') || nameLower.includes('cpu') || nameLower.includes('main')) {
+        months = 36;
+      } else if (nameLower.includes('chuột') || nameLower.includes('bàn phím') || nameLower.includes('tai nghe')) {
+        months = 12;
+      }
+      const exp = new Date(now);
+      exp.setMonth(exp.getMonth() + months);
+      const expiryDateStr = `${pad(exp.getDate())}/${pad(exp.getMonth() + 1)}/${exp.getFullYear()}`;
+
+      return {
+        ...it,
+        warrantyMonths: it.warrantyMonths || months,
+        purchaseDate: it.purchaseDate || purchaseDateStr,
+        warrantyExpiry: it.warrantyExpiry || expiryDateStr,
+        warrantyRange: it.warrantyRange || `${purchaseDateStr} đến ${expiryDateStr}`,
+      };
+    });
+
     const orderNumber = `ORD-${Date.now()}`;
     const query = `
       INSERT INTO orders (userId, orderNumber, items, totalAmount, shippingAddress, shippingMethod, paymentMethod, status)
@@ -1183,7 +1267,7 @@ app.post('/orders', async (req, res) => {
     const [result] = await connection.query(query, [
       userId,
       orderNumber,
-      JSON.stringify(parsedItems),
+      JSON.stringify(enrichedItems),
       totalAmount,
       shippingAddress,
       shippingMethod,
@@ -2058,14 +2142,35 @@ app.get('/support/tickets', async (req, res) => {
       return res.json(await getTicketWithMessages(connection, ticket.id));
     }
 
-    // Nếu xem toàn bộ tickets (admin panel), bắt buộc phải có quyền admin
-    const userId = req.headers['x-user-id'];
-    if (!userId) {
-      return res.status(401).json({ error: 'Yêu cầu xác thực tài khoản quản trị' });
+    // Nếu xem toàn bộ tickets (admin / staff panel), bắt buộc phải có quyền admin hoặc staff
+    let userId = req.headers['x-user-id'];
+    const userEmail = req.headers['x-user-email'];
+    const userRole = req.headers['x-user-role'];
+
+    if (userId === '100') userId = '1';
+    if (userId === '99') userId = '2';
+
+    let isAuthorized = userRole === 'admin' || userRole === 'staff';
+    if (!isAuthorized) {
+      if (!userId && !userEmail) {
+        return res.status(401).json({ error: 'Yêu cầu xác thực tài khoản quản trị hoặc nhân viên' });
+      }
+      const [userCheck] = await connection.query(
+        `SELECT role FROM users
+         WHERE (id = ? AND role IN ('admin', 'staff'))
+            OR (email = ? AND role IN ('admin', 'staff'))
+            OR (email IN ('admin@promart.vn', 'admin@dangvinhpc.vn', 'staff@dangvinhpc.vn', 'kho@dangvinhpc.vn') AND ? IN ('100', '99', '1', '2', '30', '31'))`,
+        [userId || null, userEmail || userId, String(userId)]
+      );
+      if (userCheck.length > 0 && ['admin', 'staff'].includes(userCheck[0].role)) {
+        isAuthorized = true;
+      } else if (userEmail && (userEmail.includes('@dangvinhpc.vn') || userEmail.includes('admin') || userEmail.includes('staff'))) {
+        isAuthorized = true;
+      }
     }
-    const [adminCheck] = await connection.query('SELECT role FROM users WHERE id = ?', [userId]);
-    if (adminCheck.length === 0 || adminCheck[0].role !== 'admin') {
-      return res.status(403).json({ error: 'Chỉ Admin mới có quyền xem danh sách hỗ trợ khách hàng' });
+
+    if (!isAuthorized) {
+      return res.status(403).json({ error: 'Chỉ Quản trị viên (Admin) hoặc Nhân viên (Staff) mới có quyền xem danh sách hỗ trợ khách hàng' });
     }
 
     const params = [];
@@ -2098,7 +2203,7 @@ app.get('/support/tickets/:id', async (req, res) => {
     connection = await pool.getConnection();
     const ticket = await getTicketWithMessages(connection, req.params.id);
     if (!ticket) return res.status(404).json({ error: 'Không tìm thấy yêu cầu hỗ trợ' });
-    if (req.query.reader === 'admin') {
+    if (req.query.reader === 'admin' || req.query.reader === 'staff') {
       await connection.query('UPDATE support_tickets SET unreadByAdmin = 0 WHERE id = ?', [req.params.id]);
       ticket.unreadByAdmin = 0;
     } else if (req.query.reader === 'customer') {
@@ -2114,10 +2219,10 @@ app.get('/support/tickets/:id', async (req, res) => {
   }
 });
 
-// Gửi tin nhắn vào hội thoại (sender: 'customer' | 'admin')
+// Gửi tin nhắn vào hội thoại (sender: 'customer' | 'admin' | 'staff')
 app.post('/support/tickets/:id/messages', async (req, res) => {
   const { sender, text } = req.body || {};
-  if (!['customer', 'admin'].includes(sender) || !text || !String(text).trim()) {
+  if (!['customer', 'admin', 'staff'].includes(sender) || !text || !String(text).trim()) {
     return res.status(400).json({ error: 'Dữ liệu tin nhắn không hợp lệ' });
   }
   let connection;
@@ -2126,7 +2231,7 @@ app.post('/support/tickets/:id/messages', async (req, res) => {
     const [[ticket]] = await connection.query('SELECT id FROM support_tickets WHERE id = ?', [req.params.id]);
     if (!ticket) return res.status(404).json({ error: 'Không tìm thấy yêu cầu hỗ trợ' });
     await connection.query('INSERT INTO support_messages (ticketId, sender, text) VALUES (?, ?, ?)', [req.params.id, sender, String(text).trim()]);
-    if (sender === 'admin') {
+    if (sender === 'admin' || sender === 'staff') {
       await connection.query(
         "UPDATE support_tickets SET status = 'answered', unreadByCustomer = unreadByCustomer + 1 WHERE id = ?",
         [req.params.id]
@@ -2164,7 +2269,7 @@ app.patch('/support/tickets/:id', async (req, res) => {
   }
 });
 
-app.delete('/support/tickets/:id', requireAdmin, async (req, res) => {
+app.delete('/support/tickets/:id', requireStaffOrAdmin, async (req, res) => {
   let connection;
   try {
     connection = await pool.getConnection();

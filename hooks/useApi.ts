@@ -21,6 +21,19 @@ export function useProducts(params?: Record<string, any>) {
 
   useEffect(() => {
     fetchProducts();
+    if (typeof window !== 'undefined') {
+      const handleSync = () => fetchProducts();
+      window.addEventListener('dpc_product_updated', handleSync);
+      let bc: BroadcastChannel | null = null;
+      try {
+        bc = new BroadcastChannel('dpc_product_sync');
+        bc.onmessage = () => fetchProducts();
+      } catch {}
+      return () => {
+        window.removeEventListener('dpc_product_updated', handleSync);
+        if (bc) bc.close();
+      };
+    }
   }, [fetchProducts]);
 
   return { products, loading, error, refetch: fetchProducts };

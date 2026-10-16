@@ -806,13 +806,28 @@ export default function CartScreen() {
 
                   {/* PAYMENT ICONS BADGE */}
                   <View style={styles.paymentMethodsRow}>
-                    <Text style={styles.paymentMethodsTitle}>Hỗ trợ thanh toán:</Text>
+                    <Text style={styles.paymentMethodsTitle}>Hỗ trợ thanh toán bảo mật:</Text>
                     <View style={styles.paymentBadgesList}>
-                      <View style={styles.paymentPill}><Text style={styles.paymentPillText}>VNPAY</Text></View>
-                      <View style={styles.paymentPill}><Text style={styles.paymentPillText}>MoMo</Text></View>
-                      <View style={styles.paymentPill}><Text style={styles.paymentPillText}>Visa/Master</Text></View>
-                      <View style={styles.paymentPill}><Text style={styles.paymentPillText}>COD</Text></View>
+                      <View style={[styles.paymentPill, { backgroundColor: '#eff6ff', borderColor: '#bfdbfe' }]}>
+                        <Ionicons name="qr-code-outline" size={12} color="#0284c7" style={{ marginRight: 3 }} />
+                        <Text style={[styles.paymentPillText, { color: '#0284c7', fontWeight: '700' }]}>VNPAY-QR</Text>
+                      </View>
+                      <View style={[styles.paymentPill, { backgroundColor: '#fdf2f8', borderColor: '#fbcfe8' }]}>
+                        <Ionicons name="wallet-outline" size={12} color="#db2777" style={{ marginRight: 3 }} />
+                        <Text style={[styles.paymentPillText, { color: '#db2777', fontWeight: '700' }]}>MoMo QR</Text>
+                      </View>
+                      <View style={styles.paymentPill}>
+                        <Ionicons name="card-outline" size={12} color="#475569" style={{ marginRight: 3 }} />
+                        <Text style={styles.paymentPillText}>Visa/ATM</Text>
+                      </View>
+                      <View style={styles.paymentPill}>
+                        <Ionicons name="cash-outline" size={12} color="#16a34a" style={{ marginRight: 3 }} />
+                        <Text style={[styles.paymentPillText, { color: '#16a34a', fontWeight: '700' }]}>COD</Text>
+                      </View>
                     </View>
+                    <Text style={{ fontSize: 11, color: '#2563eb', marginTop: 8, fontWeight: '600', textAlign: 'center' }}>
+                      👉 Bấm &quot;Tiến hành đặt hàng&quot; để chọn Quét mã QR ngân hàng hoặc COD
+                    </Text>
                   </View>
                 </View>
               </View>
@@ -841,9 +856,9 @@ export default function CartScreen() {
             }}
             disabled={selectedItems.length === 0}
           >
-            <Ionicons name="card" size={18} color="#ffffff" style={{ marginRight: 6 }} />
+            <Ionicons name="qr-code-outline" size={18} color="#ffffff" style={{ marginRight: 6 }} />
             <Text style={styles.mobileBottomBtnText}>
-              {selectedItems.length === 0 ? 'Chưa chọn SP' : `Đặt hàng (${selectedItems.length})`}
+              {selectedItems.length === 0 ? 'Chưa chọn SP' : `Đặt hàng / Quét QR (${selectedItems.length})`}
             </Text>
           </Pressable>
         </View>
@@ -1680,16 +1695,22 @@ const styles = StyleSheet.create({
   },
   paymentBadgesList: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
     gap: 8,
   },
   paymentPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
     paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
+    paddingVertical: 4,
+    borderRadius: 8,
   },
   paymentPillText: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '700',
     color: '#64748b',
   },

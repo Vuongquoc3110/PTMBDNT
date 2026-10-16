@@ -84,9 +84,9 @@ const RIGHT_EVENT_CARDS = [
   {
     id: 'card-1',
     title: 'Build PC',
-    badgeText: 'Tặng Màn Hình 240Hz',
+    badgeText: 'Tặng Màn 240Hz',
     badgeBg: '#f97316',
-    subText: 'Deal hời cấu hình khủng',
+    subText: 'Cấu hình khủng',
     image: 'https://images.unsplash.com/photo-1587202372634-32705e3bf49c?auto=format&fit=crop&w=500&q=80',
     link: '/products?category=pc-gaming',
   },
@@ -95,25 +95,25 @@ const RIGHT_EVENT_CARDS = [
     title: 'Bàn Phím Cơ',
     badgeText: 'Giảm đến 26%',
     badgeBg: '#ea580c',
-    subText: 'Custom & Gaming RGB',
+    subText: 'Gaming RGB',
     image: 'https://images.unsplash.com/photo-1587829741301-dc798b83add3?auto=format&fit=crop&w=500&q=80',
     link: '/products?category=keyboard',
   },
   {
     id: 'card-3',
-    title: 'PC i5 / RTX 5060',
-    badgeText: 'Giá từ 23.000.000₫',
+    title: 'PC Gaming',
+    badgeText: 'Từ 23 Triệu',
     badgeBg: '#059669',
-    subText: 'Chiến mượt mọi game AAA',
+    subText: 'Chiến mượt AAA',
     image: 'https://images.unsplash.com/photo-1591799264318-7e6ef8ddb7ea?auto=format&fit=crop&w=500&q=80',
     link: '/products?category=pc-gaming',
   },
   {
     id: 'card-4',
     title: 'Laptop Gaming',
-    badgeText: 'Quà tặng 3.500.000₫',
+    badgeText: 'Quà 3.5 Triệu',
     badgeBg: '#2563eb',
-    subText: 'Sẵn hàng giao nhanh 2h',
+    subText: 'Giao nhanh 2h',
     image: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=500&q=80',
     link: '/products?category=laptop-gaming',
   },
@@ -272,7 +272,7 @@ export function HomeHeroBanners() {
             </View>
             <Text style={styles.subEventTitle}>{currentSub.title}</Text>
             <Text style={styles.subEventHighlight}>{currentSub.highlight}</Text>
-            <Text style={styles.subEventGift} numberOfLines={1}>
+            <Text style={styles.subEventGift} numberOfLines={2}>
               {currentSub.giftDetail}
             </Text>
           </View>
@@ -325,21 +325,46 @@ export function HomeHeroBanners() {
             onPress={() => router.push(card.link as any)}
             {...({ dataSet: { eventCard: 'true' } } as any)}
           >
-            <View style={styles.eventMiniCopy}>
-              <Text style={[styles.eventMiniTitle, isDark && styles.textLight]} numberOfLines={1}>
+            <View style={[styles.eventMiniCopy, !isDesktop && styles.eventMiniCopyMobile]}>
+              <Text
+                style={[
+                  styles.eventMiniTitle,
+                  !isDesktop && styles.eventMiniTitleMobile,
+                  isDark && styles.textLight,
+                ]}
+                numberOfLines={1}
+              >
                 {card.title}
               </Text>
-              <View style={[styles.eventMiniBadge, { backgroundColor: card.badgeBg }]}>
-                <Text style={styles.eventMiniBadgeText} numberOfLines={1}>
+              <View
+                style={[
+                  styles.eventMiniBadge,
+                  !isDesktop && styles.eventMiniBadgeMobile,
+                  { backgroundColor: card.badgeBg },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.eventMiniBadgeText,
+                    !isDesktop && styles.eventMiniBadgeTextMobile,
+                  ]}
+                  numberOfLines={1}
+                >
                   {card.badgeText}
                 </Text>
               </View>
-              <Text style={styles.eventMiniSub} numberOfLines={1}>
+              <Text
+                style={[
+                  styles.eventMiniSub,
+                  !isDesktop && styles.eventMiniSubMobile,
+                ]}
+                numberOfLines={1}
+              >
                 {card.subText}
               </Text>
             </View>
 
-            <View style={styles.eventMiniImgWrap}>
+            <View style={[styles.eventMiniImgWrap, !isDesktop && styles.eventMiniImgWrapMobile]}>
               <Image
                 source={{ uri: card.image }}
                 style={styles.eventMiniImg}
@@ -687,19 +712,34 @@ const styles = StyleSheet.create({
     borderColor: '#1f2937',
   },
   eventMiniCardMobile: {
-    minWidth: '48%',
+    minWidth: '47%',
     flex: 0,
     flexGrow: 1,
+    padding: 8,
+    minHeight: 80,
+    borderRadius: 10,
   },
   eventMiniCopy: {
     flex: 1.3,
     paddingRight: 8,
+  },
+  eventMiniCopyMobile: {
+    flex: 1,
+    paddingRight: 6,
+    minWidth: 0,
+    justifyContent: 'center',
   },
   eventMiniTitle: {
     fontSize: 15,
     fontWeight: '900',
     color: '#0f172a',
     marginBottom: 5,
+  },
+  eventMiniTitleMobile: {
+    fontSize: 13,
+    fontWeight: '800',
+    marginBottom: 3,
+    letterSpacing: -0.3,
   },
   eventMiniBadge: {
     paddingHorizontal: 8,
@@ -708,13 +748,28 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     marginBottom: 4,
   },
+  eventMiniBadgeMobile: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 5,
+    marginBottom: 3,
+  },
   eventMiniBadgeText: {
     color: '#ffffff',
     fontSize: 11,
     fontWeight: '800',
   },
+  eventMiniBadgeTextMobile: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
   eventMiniSub: {
     fontSize: 11,
+    color: '#64748b',
+    fontWeight: '600',
+  },
+  eventMiniSubMobile: {
+    fontSize: 10,
     color: '#64748b',
     fontWeight: '600',
   },
@@ -726,6 +781,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8fafc',
     borderWidth: 1,
     borderColor: '#f1f5f9',
+  },
+  eventMiniImgWrapMobile: {
+    width: 54,
+    height: 54,
+    borderRadius: 8,
+    alignSelf: 'center',
   },
   eventMiniImg: {
     width: '100%',

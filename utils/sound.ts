@@ -1,4 +1,4 @@
-// Web Audio API Sound Synthesizer — No external audio file dependencies
+ // Web Audio API Sound Synthesizer — No external audio file dependencies
 export function playNotificationSound() {
   if (typeof window === 'undefined') return;
   try {

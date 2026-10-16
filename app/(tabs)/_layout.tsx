@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs, usePathname, useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
 import { GEAR_CATEGORIES, normalizeCategory } from '@/constants/categories';
 import { useAppContext } from '@/context/AppContext';
@@ -139,6 +139,7 @@ export default function TabLayout() {
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768;
   const pathname = usePathname();
+  const { isDark } = useAppContext();
 
   const isHomePage = Boolean(
     pathname === '/' ||
@@ -153,15 +154,36 @@ export default function TabLayout() {
       screenOptions={{
         headerShown: false,
         tabBarStyle: isDesktop ? { display: 'none' } : {
-          height: 60,
-          paddingBottom: 8,
-          paddingTop: 8,
-          backgroundColor: '#ffffff',
+          height: Platform.OS === 'ios' ? 84 : 68,
+          paddingTop: 4,
+          paddingBottom: Platform.OS === 'ios' ? 24 : 8,
+          backgroundColor: isDark ? '#0f172a' : '#ffffff',
           borderTopWidth: 1,
-          borderTopColor: '#e2e8f0',
+          borderTopColor: isDark ? '#1e293b' : '#e2e8f0',
+          elevation: 10,
+          shadowColor: '#000',
+          shadowOpacity: 0.06,
+          shadowRadius: 8,
+          shadowOffset: { width: 0, height: -3 },
+          overflow: 'visible',
         },
         tabBarActiveTintColor: '#2563eb',
-        tabBarInactiveTintColor: '#64748b',
+        tabBarInactiveTintColor: isDark ? '#94a3b8' : '#64748b',
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: '700',
+          marginTop: 1,
+          paddingBottom: 2,
+        },
+        tabBarIconStyle: {
+          marginTop: 2,
+        },
+        tabBarItemStyle: {
+          justifyContent: 'center',
+          alignItems: 'center',
+          paddingVertical: 1,
+          overflow: 'visible',
+        },
         tabBarButton: (buttonProps: any) => {
           const { href, style, ...otherProps } = buttonProps;
           return (
@@ -177,28 +199,28 @@ export default function TabLayout() {
         name="index"
         options={{
           title: 'Trang chủ',
-          tabBarIcon: ({ color, size }) => <Ionicons name="home-outline" size={size} color={color} />,
+          tabBarIcon: ({ color }) => <Ionicons name="home-outline" size={22} color={color} />,
         }}
       />
       <Tabs.Screen
         name="categories"
         options={{
           title: 'Danh mục',
-          tabBarIcon: ({ color, size }) => <Ionicons name="grid-outline" size={size} color={color} />,
+          tabBarIcon: ({ color }) => <Ionicons name="grid-outline" size={22} color={color} />,
         }}
       />
       <Tabs.Screen
         name="explore"
         options={{
           title: 'Đơn hàng',
-          tabBarIcon: ({ color, size }) => <Ionicons name="receipt-outline" size={size} color={color} />,
+          tabBarIcon: ({ color }) => <Ionicons name="receipt-outline" size={22} color={color} />,
         }}
       />
       <Tabs.Screen
         name="user"
         options={{
           title: 'Tài khoản',
-          tabBarIcon: ({ color, size }) => <Ionicons name="person-outline" size={size} color={color} />,
+          tabBarIcon: ({ color }) => <Ionicons name="person-outline" size={22} color={color} />,
         }}
       />
     </Tabs>

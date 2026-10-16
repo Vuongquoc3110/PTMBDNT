@@ -18,6 +18,7 @@ import { AuthRequiredModal } from '@/components/AuthRequiredModal';
 import {
   formatPrice,
   products,
+  categories,
   type Product,
   getProductFallbackImage,
   isInvalidOrBlockedImageUrl,
@@ -69,6 +70,7 @@ export default function ProductDetailScreen() {
   const [authModalVisible, setAuthModalVisible] = useState(false);
   const [authModalMessage, setAuthModalMessage] = useState('');
 
+  const SAFE_DEFAULT_IMAGE = 'https://images.unsplash.com/photo-1588872657578-7efd1f1555ed?auto=format&fit=crop&w=800&q=85';
 
   const galleryImages = useMemo(() => {
     let rawList: string[] = [];
@@ -80,11 +82,54 @@ export default function ProductDetailScreen() {
     const fallback = getProductFallbackImage(product);
     return fallback && !isInvalidOrBlockedImageUrl(fallback)
       ? [fallback]
-      : ['https://images.unsplash.com/photo-1588872657578-7efd1f1555ed?auto=format&fit=crop&w=800&q=85'];
+      : [SAFE_DEFAULT_IMAGE];
   }, [product]);
 
   // States
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const [heroImageUri, setHeroImageUri] = useState<string>('');
+  const [failedImageUrls, setFailedImageUrls] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    setSelectedImageIndex(0);
+    const initial = galleryImages[0] || getProductFallbackImage(product) || SAFE_DEFAULT_IMAGE;
+    setHeroImageUri(initial);
+  }, [product.id, galleryImages]);
+
+  const activeDisplayImage = useMemo(() => {
+    if (heroImageUri && !failedImageUrls[heroImageUri]) {
+      return heroImageUri;
+    }
+    const current = galleryImages[selectedImageIndex] || galleryImages[0];
+    if (current && !failedImageUrls[current]) {
+      return current;
+    }
+    const fallback = getProductFallbackImage(product);
+    if (fallback && !failedImageUrls[fallback] && !isInvalidOrBlockedImageUrl(fallback)) {
+      return fallback;
+    }
+    return SAFE_DEFAULT_IMAGE;
+  }, [heroImageUri, failedImageUrls, galleryImages, selectedImageIndex, product]);
+
+  const categoryDisplayName = useMemo(() => {
+    const rawCat = (product.category || (product as any).category_id || '').toLowerCase().trim();
+    const found = categories.find((c) => c.id.toLowerCase() === rawCat);
+    if (found) return found.name;
+    if (rawCat === 'keyboard') return 'Bàn Phím';
+    if (rawCat === 'mouse') return 'Chuột';
+    if (rawCat === 'laptop') return 'Laptop';
+    if (rawCat === 'gpu') return 'Card Đồ Họa (GPU)';
+    if (rawCat === 'cpu') return 'Vi Xử Lý (CPU)';
+    if (rawCat === 'ram') return 'RAM';
+    if (rawCat === 'mainboard') return 'Bo Mạch Chủ';
+    if (rawCat === 'psu') return 'Nguồn Máy Tính';
+    if (rawCat === 'case') return 'Vỏ Case';
+    if (rawCat === 'mon' || rawCat === 'monitor') return 'Màn Hình';
+    if (rawCat === 'headset') return 'Tai Nghe';
+    if (rawCat === 'chair') return 'Ghế Công Thái Học';
+    return product.category || (product as any).category_id || 'Linh kiện';
+  }, [product.category, (product as any).category_id]);
+
   const [quantity, setQuantity] = useState(1);
   const [toast, setToast] = useState('');
   const [activeTab, setActiveTab] = useState<'desc' | 'specs' | 'reviews'>('desc');
@@ -152,8 +197,13 @@ export default function ProductDetailScreen() {
 
   // Related products
   const relatedProducts = useMemo(() => {
+    const cat = (product.category || (product as any).category_id || '').toLowerCase();
     return products
-      .filter((p) => p.id !== product.id && p.category === product.category)
+      .filter((p) => {
+        if (p.id === product.id) return false;
+        const pCat = (p.category || (p as any).category_id || '').toLowerCase();
+        return pCat === cat;
+      })
       .slice(0, 4);
   }, [product]);
 
@@ -233,6 +283,56 @@ export default function ProductDetailScreen() {
     };
   }, [product, isLaptop, selectedColor, selectedRam, selectedCpu, selectedStorage]);
 
+  const renderCommitments = () => (
+    <View style={[styles.commitmentsCard, !isDesktop && { marginTop: 16 }]}>
+      <View style={styles.commitItem}>
+        <View style={styles.commitIconWrap}>
+          <Ionicons name="shield-checkmark" size={20} color="#2563eb" />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.commitTitle}>100% Chính hãng</Text>
+          <Text style={styles.commitDesc}>Bảo đảm hàng chuẩn, đền bù 200% nếu phát hiện giả</Text>
+        </View>
+      </View>
+
+      <View style={styles.commitDivider} />
+
+      <View style={styles.commitItem}>
+        <View style={styles.commitIconWrap}>
+          <Ionicons name="sync" size={20} color="#16a34a" />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.commitTitle}>1 Đổi 1 trong 30 ngày</Text>
+          <Text style={styles.commitDesc}>Đổi mới ngay lập tức nếu lỗi từ nhà sản xuất</Text>
+        </View>
+      </View>
+
+      <View style={styles.commitDivider} />
+
+      <View style={styles.commitItem}>
+        <View style={styles.commitIconWrap}>
+          <Ionicons name="airplane" size={20} color="#ea580c" />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.commitTitle}>Giao hàng hỏa tốc</Text>
+          <Text style={styles.commitDesc}>Miễn phí vận chuyển toàn quốc, kiểm tra trước khi nhận</Text>
+        </View>
+      </View>
+
+      <View style={styles.commitDivider} />
+
+      <View style={styles.commitItem}>
+        <View style={styles.commitIconWrap}>
+          <Ionicons name="construct" size={20} color="#9333ea" />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.commitTitle}>Hỗ trợ kỹ thuật trọn đời</Text>
+          <Text style={styles.commitDesc}>Cài đặt phần mềm, vệ sinh bảo dưỡng định kỳ miễn phí</Text>
+        </View>
+      </View>
+    </View>
+  );
+
   return (
     <View style={styles.page}>
       <Header />
@@ -259,7 +359,7 @@ export default function ProductDetailScreen() {
               <Text style={styles.breadcrumbSep}>/</Text>
               <Pressable onPress={() => router.push('/products' as any)}><Text style={styles.breadcrumbLink}>Sản phẩm</Text></Pressable>
               <Text style={styles.breadcrumbSep}>/</Text>
-              <Text style={styles.breadcrumbCategory}>{product.category}</Text>
+              <Text style={styles.breadcrumbCategory}>{categoryDisplayName}</Text>
               <Text style={styles.breadcrumbSep}>/</Text>
               <Text style={styles.breadcrumbCurrent} numberOfLines={1}>{product.name}</Text>
             </View>
@@ -270,13 +370,22 @@ export default function ProductDetailScreen() {
             {/* LEFT COLUMN: HERO GALLERY & COMMITMENTS */}
             <View style={[styles.leftColumn, isDesktop && { width: '48%' }]}>
               {/* HERO MAIN IMAGE */}
-              <View style={styles.heroImageCard}>
+              <View style={[styles.heroImageCard, !isDesktop && styles.heroImageCardMobile]}>
                 <Image
-                  key={galleryImages[selectedImageIndex] || galleryImages[0]}
-                  source={{ uri: galleryImages[selectedImageIndex] || galleryImages[0] }}
+                  key={activeDisplayImage}
+                  source={{ uri: activeDisplayImage }}
                   style={styles.heroImage}
                   resizeMode="contain"
-                  {...({ referrerPolicy: 'no-referrer' } as any)}
+                  onError={() => {
+                    setFailedImageUrls((prev) => ({ ...prev, [activeDisplayImage]: true }));
+                    const fallback = getProductFallbackImage(product);
+                    if (fallback && fallback !== activeDisplayImage && !isInvalidOrBlockedImageUrl(fallback)) {
+                      setHeroImageUri(fallback);
+                    } else {
+                      setHeroImageUri(SAFE_DEFAULT_IMAGE);
+                    }
+                  }}
+                  {...({ dataSet: { productImg: 'true' }, referrerPolicy: 'no-referrer' } as any)}
                 />
 
                 {discountPercent > 0 && (
@@ -314,70 +423,37 @@ export default function ProductDetailScreen() {
                 >
                   {galleryImages.map((img, idx) => {
                     const isSelected = selectedImageIndex === idx;
+                    const isFailed = failedImageUrls[img];
+                    const thumbUri = isFailed ? (getProductFallbackImage(product) || SAFE_DEFAULT_IMAGE) : img;
                     return (
                       <Pressable
                         key={idx}
-                        onPress={() => setSelectedImageIndex(idx)}
+                        onPress={() => {
+                          setSelectedImageIndex(idx);
+                          setHeroImageUri(img);
+                        }}
                         style={[
                           styles.thumbnailBox,
                           isSelected && styles.thumbnailBoxActive,
                         ]}
                       >
-                        <Image source={{ uri: img }} style={styles.thumbnailImg} resizeMode="cover" />
+                        <Image
+                          source={{ uri: thumbUri }}
+                          style={styles.thumbnailImg}
+                          resizeMode="cover"
+                          onError={() => {
+                            setFailedImageUrls((prev) => ({ ...prev, [img]: true }));
+                          }}
+                          {...({ referrerPolicy: 'no-referrer' } as any)}
+                        />
                       </Pressable>
                     );
                   })}
                 </ScrollView>
               )}
 
-              {/* TRUST & POLICY COMMITMENTS */}
-              <View style={styles.commitmentsCard}>
-                <View style={styles.commitItem}>
-                  <View style={styles.commitIconWrap}>
-                    <Ionicons name="shield-checkmark" size={20} color="#2563eb" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.commitTitle}>100% Chính hãng</Text>
-                    <Text style={styles.commitDesc}>Bảo đảm hàng chuẩn, đền bù 200% nếu phát hiện giả</Text>
-                  </View>
-                </View>
-
-                <View style={styles.commitDivider} />
-
-                <View style={styles.commitItem}>
-                  <View style={styles.commitIconWrap}>
-                    <Ionicons name="sync" size={20} color="#16a34a" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.commitTitle}>1 Đổi 1 trong 30 ngày</Text>
-                    <Text style={styles.commitDesc}>Đổi mới ngay lập tức nếu lỗi từ nhà sản xuất</Text>
-                  </View>
-                </View>
-
-                <View style={styles.commitDivider} />
-
-                <View style={styles.commitItem}>
-                  <View style={styles.commitIconWrap}>
-                    <Ionicons name="airplane" size={20} color="#ea580c" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.commitTitle}>Giao hàng hỏa tốc</Text>
-                    <Text style={styles.commitDesc}>Miễn phí vận chuyển toàn quốc, kiểm tra trước khi nhận</Text>
-                  </View>
-                </View>
-
-                <View style={styles.commitDivider} />
-
-                <View style={styles.commitItem}>
-                  <View style={styles.commitIconWrap}>
-                    <Ionicons name="construct" size={20} color="#9333ea" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.commitTitle}>Hỗ trợ kỹ thuật trọn đời</Text>
-                    <Text style={styles.commitDesc}>Cài đặt phần mềm, vệ sinh bảo dưỡng định kỳ miễn phí</Text>
-                  </View>
-                </View>
-              </View>
+              {/* TRUST & POLICY COMMITMENTS (DESKTOP) */}
+              {isDesktop && renderCommitments()}
             </View>
 
             {/* RIGHT COLUMN: PRODUCT INFO & PURCHASE CONTROLS */}
@@ -386,7 +462,7 @@ export default function ProductDetailScreen() {
                 {/* CATEGORY PILL & SKU */}
                 <View style={styles.metaHeaderRow}>
                   <View style={styles.categoryPill}>
-                    <Text style={styles.categoryPillText}>{(product.category || (product as any).category_id || 'Sản phẩm').toUpperCase()}</Text>
+                    <Text style={styles.categoryPillText}>{categoryDisplayName.toUpperCase()}</Text>
                   </View>
                   <Text style={styles.skuText}>Mã SP: {product.id.toUpperCase()}</Text>
                 </View>
@@ -825,6 +901,9 @@ export default function ProductDetailScreen() {
                   </Text>
                 </View>
               </View>
+
+              {/* TRUST & POLICY COMMITMENTS (MOBILE) */}
+              {!isDesktop && renderCommitments()}
             </View>
           </View>
 
@@ -1277,6 +1356,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 20,
     elevation: 4,
+  },
+  heroImageCardMobile: {
+    height: 320,
+    padding: 12,
+    borderRadius: 16,
   },
   heroImage: {
     width: '100%',

@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 
 import { AdminSupportPanel } from '@/components/admin/AdminSupportPanel';
+import { InvoiceModal } from '@/components/InvoiceModal';
 import { useAppContext } from '@/context/AppContext';
 import { formatPrice, getProductFallbackImage, isInvalidOrBlockedImageUrl } from '@/data/products';
 import { apiService, type Order, type User, type Voucher } from '@/services/api';
@@ -51,6 +52,41 @@ interface CategoryItem {
 
 const DEFAULT_IMAGE = 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=600&q=80';
 
+function AdminProductThumb({
+  image,
+  product,
+  style,
+}: {
+  image?: string;
+  product?: any;
+  style?: any;
+}) {
+  const fallback = product ? getProductFallbackImage(product) || DEFAULT_IMAGE : DEFAULT_IMAGE;
+  const initial = image && !isInvalidOrBlockedImageUrl(image) ? image : fallback;
+  const [imgUri, setImgUri] = useState(initial);
+
+  useEffect(() => {
+    const next = image && !isInvalidOrBlockedImageUrl(image) ? image : fallback;
+    setImgUri(next);
+  }, [image, fallback]);
+
+  return (
+    <Image
+      source={{ uri: imgUri }}
+      style={style}
+      resizeMode="cover"
+      onError={() => {
+        if (imgUri !== fallback) {
+          setImgUri(fallback);
+        } else if (imgUri !== DEFAULT_IMAGE) {
+          setImgUri(DEFAULT_IMAGE);
+        }
+      }}
+      {...({ referrerPolicy: 'no-referrer' } as any)}
+    />
+  );
+}
+
 function getProductBrand(product: ProductItem) {
   return product.specifications?.['Thương hiệu'] || product.specifications?.Brand || product.name.split(' ')[0] || 'Khác';
 }
@@ -82,6 +118,7 @@ export default function AdminScreen() {
   const { width } = useWindowDimensions();
   const isDesktop = width >= 900;
   const isTablet = width >= 600 && width < 900;
+  const isMobile = width < 600;
   const { user, isAdmin, isDark, logout } = useAppContext();
 
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
@@ -161,6 +198,7 @@ export default function AdminScreen() {
 
   // Loading flags for modals
   const [isSavingProduct, setIsSavingProduct] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [isSavingCategory, setIsSavingCategory] = useState(false);
   const [isSavingVoucher, setIsSavingVoucher] = useState(false);
   const [isSavingUser, setIsSavingUser] = useState(false);
@@ -185,6 +223,22 @@ export default function AdminScreen() {
     id: string | number;
     title: string;
   } | null>(null);
+
+  // Quản lý xuất & in hóa đơn bán lẻ
+  const [invoiceModalVisible, setInvoiceModalVisible] = useState(false);
+  const [invoiceOrder, setInvoiceOrder] = useState<Order | null>(null);
+
+  // Bộ lọc phân tích doanh thu theo Ngày, Tháng, Năm
+  const [revenuePeriod, setRevenuePeriod] = useState<'day' | 'month' | 'year' | 'all'>('all');
+  const [revenueChartMode, setRevenueChartMode] = useState<'day' | 'month' | 'year'>('day');
+  const [revenueStatusMode, setRevenueStatusMode] = useState<'completed' | 'all_active'>('completed');
+  const [selectedSpecificDate, setSelectedSpecificDate] = useState<string>(() => {
+    const d = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  });
+  const [selectedSpecificMonth, setSelectedSpecificMonth] = useState<number>(() => new Date().getMonth() + 1);
+  const [selectedSpecificYear, setSelectedSpecificYear] = useState<number>(() => new Date().getFullYear());
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -423,6 +477,8 @@ export default function AdminScreen() {
       oldPrice: oldPriceNum || null,
       discount: oldPriceNum > priceNum ? Math.round((1 - priceNum / oldPriceNum) * 100) : 0,
       isSale: oldPriceNum > priceNum,
+      isNew: true,
+      isHot: true,
       stock: stockNum,
       image: productForm.image.trim() || DEFAULT_IMAGE,
       description: productForm.description.trim(),
@@ -435,14 +491,27 @@ export default function AdminScreen() {
         const updated = productList.map((p) => (p.id === editingProduct.id ? { ...p, ...payload } : p));
         setProductList(updated);
         syncCategoryCounts(updated);
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new Event('dpc_product_updated'));
+        }
         showToast(`Đã cập nhật "${productForm.name}"`);
       } else {
-        const newProduct = { id: productForm.id.trim(), ...payload, rating: 5, reviewCount: 1 };
+        const newProduct = {
+          id: productForm.id.trim(),
+          ...payload,
+          isNew: true,
+          rating: 5,
+          reviewCount: 1,
+          createdAt: new Date().toISOString(),
+        };
         await apiService.createProduct(newProduct);
         const updated = [newProduct as any, ...productList];
         setProductList(updated);
         syncCategoryCounts(updated);
         setStats((prev) => ({ ...prev, totalProducts: prev.totalProducts + 1 }));
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new Event('dpc_product_updated'));
+        }
         showToast(`Đã thêm "${productForm.name}" thành công!`);
       }
       setIsProductModalOpen(false);
@@ -450,6 +519,83 @@ export default function AdminScreen() {
       showToast('Lỗi khi lưu sản phẩm: ' + (err.message || 'Thất bại'));
     } finally {
       setIsSavingProduct(false);
+    }
+  };
+
+  // Chọn ảnh sản phẩm từ máy tính / thiết bị (hỗ trợ nén Canvas & lưu trữ máy chủ)
+  const handlePickProductImage = () => {
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.onchange = async (e: any) => {
+        const file = e.target?.files?.[0];
+        if (!file) return;
+
+        if (file.size > 10 * 1024 * 1024) {
+          showToast('Ảnh quá lớn (>10MB). Vui lòng chọn ảnh nhỏ hơn.');
+          return;
+        }
+
+        setIsUploadingImage(true);
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+          const rawDataUrl = event.target?.result as string;
+          if (!rawDataUrl) {
+            setIsUploadingImage(false);
+            return;
+          }
+
+          const img = document.createElement('img');
+          img.onload = async () => {
+            let width = img.width;
+            let height = img.height;
+            const maxDim = 1200;
+            if (width > maxDim || height > maxDim) {
+              if (width > height) {
+                height = Math.round((height * maxDim) / width);
+                width = maxDim;
+              } else {
+                width = Math.round((width * maxDim) / height);
+                height = maxDim;
+              }
+            }
+
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx?.drawImage(img, 0, 0, width, height);
+            const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+
+            try {
+              const res = await apiService.uploadImage(compressedDataUrl, productForm.name || 'product');
+              if (res?.url) {
+                setProductForm((prev) => ({ ...prev, image: res.url }));
+                showToast('✅ Đã tải ảnh lên máy chủ thành công!');
+              } else {
+                setProductForm((prev) => ({ ...prev, image: compressedDataUrl }));
+                showToast('✅ Đã chọn ảnh từ máy!');
+              }
+            } catch {
+              setProductForm((prev) => ({ ...prev, image: compressedDataUrl }));
+              showToast('✅ Đã chọn ảnh từ máy!');
+            } finally {
+              setIsUploadingImage(false);
+            }
+          };
+          img.onerror = () => {
+            setProductForm((prev) => ({ ...prev, image: rawDataUrl }));
+            setIsUploadingImage(false);
+            showToast('✅ Đã chọn ảnh từ máy!');
+          };
+          img.src = rawDataUrl;
+        };
+        reader.readAsDataURL(file);
+      };
+      input.click();
+    } else {
+      showToast('Chọn ảnh từ tệp tin tối ưu trên trình duyệt Web.');
     }
   };
 
@@ -564,6 +710,29 @@ export default function AdminScreen() {
     }
   };
 
+  const getWarrantyRangeForItem = (orderCreatedAt?: string, it?: any) => {
+    const nameLower = (it?.name || '').toLowerCase();
+    let months = it?.warrantyMonths || 24;
+    if (!it?.warrantyMonths) {
+      if (nameLower.includes('laptop') || nameLower.includes('macbook')) months = 24;
+      else if (nameLower.includes('màn hình') || nameLower.includes('pc') || nameLower.includes('vga') || nameLower.includes('rtx')) months = 36;
+      else if (nameLower.includes('chuột') || nameLower.includes('bàn phím') || nameLower.includes('tai nghe')) months = 12;
+    }
+    const orderDate = orderCreatedAt ? new Date(orderCreatedAt) : new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const formatD = (d: Date) => `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+    const purchaseStr = it?.purchaseDate || formatD(orderDate);
+    const expDate = new Date(orderDate);
+    expDate.setMonth(expDate.getMonth() + months);
+    const expiryStr = it?.warrantyExpiry || formatD(expDate);
+    return {
+      months,
+      purchaseStr,
+      expiryStr,
+      range: it?.warrantyRange || `${purchaseStr} đến ${expiryStr}`,
+    };
+  };
+
   // In Phiếu Tiếp Nhận & Thẩm Định Bảo Hành / Đổi Trả
   const handlePrintWarrantyReceipt = (order: Order) => {
     if (typeof window === 'undefined') return;
@@ -575,17 +744,23 @@ export default function AdminScreen() {
     }
 
     const itemsHtml = (order.items || [])
-      .map(
-        (it, idx) => `
-      <tr>
-        <td style="text-align: center;">${idx + 1}</td>
-        <td><strong>${it.name}</strong></td>
-        <td style="text-align: center;">${it.quantity}</td>
-        <td style="text-align: right;">${Number(it.price).toLocaleString('vi-VN')} đ</td>
-        <td style="text-align: right;"><strong>${(it.price * it.quantity).toLocaleString('vi-VN')} đ</strong></td>
-      </tr>
-    `
-      )
+      .map((it, idx) => {
+        const w = getWarrantyRangeForItem(order.createdAt, it);
+        return `
+          <tr>
+            <td style="text-align: center;">${idx + 1}</td>
+            <td>
+              <strong>${it.name}</strong>
+              <div style="font-size: 11px; color: #16a34a; margin-top: 3px;">
+                🛡️ Thời hạn BH dự kiến: <strong>${w.range}</strong> (${w.months} Tháng)
+              </div>
+            </td>
+            <td style="text-align: center;">${it.quantity}</td>
+            <td style="text-align: right;">${Number(it.price).toLocaleString('vi-VN')} đ</td>
+            <td style="text-align: right;"><strong>${(it.price * it.quantity).toLocaleString('vi-VN')} đ</strong></td>
+          </tr>
+        `;
+      })
       .join('');
 
     const statusText =
@@ -707,17 +882,23 @@ export default function AdminScreen() {
       return;
     }
     const itemsHtml = (order.items || [])
-      .map(
-        (it, idx) => `
-      <tr>
-        <td style="text-align: center;">${idx + 1}</td>
-        <td><strong>${it.name}</strong></td>
-        <td style="text-align: center;">${it.quantity}</td>
-        <td style="text-align: right;">${Number(it.price).toLocaleString('vi-VN')} đ</td>
-        <td style="text-align: right;"><strong>${(it.price * it.quantity).toLocaleString('vi-VN')} đ</strong></td>
-      </tr>
-    `
-      )
+      .map((it, idx) => {
+        const w = getWarrantyRangeForItem(order.createdAt, it);
+        return `
+          <tr>
+            <td style="text-align: center;">${idx + 1}</td>
+            <td>
+              <strong>${it.name}</strong>
+              <div style="font-size: 11px; color: #16a34a; margin-top: 3px;">
+                🛡️ Thời hạn BH dự kiến: <strong>${w.range}</strong> (${w.months} Tháng)
+              </div>
+            </td>
+            <td style="text-align: center;">${it.quantity}</td>
+            <td style="text-align: right;">${Number(it.price).toLocaleString('vi-VN')} đ</td>
+            <td style="text-align: right;"><strong>${(it.price * it.quantity).toLocaleString('vi-VN')} đ</strong></td>
+          </tr>
+        `;
+      })
       .join('');
 
     const html = `
@@ -767,7 +948,13 @@ export default function AdminScreen() {
             <td><strong>Thanh toán:</strong> ${order.paymentMethod === 'cod' ? 'COD (Tiền mặt khi nhận)' : order.paymentMethod?.toUpperCase()}</td>
           </tr>
           <tr>
-            <td colspan="2"><strong>Địa chỉ giao:</strong> ${order.shippingAddress || 'Chưa cung cấp'}</td>
+            <td><strong>Địa chỉ giao:</strong> ${order.shippingAddress || 'Chưa cung cấp'}</td>
+            <td><strong>Ngày mua máy:</strong> ${order.createdAt ? new Date(order.createdAt).toLocaleDateString('vi-VN') : ''}</td>
+          </tr>
+          <tr>
+            <td colspan="2" style="padding-top: 6px; font-size: 11px; color: #15803d;">
+              🛡️ <strong>LƯU Ý BẢO HÀNH CHÍNH HÃNG:</strong> Thời hạn bảo hành dự kiến tính chính xác từ ngày khách mua máy đến ngày hết hạn bảo hành trên hệ thống tra cứu điện tử DANGVINHPC.
+            </td>
           </tr>
         </table>
 
@@ -1138,6 +1325,207 @@ export default function AdminScreen() {
       .filter((o) => o.status === 'completed')
       .reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0);
   }, [orderList]);
+
+  // Phân tích doanh thu bán hàng theo Ngày, Tháng, Năm chi tiết
+  const revenueAnalytics = useMemo(() => {
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const todayStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    const thisMonthStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}`;
+    const thisYear = now.getFullYear();
+
+    const completedOrders = orderList.filter((o) => o.status === 'completed');
+
+    // 1. Thống kê theo 7 ngày gần nhất
+    const dailyMap: Record<string, { label: string; dateStr: string; fullDate: string; revenue: number; count: number }> = {};
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      const dStr = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+      const dayLabel = `${pad(d.getDate())}/${pad(d.getMonth() + 1)}`;
+      dailyMap[dStr] = {
+        label: dayLabel,
+        dateStr: dStr,
+        fullDate: `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`,
+        revenue: 0,
+        count: 0,
+      };
+    }
+
+    // 2. Thống kê theo 12 tháng của năm nay
+    const monthlyMap: Record<string, { label: string; monthStr: string; fullMonth: string; revenue: number; count: number }> = {};
+    for (let m = 1; m <= 12; m++) {
+      const mStr = `${thisYear}-${pad(m)}`;
+      monthlyMap[mStr] = {
+        label: `Tháng ${m}`,
+        monthStr: mStr,
+        fullMonth: `Tháng ${m}/${thisYear}`,
+        revenue: 0,
+        count: 0,
+      };
+    }
+
+    // 3. Thống kê theo năm
+    const yearlyMap: Record<string, { label: string; yearStr: string; fullYear: string; revenue: number; count: number }> = {};
+    [thisYear - 2, thisYear - 1, thisYear].forEach((yr) => {
+      yearlyMap[String(yr)] = {
+        label: `Năm ${yr}`,
+        yearStr: String(yr),
+        fullYear: `Năm ${yr}`,
+        revenue: 0,
+        count: 0,
+      };
+    });
+
+    let todayRevenue = 0;
+    let todayCount = 0;
+    let monthRevenue = 0;
+    let monthCount = 0;
+    let yearRevenue = 0;
+    let yearCount = 0;
+    let totalAll = 0;
+
+    completedOrders.forEach((o) => {
+      const amt = Number(o.totalAmount) || 0;
+      totalAll += amt;
+      const oDate = o.createdAt ? new Date(o.createdAt) : new Date();
+      const dStr = `${oDate.getFullYear()}-${pad(oDate.getMonth() + 1)}-${pad(oDate.getDate())}`;
+      const mStr = `${oDate.getFullYear()}-${pad(oDate.getMonth() + 1)}`;
+      const yStr = String(oDate.getFullYear());
+
+      // Ngày
+      if (dStr === todayStr) {
+        todayRevenue += amt;
+        todayCount += 1;
+      }
+      if (dailyMap[dStr]) {
+        dailyMap[dStr].revenue += amt;
+        dailyMap[dStr].count += 1;
+      }
+
+      // Tháng
+      if (mStr === thisMonthStr) {
+        monthRevenue += amt;
+        monthCount += 1;
+      }
+      if (monthlyMap[mStr]) {
+        monthlyMap[mStr].revenue += amt;
+        monthlyMap[mStr].count += 1;
+      }
+
+      // Năm
+      if (oDate.getFullYear() === thisYear) {
+        yearRevenue += amt;
+        yearCount += 1;
+      }
+      if (!yearlyMap[yStr]) {
+        yearlyMap[yStr] = {
+          label: `Năm ${yStr}`,
+          yearStr: yStr,
+          fullYear: `Năm ${yStr}`,
+          revenue: 0,
+          count: 0,
+        };
+      }
+      yearlyMap[yStr].revenue += amt;
+      yearlyMap[yStr].count += 1;
+    });
+
+    return {
+      todayRevenue,
+      todayCount,
+      monthRevenue,
+      monthCount,
+      yearRevenue,
+      yearCount,
+      totalAll,
+      dailyList: Object.values(dailyMap),
+      monthlyList: Object.values(monthlyMap),
+      yearlyList: Object.values(yearlyMap).sort((a, b) => Number(a.yearStr) - Number(b.yearStr)),
+    };
+  }, [orderList]);
+
+  // Danh sách các ngày thực tế có phát sinh đơn hàng để chọn nhanh
+  const availableOrderDates = useMemo(() => {
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const map = new Map<string, { dateStr: string; label: string; fullDate: string; count: number }>();
+    orderList.forEach((o) => {
+      const d = o.createdAt ? new Date(o.createdAt) : new Date();
+      const dStr = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+      const label = `${pad(d.getDate())}/${pad(d.getMonth() + 1)}`;
+      const fullDate = `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+      const existing = map.get(dStr);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        map.set(dStr, { dateStr: dStr, label, fullDate, count: 1 });
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => b.dateStr.localeCompare(a.dateStr));
+  }, [orderList]);
+
+  const currentPeriodRevenue = useMemo(() => {
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const targetOrders = orderList.filter((o) => {
+      if (revenueStatusMode === 'completed') {
+        return o.status === 'completed';
+      }
+      return o.status !== 'cancelled';
+    });
+
+    if (revenuePeriod === 'day') {
+      const dayOrders = targetOrders.filter((o) => {
+        const d = o.createdAt ? new Date(o.createdAt) : new Date();
+        const dStr = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+        return dStr === selectedSpecificDate;
+      });
+      const amount = dayOrders.reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0);
+      const [y, m, d] = (selectedSpecificDate || '').split('-');
+      return {
+        amount,
+        ordersCount: dayOrders.length,
+        label: `Doanh thu ngày ${d || '??'}/${m || '??'}/${y || '????'}`,
+        badge: `${d || '??'}/${m || '??'}`,
+      };
+    }
+
+    if (revenuePeriod === 'month') {
+      const monthOrders = targetOrders.filter((o) => {
+        const d = o.createdAt ? new Date(o.createdAt) : new Date();
+        return (d.getMonth() + 1) === selectedSpecificMonth && d.getFullYear() === selectedSpecificYear;
+      });
+      const amount = monthOrders.reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0);
+      return {
+        amount,
+        ordersCount: monthOrders.length,
+        label: `Doanh thu Tháng ${selectedSpecificMonth}/${selectedSpecificYear}`,
+        badge: `T${selectedSpecificMonth}`,
+      };
+    }
+
+    if (revenuePeriod === 'year') {
+      const yearOrders = targetOrders.filter((o) => {
+        const d = o.createdAt ? new Date(o.createdAt) : new Date();
+        return d.getFullYear() === selectedSpecificYear;
+      });
+      const amount = yearOrders.reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0);
+      return {
+        amount,
+        ordersCount: yearOrders.length,
+        label: `Doanh thu Năm ${selectedSpecificYear}`,
+        badge: `Năm ${selectedSpecificYear}`,
+      };
+    }
+
+    // 'all'
+    const allAmount = targetOrders.reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0);
+    return {
+      amount: allAmount,
+      ordersCount: targetOrders.length,
+      label: revenueStatusMode === 'completed' ? 'Tổng doanh thu thực thu' : 'Tổng giá trị đơn phát sinh',
+      badge: 'Tất cả',
+    };
+  }, [revenuePeriod, revenueStatusMode, selectedSpecificDate, selectedSpecificMonth, selectedSpecificYear, orderList]);
   const pendingOrdersCount = useMemo(() => orderList.filter((o) => o.status === 'pending').length, [orderList]);
   const allWarrantyOrdersCount = useMemo(() => orderList.filter((o) => Boolean(o.returnStatus)).length, [orderList]);
   const pendingReturnOrdersCount = useMemo(() => orderList.filter((o) => o.returnStatus === 'pending').length, [orderList]);
@@ -1315,15 +1703,141 @@ export default function AdminScreen() {
               <View style={[styles.statIconWrap, { backgroundColor: '#eff6ff' }]}>
                 <Ionicons name="wallet-outline" size={22} color="#2563eb" />
               </View>
-              <View style={[styles.statTrendBadge, { backgroundColor: '#dcfce7' }]}>
-                <Ionicons name="trending-up" size={12} color="#15803d" />
-                <Text style={[styles.statTrendText, { color: '#15803d' }]}>Thực thu</Text>
+              <View style={{ flexDirection: 'row', gap: 4, flexWrap: 'wrap' }}>
+                {[
+                  { id: 'day', label: 'Ngày' },
+                  { id: 'month', label: 'Tháng' },
+                  { id: 'year', label: 'Năm' },
+                  { id: 'all', label: 'Tất cả' },
+                ].map((p) => {
+                  const isSel = revenuePeriod === p.id;
+                  return (
+                    <Pressable
+                      key={p.id}
+                      style={[styles.revenuePeriodPill, isSel && styles.revenuePeriodPillActive]}
+                      onPress={() => setRevenuePeriod(p.id as any)}
+                    >
+                      <Text style={[styles.revenuePeriodPillText, isSel && styles.revenuePeriodPillTextActive]}>
+                        {p.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
               </View>
             </View>
             <Text style={[styles.statValue, isDark && styles.textDark]}>
-              {totalCompletedRevenue.toLocaleString('vi-VN')} ₫
+              {currentPeriodRevenue.amount.toLocaleString('vi-VN')} ₫
             </Text>
-            <Text style={[styles.statLabel, isDark && styles.textMutedDark]}>Tổng doanh thu bán hàng</Text>
+
+            {/* PICKER CHỌN NGÀY CỤ THỂ */}
+            {revenuePeriod === 'day' && (
+              <View style={styles.inlineDateSelectorRow}>
+                {Platform.OS === 'web' && typeof document !== 'undefined' ? (
+                  <View style={[styles.webDatePickerWrap, isDark && { backgroundColor: '#1e293b', borderColor: '#334155' }]}>
+                    <Ionicons name="calendar" size={13} color="#2563eb" style={{ marginRight: 4 }} />
+                    <input
+                      type="date"
+                      value={selectedSpecificDate}
+                      onChange={(e: any) => e?.target?.value && setSelectedSpecificDate(e.target.value)}
+                      style={{
+                        border: 'none',
+                        background: 'transparent',
+                        outline: 'none',
+                        fontFamily: 'inherit',
+                        fontSize: '11px',
+                        fontWeight: '700',
+                        color: isDark ? '#60a5fa' : '#2563eb',
+                        cursor: 'pointer',
+                      }}
+                    />
+                  </View>
+                ) : null}
+
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', gap: 4 }}>
+                    {availableOrderDates.map((od) => {
+                      const isSelDate = selectedSpecificDate === od.dateStr;
+                      return (
+                        <Pressable
+                          key={od.dateStr}
+                          style={[styles.quickDatePill, isDark && styles.quickDatePillDark, isSelDate && styles.quickDatePillActive]}
+                          onPress={() => setSelectedSpecificDate(od.dateStr)}
+                        >
+                          <Text style={[styles.quickDatePillText, isDark && styles.textMutedDark, isSelDate && styles.quickDatePillTextActive]}>
+                            {od.label} ({od.count}đ)
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </ScrollView>
+              </View>
+            )}
+
+            {/* PICKER CHỌN THÁNG CỤ THỂ */}
+            {revenuePeriod === 'month' && (
+              <View style={styles.inlineDateSelectorRow}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', gap: 4 }}>
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((m) => {
+                      const isSelM = selectedSpecificMonth === m;
+                      return (
+                        <Pressable
+                          key={m}
+                          style={[styles.quickDatePill, isDark && styles.quickDatePillDark, isSelM && styles.quickDatePillActive]}
+                          onPress={() => setSelectedSpecificMonth(m)}
+                        >
+                          <Text style={[styles.quickDatePillText, isDark && styles.textMutedDark, isSelM && styles.quickDatePillTextActive]}>
+                            Tháng {m}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </ScrollView>
+              </View>
+            )}
+
+            {/* PICKER CHỌN NĂM CỤ THỂ */}
+            {revenuePeriod === 'year' && (
+              <View style={styles.inlineDateSelectorRow}>
+                <View style={{ flexDirection: 'row', gap: 6 }}>
+                  {[2024, 2025, 2026].map((yr) => {
+                    const isSelY = selectedSpecificYear === yr;
+                    return (
+                      <Pressable
+                        key={yr}
+                        style={[styles.quickDatePill, isDark && styles.quickDatePillDark, isSelY && styles.quickDatePillActive]}
+                        onPress={() => setSelectedSpecificYear(yr)}
+                      >
+                        <Text style={[styles.quickDatePillText, isDark && styles.textMutedDark, isSelY && styles.quickDatePillTextActive]}>
+                          Năm {yr}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6, flexWrap: 'wrap', gap: 4 }}>
+              <Text style={[styles.statLabel, isDark && styles.textMutedDark]}>{currentPeriodRevenue.label}</Text>
+              <Pressable
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                onPress={() => setRevenueStatusMode((prev) => (prev === 'completed' ? 'all_active' : 'completed'))}
+              >
+                <Ionicons
+                  name={revenueStatusMode === 'completed' ? 'checkmark-circle' : 'time'}
+                  size={13}
+                  color={revenueStatusMode === 'completed' ? '#16a34a' : '#2563eb'}
+                />
+                <Text style={{ fontSize: 11, fontWeight: '700', color: revenueStatusMode === 'completed' ? '#16a34a' : '#2563eb' }}>
+                  {revenueStatusMode === 'completed'
+                    ? `${currentPeriodRevenue.ordersCount} đơn thành công`
+                    : `${currentPeriodRevenue.ordersCount} đơn (cả đơn chờ)`}
+                </Text>
+              </Pressable>
+            </View>
           </View>
 
           {/* Đơn hàng */}
@@ -1503,6 +2017,190 @@ export default function AdminScreen() {
               </View>
             </View>
 
+            {/* ======================================================== */}
+            {/* BÁO CÁO DOANH THU BÁN HÀNG THEO NGÀY / THÁNG / NĂM       */}
+            {/* ======================================================== */}
+            {(() => {
+              const chartList =
+                revenueChartMode === 'day'
+                  ? revenueAnalytics.dailyList
+                  : revenueChartMode === 'month'
+                  ? revenueAnalytics.monthlyList
+                  : revenueAnalytics.yearlyList;
+
+              const maxRevenue = Math.max(...chartList.map((c) => c.revenue), 1);
+              const totalPeriodRev = chartList.reduce((sum, c) => sum + c.revenue, 0);
+              const totalPeriodOrders = chartList.reduce((sum, c) => sum + c.count, 0);
+              const aovPeriod = totalPeriodOrders > 0 ? Math.round(totalPeriodRev / totalPeriodOrders) : 0;
+
+              return (
+                <View style={[styles.dashCard, isDark && styles.cardDark, { marginBottom: 16 }]}>
+                  {/* HEADER BÁO CÁO */}
+                  <View style={[styles.dashCardHeader, { flexWrap: 'wrap', gap: 12 }]}>
+                    <View style={{ flex: 1, minWidth: 220 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                        <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: '#eff6ff', alignItems: 'center', justifyContent: 'center' }}>
+                          <Ionicons name="bar-chart" size={17} color="#2563eb" />
+                        </View>
+                        <Text style={[styles.dashCardTitle, isDark && styles.textDark]}>
+                          Báo cáo doanh thu bán hàng
+                        </Text>
+                      </View>
+                      <Text style={[styles.dashCardSubtitle, isDark && styles.textMutedDark]}>
+                        Thống kê chi tiết & biểu đồ tăng trưởng doanh số thực thu theo Ngày, Tháng và Năm
+                      </Text>
+                    </View>
+
+                    {/* SELECTOR CHẾ ĐỘ BIỂU ĐỒ: NGÀY / THÁNG / NĂM */}
+                    <View style={styles.revenueModePillsRow}>
+                      {[
+                        { id: 'day', label: '7 Ngày gần nhất', icon: 'calendar-outline' },
+                        { id: 'month', label: `12 Tháng (${new Date().getFullYear()})`, icon: 'calendar' },
+                        { id: 'year', label: 'Theo Năm', icon: 'time-outline' },
+                      ].map((m) => {
+                        const isSel = revenueChartMode === m.id;
+                        return (
+                          <Pressable
+                            key={m.id}
+                            style={[
+                              styles.revenueModePillBtn,
+                              isDark && styles.revenueModePillBtnDark,
+                              isSel && styles.revenueModePillBtnActive,
+                            ]}
+                            onPress={() => setRevenueChartMode(m.id as any)}
+                          >
+                            <Ionicons
+                              name={m.icon as any}
+                              size={14}
+                              color={isSel ? '#ffffff' : isDark ? '#94a3b8' : '#64748b'}
+                              style={{ marginRight: 4 }}
+                            />
+                            <Text
+                              style={[
+                                styles.revenueModePillText,
+                                isDark && styles.textMutedDark,
+                                isSel && styles.revenueModePillTextActive,
+                              ]}
+                            >
+                              {m.label}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  </View>
+
+                  {/* 4 TILE CHỈ SỐ NHANH */}
+                  <View style={styles.revenueKpiGrid}>
+                    <View style={[styles.revenueKpiTile, isDark && styles.revenueKpiTileDark]}>
+                      <Text style={[styles.revenueKpiLabel, isDark && styles.textMutedDark]}>Tổng thực thu trong kỳ</Text>
+                      <Text style={[styles.revenueKpiValue, { color: '#2563eb' }]} numberOfLines={1}>
+                        {formatPrice(totalPeriodRev)}
+                      </Text>
+                    </View>
+
+                    <View style={[styles.revenueKpiTile, isDark && styles.revenueKpiTileDark]}>
+                      <Text style={[styles.revenueKpiLabel, isDark && styles.textMutedDark]}>Đơn hàng hoàn tất</Text>
+                      <Text style={[styles.revenueKpiValue, { color: '#16a34a' }]}>
+                        {totalPeriodOrders} đơn
+                      </Text>
+                    </View>
+
+                    <View style={[styles.revenueKpiTile, isDark && styles.revenueKpiTileDark]}>
+                      <Text style={[styles.revenueKpiLabel, isDark && styles.textMutedDark]}>Giá trị TB / đơn (AOV)</Text>
+                      <Text style={[styles.revenueKpiValue, { color: '#0f172a' }, isDark && styles.textDark]} numberOfLines={1}>
+                        {formatPrice(aovPeriod)}
+                      </Text>
+                    </View>
+
+                    <View style={[styles.revenueKpiTile, isDark && styles.revenueKpiTileDark]}>
+                      <Text style={[styles.revenueKpiLabel, isDark && styles.textMutedDark]}>Doanh thu cao nhất kỳ</Text>
+                      <Text style={[styles.revenueKpiValue, { color: '#d97706' }]} numberOfLines={1}>
+                        {formatPrice(maxRevenue === 1 ? 0 : maxRevenue)}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* KHUNG BIỂU ĐỒ CỘT THANH LỊCH (BAR CHART) */}
+                  <View style={[styles.barChartContainer, isDark && styles.barChartContainerDark]}>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.barChartScrollContent}>
+                      {chartList.map((item, idx) => {
+                        const pct = Math.round((item.revenue / maxRevenue) * 100);
+                        const isPeak = item.revenue === maxRevenue && maxRevenue > 1;
+                        return (
+                          <View key={idx} style={styles.barColumnWrap}>
+                            {/* Số tiền vắn tắt trên đỉnh cột */}
+                            <Text style={[styles.barAmountText, isPeak && { color: '#2563eb', fontWeight: '800' }]} numberOfLines={1}>
+                              {item.revenue >= 1000000
+                                ? `${(item.revenue / 1000000).toFixed(1)} tr`
+                                : item.revenue > 0
+                                ? `${Math.round(item.revenue / 1000)}k`
+                                : '0 ₫'}
+                            </Text>
+
+                            {/* Cột biểu đồ */}
+                            <View style={styles.barTrack}>
+                              <View
+                                style={[
+                                  styles.barFill,
+                                  { height: `${Math.max(item.revenue > 0 ? 12 : 3, pct)}%` },
+                                  item.revenue > 0 ? (isPeak ? styles.barFillPeak : styles.barFillActive) : styles.barFillZero,
+                                ]}
+                              />
+                            </View>
+
+                            {/* Nhãn ngày/tháng bên dưới */}
+                            <Text style={[styles.barLabelText, isDark && styles.textMutedDark, isPeak && { fontWeight: '800', color: '#2563eb' }]}>
+                              {item.label}
+                            </Text>
+                            <Text style={styles.barSubCountText}>
+                              {item.count > 0 ? `${item.count} đơn` : '-'}
+                            </Text>
+                          </View>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+
+                  {/* BẢNG KÊ CHI TIẾT THEO MỐC */}
+                  <View style={styles.revenueTableWrap}>
+                    <View style={styles.revenueTableHeader}>
+                      <Text style={[styles.revTh, { flex: 2 }]}>Mốc thời gian</Text>
+                      <Text style={[styles.revTh, { flex: 1.5, textAlign: 'center' }]}>Đơn hoàn tất</Text>
+                      <Text style={[styles.revTh, { flex: 2, textAlign: 'right' }]}>Doanh thu thực thu</Text>
+                      <Text style={[styles.revTh, { flex: 2, textAlign: 'right' }]}>Tỷ trọng %</Text>
+                    </View>
+                    {chartList.map((item, i) => {
+                      const sharePct = totalPeriodRev > 0 ? Math.round((item.revenue / totalPeriodRev) * 100) : 0;
+                      return (
+                        <View key={i} style={[styles.revenueTableRow, i % 2 === 1 && (isDark ? styles.revenueTableRowAltDark : styles.revenueTableRowAlt)]}>
+                          <View style={{ flex: 2 }}>
+                            <Text style={[styles.revTdTime, isDark && styles.textDark]}>
+                              {(item as any).fullDate || (item as any).fullMonth || (item as any).fullYear || item.label}
+                            </Text>
+                          </View>
+                          <Text style={[styles.revTd, { flex: 1.5, textAlign: 'center', fontWeight: '700' }]}>
+                            {item.count} đơn
+                          </Text>
+                          <Text style={[styles.revTd, { flex: 2, textAlign: 'right', fontWeight: '800', color: item.revenue > 0 ? '#16a34a' : '#94a3b8' }]}>
+                            {formatPrice(item.revenue)}
+                          </Text>
+                          <View style={{ flex: 2, alignItems: 'flex-end', justifyContent: 'center' }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                              <View style={[styles.shareBarTrack, isDark && { backgroundColor: '#334155' }]}>
+                                <View style={[styles.shareBarFill, { width: `${sharePct}%` }]} />
+                              </View>
+                              <Text style={[styles.sharePctText, isDark && styles.textMutedDark]}>{sharePct}%</Text>
+                            </View>
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
+                </View>
+              );
+            })()}
+
             {/* DASHBOARD CHARTS & BREAKDOWN */}
             <View style={[styles.dashGrid, !isDesktop && styles.dashGridMobile]}>
               {/* Tình trạng xử lý đơn hàng */}
@@ -1573,8 +2271,9 @@ export default function AdminScreen() {
                 ) : (
                   lowStockProducts.slice(0, 4).map((p) => (
                     <View key={p.id} style={styles.lowStockRow}>
-                      <Image
-                        source={{ uri: p.image && !isInvalidOrBlockedImageUrl(p.image) ? p.image : getProductFallbackImage(p) || DEFAULT_IMAGE }}
+                      <AdminProductThumb
+                        image={p.image}
+                        product={p}
                         style={styles.lowStockThumb}
                       />
                       <View style={{ flex: 1 }}>
@@ -2137,8 +2836,9 @@ export default function AdminScreen() {
                   const isLowStock = stockNum > 0 && stockNum <= 5;
                   return (
                     <View key={p.id} style={[styles.productCardRow, isDark && styles.cardDark, p.isHidden && { opacity: 0.65 }]}>
-                      <Image
-                        source={{ uri: p.image && !isInvalidOrBlockedImageUrl(p.image) ? p.image : getProductFallbackImage(p) || DEFAULT_IMAGE }}
+                      <AdminProductThumb
+                        image={p.image}
+                        product={p}
                         style={styles.productCardThumb}
                       />
                       <View style={styles.productCardDetails}>
@@ -2341,8 +3041,9 @@ export default function AdminScreen() {
                     <View style={styles.brandProductsTable}>
                       {group.products.map((p) => (
                         <View key={p.id} style={styles.brandProductRow}>
-                          <Image
-                            source={{ uri: p.image && !isInvalidOrBlockedImageUrl(p.image) ? p.image : getProductFallbackImage(p) || DEFAULT_IMAGE }}
+                          <AdminProductThumb
+                            image={p.image}
+                            product={p}
                             style={styles.brandProductThumb}
                           />
                           <View style={{ flex: 1 }}>
@@ -2539,48 +3240,58 @@ export default function AdminScreen() {
                   const badgeBorder = isUserAdmin ? '#ddd6fe' : isUserStaff ? '#a7f3d0' : '#bfdbfe';
 
                   return (
-                    <View key={u.id} style={[styles.userCardRow, isDark && styles.cardDark]}>
-                      {/* AVATAR BADGE */}
-                      <View style={[styles.userAvatarBadge, { backgroundColor: badgeColor }]}>
-                        <Text style={styles.userAvatarBadgeText}>{(u.name ? u.name[0] : 'U').toUpperCase()}</Text>
-                      </View>
-
-                      {/* USER INFO */}
-                      <View style={{ flex: 1 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                          <Text style={[styles.userCardName, isDark && styles.textDark]}>{u.name || 'Chưa đặt tên'}</Text>
-
-                          {/* ROLE BADGE */}
-                          <View style={[styles.userRoleTag, { backgroundColor: badgeBg, borderColor: badgeBorder }]}>
-                            <Text style={[styles.userRoleTagText, { color: badgeColor }]}>
-                              {isUserAdmin ? '⭐ Quản Trị Viên (Admin)' : isUserStaff ? '👔 Nhân Viên Cửa Hàng (Staff)' : '👤 Khách Hàng (Customer)'}
-                            </Text>
-                          </View>
-
-                          {isSuperAdmin && (
-                            <View style={[styles.userRoleTag, { backgroundColor: '#fef3c7', borderColor: '#fde68a' }]}>
-                              <Text style={[styles.userRoleTagText, { color: '#b45309' }]}>👑 Super Admin</Text>
-                            </View>
-                          )}
-
-                          {isCurrentLoggedUser && (
-                            <View style={[styles.userRoleTag, { backgroundColor: '#f0fdf4', borderColor: '#bbf7d0' }]}>
-                              <Text style={[styles.userRoleTagText, { color: '#16a34a' }]}>Đang đăng nhập</Text>
-                            </View>
-                          )}
+                    <View
+                      key={u.id}
+                      style={[
+                        styles.userCardRow,
+                        !isDesktop && styles.userCardRowMobile,
+                        isDark && styles.cardDark,
+                      ]}
+                    >
+                      {/* USER HEADER INFO (AVATAR + TEXT) */}
+                      <View style={[styles.userCardMain, !isDesktop && styles.userCardMainMobile]}>
+                        {/* AVATAR BADGE */}
+                        <View style={[styles.userAvatarBadge, { backgroundColor: badgeColor }]}>
+                          <Text style={styles.userAvatarBadgeText}>{(u.name ? u.name[0] : 'U').toUpperCase()}</Text>
                         </View>
 
-                        <Text style={[styles.userCardContact, isDark && styles.textMutedDark]}>
-                          ✉️ {u.email} • 📞 {u.phone || 'Chưa cập nhật SĐT'}
-                        </Text>
-                        {u.address ? (
-                          <Text style={[styles.userCardAddress, isDark && styles.textMutedDark]}>📍 {u.address}</Text>
-                        ) : null}
+                        {/* USER INFO */}
+                        <View style={styles.userInfoWrap}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                            <Text style={[styles.userCardName, isDark && styles.textDark]}>{u.name || 'Chưa đặt tên'}</Text>
+
+                            {/* ROLE BADGE */}
+                            <View style={[styles.userRoleTag, { backgroundColor: badgeBg, borderColor: badgeBorder }]}>
+                              <Text style={[styles.userRoleTagText, { color: badgeColor }]}>
+                                {isUserAdmin ? '⭐ Quản Trị Viên (Admin)' : isUserStaff ? '👔 Nhân Viên Cửa Hàng (Staff)' : '👤 Khách Hàng (Customer)'}
+                              </Text>
+                            </View>
+
+                            {isSuperAdmin && (
+                              <View style={[styles.userRoleTag, { backgroundColor: '#fef3c7', borderColor: '#fde68a' }]}>
+                                <Text style={[styles.userRoleTagText, { color: '#b45309' }]}>👑 Super Admin</Text>
+                              </View>
+                            )}
+
+                            {isCurrentLoggedUser && (
+                              <View style={[styles.userRoleTag, { backgroundColor: '#f0fdf4', borderColor: '#bbf7d0' }]}>
+                                <Text style={[styles.userRoleTagText, { color: '#16a34a' }]}>Đang đăng nhập</Text>
+                              </View>
+                            )}
+                          </View>
+
+                          <Text style={[styles.userCardContact, isDark && styles.textMutedDark]}>
+                            ✉️ {u.email} • 📞 {u.phone || 'Chưa cập nhật SĐT'}
+                          </Text>
+                          {u.address ? (
+                            <Text style={[styles.userCardAddress, isDark && styles.textMutedDark]}>📍 {u.address}</Text>
+                          ) : null}
+                        </View>
                       </View>
 
                       {/* ROLE SWITCHER BUTTONS & ACTIONS */}
-                      <View style={styles.userActionsGroup}>
-                        <View style={styles.roleSwitcherGroup}>
+                      <View style={[styles.userActionsGroup, !isDesktop && styles.userActionsGroupMobile]}>
+                        <View style={[styles.roleSwitcherGroup, !isDesktop && styles.roleSwitcherGroupMobile]}>
                           <Text style={[styles.roleSwitcherLabel, isDark && styles.textMutedDark]}>Phân quyền:</Text>
                           <View style={styles.roleChipsWrap}>
                             {/* Nút Admin */}
@@ -2627,33 +3338,35 @@ export default function AdminScreen() {
                           </View>
                         </View>
 
-                        {/* Nút Xem chi tiết tài khoản */}
-                        <Pressable
-                          style={{
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            gap: 4,
-                            backgroundColor: isDark ? 'rgba(37, 99, 235, 0.15)' : '#eff6ff',
-                            paddingHorizontal: 10,
-                            paddingVertical: 7,
-                            borderRadius: 8,
-                            borderWidth: 1,
-                            borderColor: isDark ? 'rgba(37, 99, 235, 0.3)' : '#bfdbfe',
-                          }}
-                          onPress={() => setViewingUser(u)}
-                        >
-                          <Ionicons name="eye-outline" size={15} color="#2563eb" />
-                          <Text style={{ fontSize: 12, fontWeight: '700', color: '#2563eb' }}>Chi tiết</Text>
-                        </Pressable>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          {/* Nút Xem chi tiết tài khoản */}
+                          <Pressable
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              gap: 4,
+                              backgroundColor: isDark ? 'rgba(37, 99, 235, 0.15)' : '#eff6ff',
+                              paddingHorizontal: 10,
+                              paddingVertical: 7,
+                              borderRadius: 8,
+                              borderWidth: 1,
+                              borderColor: isDark ? 'rgba(37, 99, 235, 0.3)' : '#bfdbfe',
+                            }}
+                            onPress={() => setViewingUser(u)}
+                          >
+                            <Ionicons name="eye-outline" size={15} color="#2563eb" />
+                            <Text style={{ fontSize: 12, fontWeight: '700', color: '#2563eb' }}>Chi tiết</Text>
+                          </Pressable>
 
-                        {/* Nút xóa người dùng */}
-                        <Pressable
-                          style={[styles.btnDeleteUser, (isCurrentLoggedUser || isSuperAdmin) && { opacity: 0.3 }]}
-                          onPress={() => setDeleteConfirm({ type: 'user', id: u.id, title: u.name || u.email })}
-                          disabled={isCurrentLoggedUser || isSuperAdmin}
-                        >
-                          <Ionicons name="trash-outline" size={16} color="#ef4444" />
-                        </Pressable>
+                          {/* Nút xóa người dùng */}
+                          <Pressable
+                            style={[styles.btnDeleteUser, (isCurrentLoggedUser || isSuperAdmin) && { opacity: 0.3 }]}
+                            onPress={() => setDeleteConfirm({ type: 'user', id: u.id, title: u.name || u.email })}
+                            disabled={isCurrentLoggedUser || isSuperAdmin}
+                          >
+                            <Ionicons name="trash-outline" size={16} color="#ef4444" />
+                          </Pressable>
+                        </View>
                       </View>
                     </View>
                   );
@@ -2681,12 +3394,12 @@ export default function AdminScreen() {
       {/* MODAL 1: XEM CHI TIẾT ĐƠN HÀNG & IN HÓA ĐƠN               */}
       {/* ======================================================== */}
       <Modal visible={!!viewingOrder} transparent animationType="fade">
-        <View style={styles.modalBackdrop}>
-          <View style={[styles.modalBoxLarge, isDark && styles.cardDark]}>
+        <View style={[styles.modalBackdrop, isMobile && styles.modalBackdropMobile]}>
+          <View style={[styles.modalBoxLarge, isMobile && styles.modalBoxLargeMobile, isDark && styles.cardDark]}>
             <View style={styles.modalHeaderRow}>
-              <View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <Text style={[styles.modalOrderTitle, isDark && styles.textDark]}>
+              <View style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <Text style={[styles.modalOrderTitle, isDark && styles.textDark, { flexShrink: 1 }]}>
                     Hóa Đơn {viewingOrder?.orderNumber || `#ORD-${viewingOrder?.id}`}
                   </Text>
                   {viewingOrder && (
@@ -2706,17 +3419,24 @@ export default function AdminScreen() {
               </Pressable>
             </View>
 
-            <ScrollView style={{ maxHeight: 460 }} showsVerticalScrollIndicator={false}>
+            <ScrollView
+              style={{ flexGrow: 1, flexShrink: 1 }}
+              contentContainerStyle={{ paddingBottom: 16 }}
+              showsVerticalScrollIndicator={true}
+              keyboardShouldPersistTaps="handled"
+            >
               {/* THÔNG TIN KHÁCH HÀNG & GIAO HÀNG */}
-              <View style={styles.orderDetailInfoCard}>
+              <View style={[styles.orderDetailInfoCard, isMobile && { padding: 10, gap: 10 }]}>
                 <Text style={styles.infoCardHeading}>Thông tin nhận hàng</Text>
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Địa chỉ giao:</Text>
-                  <Text style={[styles.infoValue, isDark && styles.textDark]}>{viewingOrder?.shippingAddress}</Text>
+                <View style={[styles.infoRow, isMobile && { flexDirection: 'column', alignItems: 'flex-start', gap: 2 }]}>
+                  <Text style={[styles.infoLabel, isMobile && { width: 'auto', fontSize: 11 }]}>📍 Địa chỉ giao hàng:</Text>
+                  <Text style={[styles.infoValue, isDark && styles.textDark, isMobile && { textAlign: 'left', width: '100%', lineHeight: 18 }]} selectable>
+                    {viewingOrder?.shippingAddress}
+                  </Text>
                 </View>
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Phương thức thanh toán:</Text>
-                  <Text style={[styles.infoValue, isDark && styles.textDark]}>
+                <View style={[styles.infoRow, isMobile && { flexDirection: 'column', alignItems: 'flex-start', gap: 2, marginTop: isMobile ? 2 : 0 }]}>
+                  <Text style={[styles.infoLabel, isMobile && { width: 'auto', fontSize: 11 }]}>💳 Phương thức thanh toán:</Text>
+                  <Text style={[styles.infoValue, isDark && styles.textDark, isMobile && { textAlign: 'left', width: '100%' }]}>
                     {viewingOrder?.paymentMethod === 'cod' ? 'Thanh toán tiền mặt khi nhận hàng (COD)' : viewingOrder?.paymentMethod?.toUpperCase()}
                   </Text>
                 </View>
@@ -2827,27 +3547,28 @@ export default function AdminScreen() {
               <Text style={[styles.itemsTableHeading, isDark && styles.textDark]}>Danh sách linh kiện đặt mua:</Text>
               <View style={styles.itemsTableWrap}>
                 {viewingOrder?.items?.map((item, idx) => (
-                  <View key={idx} style={styles.itemTableRow}>
-                    <Image
-                      source={{ uri: item.image && !isInvalidOrBlockedImageUrl(item.image) ? item.image : DEFAULT_IMAGE }}
-                      style={styles.itemTableThumb}
+                  <View key={idx} style={[styles.itemTableRow, isMobile && { padding: 8, gap: 8 }]}>
+                    <AdminProductThumb
+                      image={item.image}
+                      product={item}
+                      style={[styles.itemTableThumb, isMobile && { width: 38, height: 38 }]}
                     />
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.itemTableName, isDark && styles.textDark]} numberOfLines={2}>{item.name}</Text>
-                      <Text style={[styles.itemTableSub, isDark && styles.textMutedDark]}>
+                    <View style={{ flex: 1, minWidth: 0, paddingRight: 6 }}>
+                      <Text style={[styles.itemTableName, isDark && styles.textDark, isMobile && { fontSize: 12, lineHeight: 16 }]} numberOfLines={2}>{item.name}</Text>
+                      <Text style={[styles.itemTableSub, isDark && styles.textMutedDark, isMobile && { fontSize: 11 }]}>
                         Đơn giá: {formatPrice(item.price)}
                       </Text>
                     </View>
-                    <View style={{ alignItems: 'flex-end' }}>
-                      <Text style={[styles.itemTableQty, isDark && styles.textDark]}>x{item.quantity}</Text>
-                      <Text style={styles.itemTableTotal}>{formatPrice(item.price * item.quantity)}</Text>
+                    <View style={{ alignItems: 'flex-end', flexShrink: 0 }}>
+                      <Text style={[styles.itemTableQty, isDark && styles.textDark, isMobile && { fontSize: 11 }]}>x{item.quantity}</Text>
+                      <Text style={[styles.itemTableTotal, isMobile && { fontSize: 12 }]}>{formatPrice(item.price * item.quantity)}</Text>
                     </View>
                   </View>
                 ))}
               </View>
 
               {/* TỔNG CỘNG TIỀN */}
-              <View style={styles.orderSummaryCard}>
+              <View style={[styles.orderSummaryCard, isMobile && { padding: 10 }]}>
                 <View style={styles.summaryLine}>
                   <Text style={styles.summaryLabel}>Tiền hàng:</Text>
                   <Text style={[styles.summaryVal, isDark && styles.textDark]}>{formatPrice(viewingOrder?.totalAmount || 0)}</Text>
@@ -2857,34 +3578,39 @@ export default function AdminScreen() {
                   <Text style={styles.summaryValFree}>Miễn phí</Text>
                 </View>
                 <View style={[styles.summaryLine, styles.summaryTotalLine]}>
-                  <Text style={styles.grandTotalLabel}>Tổng thu của khách:</Text>
-                  <Text style={styles.grandTotalVal}>{formatPrice(viewingOrder?.totalAmount || 0)}</Text>
+                  <Text style={[styles.grandTotalLabel, isMobile && { fontSize: 13 }]}>Tổng thu của khách:</Text>
+                  <Text style={[styles.grandTotalVal, isMobile && { fontSize: 15 }]}>{formatPrice(viewingOrder?.totalAmount || 0)}</Text>
                 </View>
               </View>
             </ScrollView>
 
-            <View style={styles.modalFooterActions}>
+            <View style={[styles.modalFooterActions, isMobile && { flexDirection: 'row', flexWrap: 'wrap', gap: 6, justifyContent: 'space-between' }, isDark && { borderTopColor: '#334155' }]}>
               {viewingOrder?.returnStatus ? (
                 <Pressable
-                  style={[styles.btnPrintInvoice, { backgroundColor: '#f0fdf4', borderColor: '#86efac' }]}
+                  style={[styles.btnPrintInvoice, isMobile && { flex: 1, minWidth: 120, paddingHorizontal: 8, paddingVertical: 8, justifyContent: 'center' }, { backgroundColor: '#f0fdf4', borderColor: '#86efac' }]}
                   onPress={() => viewingOrder && handlePrintWarrantyReceipt(viewingOrder)}
                 >
-                  <Ionicons name="shield-checkmark" size={17} color="#15803d" />
-                  <Text style={[styles.btnPrintInvoiceText, { color: '#15803d', fontWeight: '800' }]}>
-                    In Phiếu BH & Đổi Trả
+                  <Ionicons name="shield-checkmark" size={15} color="#15803d" />
+                  <Text style={[styles.btnPrintInvoiceText, { color: '#15803d', fontWeight: '800', fontSize: isMobile ? 11 : 13 }]}>
+                    Phiếu BH
                   </Text>
                 </Pressable>
               ) : null}
 
               <Pressable
-                style={styles.btnPrintInvoice}
-                onPress={() => viewingOrder && handlePrintSalesInvoice(viewingOrder)}
+                style={[styles.btnPrintInvoice, isMobile && { flex: 1, minWidth: 110, paddingHorizontal: 8, paddingVertical: 8, justifyContent: 'center' }]}
+                onPress={() => {
+                  if (viewingOrder) {
+                    setInvoiceOrder(viewingOrder);
+                    setInvoiceModalVisible(true);
+                  }
+                }}
               >
-                <Ionicons name="print-outline" size={17} color="#2563eb" />
-                <Text style={styles.btnPrintInvoiceText}>In Hóa Đơn Bán Hàng</Text>
+                <Ionicons name="receipt-outline" size={15} color="#2563eb" />
+                <Text style={[styles.btnPrintInvoiceText, { fontSize: isMobile ? 11 : 13 }]}>Xuất / In Hóa Đơn</Text>
               </Pressable>
 
-              <Pressable style={styles.btnCloseModal} onPress={() => setViewingOrder(null)}>
+              <Pressable style={[styles.btnCloseModal, isMobile && { minWidth: 65, paddingHorizontal: 12, paddingVertical: 8, justifyContent: 'center', alignItems: 'center' }]} onPress={() => setViewingOrder(null)}>
                 <Text style={styles.btnCloseModalText}>Đóng</Text>
               </Pressable>
             </View>
@@ -2896,8 +3622,8 @@ export default function AdminScreen() {
       {/* MODAL 2: THÊM / CHỈNH SỬA SẢN PHẨM                       */}
       {/* ======================================================== */}
       <Modal visible={isProductModalOpen} transparent animationType="fade">
-        <View style={styles.modalBackdrop}>
-          <View style={[styles.modalBoxLarge, isDark && styles.cardDark]}>
+        <View style={[styles.modalBackdrop, isMobile && styles.modalBackdropMobile]}>
+          <View style={[styles.modalBoxLarge, isMobile && styles.modalBoxLargeMobile, isDark && styles.cardDark]}>
             <View style={styles.modalHeaderRow}>
               <Text style={[styles.modalMainTitle, isDark && styles.textDark]}>
                 {editingProduct ? 'Chỉnh sửa sản phẩm' : 'Đăng sản phẩm mới'}
@@ -2907,11 +3633,16 @@ export default function AdminScreen() {
               </Pressable>
             </View>
 
-            <ScrollView style={{ maxHeight: 520 }} showsVerticalScrollIndicator={false}>
+            <ScrollView
+              style={{ flex: 1, minHeight: 0, width: '100%' }}
+              contentContainerStyle={{ paddingBottom: 24 }}
+              showsVerticalScrollIndicator={true}
+              keyboardShouldPersistTaps="handled"
+            >
               {!editingProduct && (
                 <View style={styles.formGroup}>
-                  <View style={styles.formGroupHeader}>
-                    <Text style={[styles.fieldLabel, isDark && styles.textDark]}>Mã định danh (ID):</Text>
+                  <View style={[styles.formGroupHeader, isMobile && { flexDirection: 'column', alignItems: 'flex-start', gap: 4 }]}>
+                    <Text style={[styles.fieldLabel, isDark && styles.textDark, isMobile && { marginBottom: 0 }]}>Mã định danh (ID):</Text>
                     <Pressable onPress={regenerateId} style={styles.regenBtn}>
                       <Ionicons name="refresh" size={12} color="#2563eb" />
                       <Text style={styles.regenBtnText}>Tạo mã ngẫu nhiên</Text>
@@ -2995,7 +3726,7 @@ export default function AdminScreen() {
 
               {/* GIÁ BÁN & GIÁ GỐC */}
               <View style={styles.formGroup}>
-                <View style={styles.formGroupHeader}>
+                <View style={[styles.formGroupHeader, isMobile && { flexWrap: 'wrap', gap: 4 }]}>
                   <Text style={[styles.fieldLabel, isDark && styles.textDark]}>Giá bán thực tế (VNĐ) *:</Text>
                   {!!productForm.price && (
                     <Text style={styles.previewPriceLive}>{formatPrice(parseInt(productForm.price, 10) || 0)}</Text>
@@ -3032,7 +3763,7 @@ export default function AdminScreen() {
               </View>
 
               <View style={styles.formGroup}>
-                <View style={styles.formGroupHeader}>
+                <View style={[styles.formGroupHeader, isMobile && { flexWrap: 'wrap', gap: 4 }]}>
                   <Text style={[styles.fieldLabel, isDark && styles.textDark]}>Giá gốc niêm yết (nếu có giảm giá):</Text>
                   {!!productForm.oldPrice && (
                     <Text style={styles.previewOldPriceLive}>{formatPrice(parseInt(productForm.oldPrice, 10) || 0)}</Text>
@@ -3059,30 +3790,169 @@ export default function AdminScreen() {
                 </View>
               </View>
 
-              {/* ẢNH SẢN PHẨM & MẪU SẴN */}
+              {/* ẢNH SẢN PHẨM & TẢI ẢNH TỪ MÁY TÍNH */}
               <View style={styles.formGroup}>
-                <Text style={[styles.fieldLabel, isDark && styles.textDark]}>Hình ảnh sản phẩm:</Text>
-                <View style={styles.imageInputRow}>
-                  <Image source={{ uri: productForm.image || DEFAULT_IMAGE }} style={styles.imageInputThumb} />
-                  <TextInput
-                    style={[styles.inputControl, { flex: 1 }, isDark && styles.inputControlDark]}
-                    value={productForm.image}
-                    onChangeText={(t) => setProductForm({ ...productForm, image: t })}
-                    placeholder="https://..."
-                    placeholderTextColor="#94a3b8"
-                  />
+                <View style={{ flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', justifyContent: 'space-between', marginBottom: 8, gap: 6 }}>
+                  <Text style={[styles.fieldLabel, isDark && styles.textDark, { marginBottom: 0 }]}>Hình ảnh sản phẩm:</Text>
+                  <Pressable
+                    style={[styles.uploadBtnHeader, isMobile && { width: '100%', justifyContent: 'center', paddingVertical: 8 }]}
+                    onPress={handlePickProductImage}
+                    disabled={isUploadingImage}
+                  >
+                    {isUploadingImage ? (
+                      <ActivityIndicator size="small" color="#2563eb" style={{ marginRight: 6 }} />
+                    ) : (
+                      <Ionicons name="cloud-upload-outline" size={15} color="#2563eb" style={{ marginRight: 6 }} />
+                    )}
+                    <Text style={styles.uploadBtnHeaderText}>
+                      {isUploadingImage ? 'Đang nén & tải ảnh...' : '📁 Tải ảnh từ máy tính / Điện thoại'}
+                    </Text>
+                  </Pressable>
                 </View>
-                {/* Gợi ý ảnh nhanh */}
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
-                  <View style={{ flexDirection: 'row', gap: 6 }}>
-                    {PRESET_PHOTOS.map((p, idx) => (
-                      <Pressable key={idx} style={styles.presetPhotoChip} onPress={() => setProductForm({ ...productForm, image: p.url })}>
-                        <Text style={{ fontSize: 13 }}>{p.icon}</Text>
-                        <Text style={styles.presetPhotoText}>{p.label}</Text>
+
+                {isMobile ? (
+                  // Giao diện chọn ảnh tối ưu cho Màn hình điện thoại
+                  <View style={{ gap: 10, width: '100%' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                      <Pressable
+                        style={styles.imageThumbTouch}
+                        onPress={handlePickProductImage}
+                        accessibilityRole="button"
+                        accessibilityLabel="Bấm vào để chọn ảnh từ máy tính"
+                      >
+                        <Image source={{ uri: productForm.image || DEFAULT_IMAGE }} style={[styles.imageInputThumb, { width: 56, height: 56 }]} />
+                        <View style={styles.imageThumbOverlay}>
+                          <Ionicons name="camera" size={12} color="#ffffff" />
+                        </View>
                       </Pressable>
-                    ))}
+
+                      <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
+                        <Pressable
+                          style={[styles.uploadActionBtn, isUploadingImage && { opacity: 0.6 }]}
+                          onPress={handlePickProductImage}
+                          disabled={isUploadingImage}
+                        >
+                          <Ionicons name="folder-open-outline" size={14} color="#0f172a" />
+                          <Text style={styles.uploadActionBtnText} numberOfLines={1}>
+                            {isUploadingImage ? 'Đang xử lý...' : 'Chọn từ tệp tin'}
+                          </Text>
+                        </Pressable>
+
+                        {productForm.image && productForm.image.startsWith('data:image') && (
+                          <View style={styles.localImgBadge}>
+                            <Ionicons name="checkmark-circle" size={12} color="#16a34a" />
+                            <Text style={styles.localImgBadgeText}>Ảnh từ thiết bị</Text>
+                          </View>
+                        )}
+                        {productForm.image && productForm.image.includes('/uploads/') && (
+                          <View style={styles.localImgBadge}>
+                            <Ionicons name="cloud-done" size={12} color="#16a34a" />
+                            <Text style={styles.localImgBadgeText}>Đã lưu trên máy chủ</Text>
+                          </View>
+                        )}
+                      </View>
+                    </View>
+
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, width: '100%' }}>
+                      <TextInput
+                        style={[styles.inputControl, { flex: 1, minWidth: 0, fontSize: 13 }, isDark && styles.inputControlDark]}
+                        value={productForm.image}
+                        onChangeText={(t) => setProductForm({ ...productForm, image: t })}
+                        placeholder="Hoặc dán URL: https://..."
+                        placeholderTextColor="#94a3b8"
+                      />
+                      {productForm.image ? (
+                        <Pressable
+                          style={styles.clearImgBtn}
+                          onPress={() => setProductForm({ ...productForm, image: '' })}
+                          accessibilityLabel="Xóa ảnh"
+                        >
+                          <Ionicons name="close" size={16} color="#64748b" />
+                        </Pressable>
+                      ) : null}
+                    </View>
                   </View>
-                </ScrollView>
+                ) : (
+                  // Giao diện màn hình máy tính (Desktop)
+                  <View style={styles.imageInputRow}>
+                    <Pressable
+                      style={styles.imageThumbTouch}
+                      onPress={handlePickProductImage}
+                      accessibilityRole="button"
+                      accessibilityLabel="Bấm vào để chọn ảnh từ máy tính"
+                    >
+                      <Image source={{ uri: productForm.image || DEFAULT_IMAGE }} style={styles.imageInputThumb} />
+                      <View style={styles.imageThumbOverlay}>
+                        <Ionicons name="camera" size={13} color="#ffffff" />
+                      </View>
+                    </Pressable>
+
+                    <View style={{ flex: 1, gap: 6, minWidth: 0 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <TextInput
+                          style={[styles.inputControl, { flex: 1, minWidth: 0 }, isDark && styles.inputControlDark]}
+                          value={productForm.image}
+                          onChangeText={(t) => setProductForm({ ...productForm, image: t })}
+                          placeholder="Dán link ảnh https://... hoặc chọn ảnh từ máy tính"
+                          placeholderTextColor="#94a3b8"
+                        />
+                        {productForm.image ? (
+                          <Pressable
+                            style={styles.clearImgBtn}
+                            onPress={() => setProductForm({ ...productForm, image: '' })}
+                            accessibilityLabel="Xóa ảnh"
+                          >
+                            <Ionicons name="close" size={16} color="#64748b" />
+                          </Pressable>
+                        ) : null}
+                      </View>
+
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <Pressable
+                          style={[styles.uploadActionBtn, isUploadingImage && { opacity: 0.6 }]}
+                          onPress={handlePickProductImage}
+                          disabled={isUploadingImage}
+                        >
+                          <Ionicons name="folder-open-outline" size={13} color="#0f172a" />
+                          <Text style={styles.uploadActionBtnText}>
+                            {isUploadingImage ? 'Đang xử lý...' : 'Chọn từ máy tính / Điện thoại'}
+                          </Text>
+                        </Pressable>
+
+                        {productForm.image && productForm.image.startsWith('data:image') && (
+                          <View style={styles.localImgBadge}>
+                            <Ionicons name="checkmark-circle" size={12} color="#16a34a" />
+                            <Text style={styles.localImgBadgeText}>Ảnh từ máy tính</Text>
+                          </View>
+                        )}
+
+                        {productForm.image && productForm.image.includes('/uploads/') && (
+                          <View style={styles.localImgBadge}>
+                            <Ionicons name="cloud-done" size={12} color="#16a34a" />
+                            <Text style={styles.localImgBadgeText}>Đã lưu trên máy chủ</Text>
+                          </View>
+                        )}
+                      </View>
+                    </View>
+                  </View>
+                )}
+
+                {/* Gợi ý ảnh nhanh */}
+                <View style={{ marginTop: 10 }}>
+                  <Text style={{ fontSize: 11, color: isDark ? '#94a3b8' : '#64748b', marginBottom: 5 }}>
+                    Hoặc chọn nhanh ảnh mẫu có sẵn:
+                  </Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ width: '100%' }}>
+                    <View style={{ flexDirection: 'row', gap: 6, paddingRight: 10 }}>
+                      {PRESET_PHOTOS.map((p, idx) => (
+                        <Pressable key={idx} style={styles.presetPhotoChip} onPress={() => setProductForm({ ...productForm, image: p.url })}>
+                          <Text style={{ fontSize: 13 }}>{p.icon}</Text>
+                          <Text style={styles.presetPhotoText}>{p.label}</Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </ScrollView>
+                </View>
               </View>
 
               {/* MÔ TẢ */}
@@ -3099,15 +3969,15 @@ export default function AdminScreen() {
               </View>
             </ScrollView>
 
-            <View style={styles.modalFooterActions}>
-              <Pressable style={styles.btnSecondary} onPress={() => setIsProductModalOpen(false)}>
+            <View style={[styles.modalFooterActions, isMobile && styles.modalFooterActionsMobile, isDark && { borderTopColor: '#334155' }]}>
+              <Pressable style={[styles.btnSecondary, isMobile && { flex: 1, justifyContent: 'center' }]} onPress={() => setIsProductModalOpen(false)}>
                 <Text style={styles.btnSecondaryText}>Hủy bỏ</Text>
               </Pressable>
-              <Pressable style={styles.btnPrimary} onPress={handleSaveProduct} disabled={isSavingProduct}>
+              <Pressable style={[styles.btnPrimary, isMobile && { flex: 1.6, justifyContent: 'center' }]} onPress={handleSaveProduct} disabled={isSavingProduct}>
                 {isSavingProduct ? (
                   <ActivityIndicator size="small" color="#ffffff" />
                 ) : (
-                  <Text style={styles.btnPrimaryText}>{editingProduct ? 'Cập nhật sản phẩm' : 'Lưu sản phẩm mới'}</Text>
+                  <Text style={styles.btnPrimaryText}>{editingProduct ? 'Cập nhật' : 'Lưu sản phẩm'}</Text>
                 )}
               </Pressable>
             </View>
@@ -3119,8 +3989,8 @@ export default function AdminScreen() {
       {/* MODAL 3: THÊM / SỬA DANH MỤC                              */}
       {/* ======================================================== */}
       <Modal visible={isCategoryModalOpen} transparent animationType="fade">
-        <View style={styles.modalBackdrop}>
-          <View style={[styles.modalBoxSmall, isDark && styles.cardDark]}>
+        <View style={[styles.modalBackdrop, isMobile && styles.modalBackdropMobile]}>
+          <View style={[styles.modalBoxSmall, isMobile && styles.modalBoxSmallMobile, isDark && styles.cardDark]}>
             <View style={styles.modalHeaderRow}>
               <Text style={[styles.modalMainTitle, isDark && styles.textDark]}>
                 {editingCategory ? 'Chỉnh sửa danh mục' : 'Thêm danh mục mới'}
@@ -3164,11 +4034,11 @@ export default function AdminScreen() {
               />
             </View>
 
-            <View style={styles.modalFooterActions}>
-              <Pressable style={styles.btnSecondary} onPress={() => setIsCategoryModalOpen(false)}>
+            <View style={[styles.modalFooterActions, isMobile && styles.modalFooterActionsMobile, isDark && { borderTopColor: '#334155' }]}>
+              <Pressable style={[styles.btnSecondary, isMobile && { flex: 1, justifyContent: 'center' }]} onPress={() => setIsCategoryModalOpen(false)}>
                 <Text style={styles.btnSecondaryText}>Hủy</Text>
               </Pressable>
-              <Pressable style={styles.btnPrimary} onPress={handleSaveCategory} disabled={isSavingCategory}>
+              <Pressable style={[styles.btnPrimary, isMobile && { flex: 1.6, justifyContent: 'center' }]} onPress={handleSaveCategory} disabled={isSavingCategory}>
                 {isSavingCategory ? (
                   <ActivityIndicator size="small" color="#ffffff" />
                 ) : (
@@ -3184,8 +4054,8 @@ export default function AdminScreen() {
       {/* MODAL 4: TẠO MÃ GIẢM GIÁ (VOUCHER)                       */}
       {/* ======================================================== */}
       <Modal visible={isVoucherModalOpen} transparent animationType="fade">
-        <View style={styles.modalBackdrop}>
-          <View style={[styles.modalBoxSmall, isDark && styles.cardDark]}>
+        <View style={[styles.modalBackdrop, isMobile && styles.modalBackdropMobile]}>
+          <View style={[styles.modalBoxSmall, isMobile && styles.modalBoxSmallMobile, isDark && styles.cardDark]}>
             <View style={styles.modalHeaderRow}>
               <Text style={[styles.modalMainTitle, isDark && styles.textDark]}>Tạo Mã Giảm Giá Mới</Text>
               <Pressable onPress={() => setIsVoucherModalOpen(false)}>
@@ -3239,11 +4109,11 @@ export default function AdminScreen() {
               />
             </View>
 
-            <View style={styles.modalFooterActions}>
-              <Pressable style={styles.btnSecondary} onPress={() => setIsVoucherModalOpen(false)}>
+            <View style={[styles.modalFooterActions, isMobile && styles.modalFooterActionsMobile, isDark && { borderTopColor: '#334155' }]}>
+              <Pressable style={[styles.btnSecondary, isMobile && { flex: 1, justifyContent: 'center' }]} onPress={() => setIsVoucherModalOpen(false)}>
                 <Text style={styles.btnSecondaryText}>Hủy</Text>
               </Pressable>
-              <Pressable style={styles.btnPrimary} onPress={handleSaveVoucher} disabled={isSavingVoucher}>
+              <Pressable style={[styles.btnPrimary, isMobile && { flex: 1.6, justifyContent: 'center' }]} onPress={handleSaveVoucher} disabled={isSavingVoucher}>
                 {isSavingVoucher ? (
                   <ActivityIndicator size="small" color="#ffffff" />
                 ) : (
@@ -3259,8 +4129,8 @@ export default function AdminScreen() {
       {/* MODAL 5: XÁC NHẬN XÓA                                    */}
       {/* ======================================================== */}
       <Modal visible={!!deleteConfirm} transparent animationType="fade">
-        <View style={styles.modalBackdrop}>
-          <View style={[styles.modalBoxSmall, { alignItems: 'center' }, isDark && styles.cardDark]}>
+        <View style={[styles.modalBackdrop, isMobile && styles.modalBackdropMobile]}>
+          <View style={[styles.modalBoxSmall, isMobile && styles.modalBoxSmallMobile, { alignItems: 'center', padding: isMobile ? 18 : 24 }, isDark && styles.cardDark]}>
             <View style={styles.dangerCircle}>
               <Ionicons name="trash" size={26} color="#ef4444" />
             </View>
@@ -3295,8 +4165,8 @@ export default function AdminScreen() {
       {/* MODAL 6: THÊM TÀI KHOẢN / NHÂN VIÊN MỚI                 */}
       {/* ======================================================== */}
       <Modal visible={isCreateUserModalOpen} transparent animationType="fade">
-        <View style={styles.modalBackdrop}>
-          <View style={[styles.modalBoxSmall, isDark && styles.cardDark]}>
+        <View style={[styles.modalBackdrop, isMobile && styles.modalBackdropMobile]}>
+          <View style={[styles.modalBoxSmall, isMobile && styles.modalBoxSmallMobile, isDark && styles.cardDark]}>
             <View style={styles.modalHeaderRow}>
               <View>
                 <Text style={[styles.modalMainTitle, isDark && styles.textDark]}>Thêm Tài khoản / Nhân viên mới</Text>
@@ -3309,7 +4179,12 @@ export default function AdminScreen() {
               </Pressable>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
+            <ScrollView
+              showsVerticalScrollIndicator={true}
+              style={{ flexGrow: 1, flexShrink: 1 }}
+              contentContainerStyle={{ paddingBottom: 16 }}
+              keyboardShouldPersistTaps="handled"
+            >
               {/* VAI TRÒ */}
               <View style={styles.formGroup}>
                 <Text style={[styles.fieldLabel, isDark && styles.textDark]}>Vai trò phân quyền:</Text>
@@ -3393,11 +4268,11 @@ export default function AdminScreen() {
               </View>
             </ScrollView>
 
-            <View style={[styles.modalFooterActions, { marginTop: 16 }]}>
-              <Pressable style={styles.btnSecondary} onPress={() => setIsCreateUserModalOpen(false)}>
+            <View style={[styles.modalFooterActions, isMobile && styles.modalFooterActionsMobile, isDark && { borderTopColor: '#334155' }]}>
+              <Pressable style={[styles.btnSecondary, isMobile && { flex: 1, justifyContent: 'center' }]} onPress={() => setIsCreateUserModalOpen(false)}>
                 <Text style={styles.btnSecondaryText}>Hủy bỏ</Text>
               </Pressable>
-              <Pressable style={[styles.btnPrimary, { backgroundColor: '#7c3aed' }]} onPress={handleCreateUser} disabled={isSavingUser}>
+              <Pressable style={[styles.btnPrimary, { backgroundColor: '#7c3aed' }, isMobile && { flex: 1.6, justifyContent: 'center' }]} onPress={handleCreateUser} disabled={isSavingUser}>
                 {isSavingUser ? (
                   <ActivityIndicator size="small" color="#ffffff" />
                 ) : (
@@ -3411,32 +4286,37 @@ export default function AdminScreen() {
 
       {/* MODAL 7: XEM CHI TIẾT THÔNG TIN TÀI KHOẢN */}
       <Modal visible={!!viewingUser} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalCard, isDark && styles.modalCardDark, { maxWidth: 540 }]}>
-            <View style={styles.modalHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                <View style={[styles.userAvatarBadge, { width: 38, height: 38, borderRadius: 19, backgroundColor: viewingUser?.role === 'admin' ? '#7c3aed' : viewingUser?.role === 'staff' ? '#059669' : '#2563eb' }]}>
+        <View style={[styles.modalBackdrop, isMobile && styles.modalBackdropMobile]}>
+          <View style={[styles.modalBoxSmall, isMobile && styles.modalBoxSmallMobile, isDark && styles.cardDark, { maxWidth: 540 }]}>
+            <View style={styles.modalHeaderRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+                <View style={[styles.userAvatarBadge, { width: 38, height: 38, borderRadius: 19, backgroundColor: viewingUser?.role === 'admin' ? '#7c3aed' : viewingUser?.role === 'staff' ? '#059669' : '#2563eb', justifyContent: 'center', alignItems: 'center' }]}>
                   <Text style={[styles.userAvatarBadgeText, { fontSize: 16 }]}>{(viewingUser?.name ? viewingUser.name[0] : 'U').toUpperCase()}</Text>
                 </View>
-                <View>
-                  <Text style={[styles.modalTitle, isDark && styles.textDark]}>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={[styles.modalMainTitle, isDark && styles.textDark, isMobile && { fontSize: 16 }]} numberOfLines={1}>
                     Hồ Sơ Tài Khoản #{viewingUser?.id}
                   </Text>
-                  <Text style={[styles.modalSubtitle, isDark && styles.textMutedDark]}>
-                    Thông tin chi tiết người dùng trên hệ thống DANGVINHPC
+                  <Text style={[{ fontSize: 11, color: '#64748b', marginTop: 1 }, isDark && styles.textMutedDark]} numberOfLines={1}>
+                    Thông tin chi tiết tài khoản DANGVINHPC
                   </Text>
                 </View>
               </View>
-              <Pressable style={styles.modalCloseBtn} onPress={() => setViewingUser(null)}>
-                <Ionicons name="close" size={20} color="#94a3b8" />
+              <Pressable onPress={() => setViewingUser(null)} hitSlop={10}>
+                <Ionicons name="close" size={24} color="#64748b" />
               </Pressable>
             </View>
 
             {viewingUser && (
-              <ScrollView style={{ maxHeight: 500 }} showsVerticalScrollIndicator={false}>
+              <ScrollView
+                style={{ flex: 1, minHeight: 0, width: '100%' }}
+                contentContainerStyle={{ paddingBottom: 16 }}
+                showsVerticalScrollIndicator={true}
+                keyboardShouldPersistTaps="handled"
+              >
                 {/* Thông tin chính */}
-                <View style={{ backgroundColor: isDark ? '#0f172a' : '#f8fafc', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: isDark ? '#334155' : '#e2e8f0', marginBottom: 16 }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <View style={{ backgroundColor: isDark ? '#0f172a' : '#f8fafc', padding: isMobile ? 12 : 16, borderRadius: 12, borderWidth: 1, borderColor: isDark ? '#334155' : '#e2e8f0', marginBottom: 14 }}>
+                  <View style={{ flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: isMobile ? 'flex-start' : 'center', marginBottom: 12, gap: 6 }}>
                     <Text style={{ fontSize: 16, fontWeight: '800', color: isDark ? '#f8fafc' : '#0f172a' }}>
                       {viewingUser.name || 'Chưa cập nhật họ tên'}
                     </Text>
@@ -3453,25 +4333,25 @@ export default function AdminScreen() {
                   </View>
 
                   <View style={{ gap: 8 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      <Text style={{ width: 110, fontSize: 13, color: '#64748b' }}>✉️ Email:</Text>
-                      <Text style={{ fontSize: 13, fontWeight: '700', color: isDark ? '#f8fafc' : '#1e293b' }}>{viewingUser.email}</Text>
+                    <View style={{ flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', gap: isMobile ? 2 : 0 }}>
+                      <Text style={{ width: isMobile ? 'auto' : 110, fontSize: 12, color: '#64748b' }}>✉️ Email:</Text>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: isDark ? '#f8fafc' : '#1e293b' }} selectable>{viewingUser.email}</Text>
                     </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      <Text style={{ width: 110, fontSize: 13, color: '#64748b' }}>📞 Điện thoại:</Text>
-                      <Text style={{ fontSize: 13, fontWeight: '700', color: isDark ? '#f8fafc' : '#1e293b' }}>{viewingUser.phone || 'Chưa cập nhật'}</Text>
+                    <View style={{ flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', gap: isMobile ? 2 : 0 }}>
+                      <Text style={{ width: isMobile ? 'auto' : 110, fontSize: 12, color: '#64748b' }}>📞 Điện thoại:</Text>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: isDark ? '#f8fafc' : '#1e293b' }} selectable>{viewingUser.phone || 'Chưa cập nhật'}</Text>
                     </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
-                      <Text style={{ width: 110, fontSize: 13, color: '#64748b' }}>📍 Địa chỉ:</Text>
-                      <Text style={{ flex: 1, fontSize: 13, fontWeight: '600', color: isDark ? '#f8fafc' : '#1e293b' }}>{viewingUser.address || 'Chưa cập nhật'}</Text>
+                    <View style={{ flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'flex-start', gap: isMobile ? 2 : 0 }}>
+                      <Text style={{ width: isMobile ? 'auto' : 110, fontSize: 12, color: '#64748b' }}>📍 Địa chỉ:</Text>
+                      <Text style={{ flex: 1, fontSize: 13, fontWeight: '600', color: isDark ? '#f8fafc' : '#1e293b', lineHeight: 18 }} selectable>{viewingUser.address || 'Chưa cập nhật'}</Text>
                     </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      <Text style={{ width: 110, fontSize: 13, color: '#64748b' }}>🏙️ Khu vực:</Text>
+                    <View style={{ flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', gap: isMobile ? 2 : 0 }}>
+                      <Text style={{ width: isMobile ? 'auto' : 110, fontSize: 12, color: '#64748b' }}>🏙️ Khu vực:</Text>
                       <Text style={{ fontSize: 13, fontWeight: '600', color: isDark ? '#f8fafc' : '#1e293b' }}>{viewingUser.city || 'Chưa cập nhật'}</Text>
                     </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      <Text style={{ width: 110, fontSize: 13, color: '#64748b' }}>📅 Trạng thái:</Text>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <View style={{ flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', gap: isMobile ? 2 : 0 }}>
+                      <Text style={{ width: isMobile ? 'auto' : 110, fontSize: 12, color: '#64748b' }}>📅 Trạng thái:</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: isMobile ? 2 : 0 }}>
                         <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#22c55e' }} />
                         <Text style={{ fontSize: 13, fontWeight: '700', color: '#16a34a' }}>Đang hoạt động (Active)</Text>
                       </View>
@@ -3480,15 +4360,15 @@ export default function AdminScreen() {
                 </View>
 
                 {/* Thống kê mua hàng của user */}
-                <View style={{ backgroundColor: isDark ? '#0f172a' : '#f8fafc', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: isDark ? '#334155' : '#e2e8f0', marginBottom: 16 }}>
-                  <Text style={{ fontSize: 14, fontWeight: '700', color: isDark ? '#f8fafc' : '#0f172a', marginBottom: 10 }}>
+                <View style={{ backgroundColor: isDark ? '#0f172a' : '#f8fafc', padding: isMobile ? 12 : 16, borderRadius: 12, borderWidth: 1, borderColor: isDark ? '#334155' : '#e2e8f0', marginBottom: 14 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: isDark ? '#f8fafc' : '#0f172a', marginBottom: 10 }}>
                     📊 Thống kê hoạt động & Giao dịch
                   </Text>
                   {(() => {
                     const userOrders = orderList.filter((o) => Number(o.userId) === Number(viewingUser.id));
                     const totalSpent = userOrders.filter((o) => o.status === 'completed').reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0);
                     return (
-                      <View style={{ flexDirection: 'row', gap: 12 }}>
+                      <View style={{ flexDirection: isMobile ? 'column' : 'row', gap: 10 }}>
                         <View style={{ flex: 1, backgroundColor: isDark ? '#1e293b' : '#ffffff', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: isDark ? '#334155' : '#e2e8f0', alignItems: 'center' }}>
                           <Text style={{ fontSize: 12, color: '#64748b' }}>Tổng đơn đã đặt</Text>
                           <Text style={{ fontSize: 18, fontWeight: '800', color: '#2563eb', marginTop: 4 }}>{userOrders.length} đơn</Text>
@@ -3504,12 +4384,12 @@ export default function AdminScreen() {
               </ScrollView>
             )}
 
-            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
+            <View style={[styles.modalFooterActions, isDark && { borderTopColor: '#334155' }]}>
               <Pressable
-                style={[styles.modalActionBtn, { backgroundColor: '#64748b' }]}
+                style={[styles.btnPrimary, { minWidth: 90, justifyContent: 'center', alignItems: 'center', width: isMobile ? '100%' : 'auto' }]}
                 onPress={() => setViewingUser(null)}
               >
-                <Text style={styles.modalActionBtnText}>Đóng</Text>
+                <Text style={styles.btnPrimaryText}>Đóng</Text>
               </Pressable>
             </View>
           </View>
@@ -3518,8 +4398,8 @@ export default function AdminScreen() {
 
       {/* MODAL 8: XÁC NHẬN ĐĂNG XUẤT ADMIN */}
       <Modal visible={logoutModalVisible} transparent animationType="fade">
-        <View style={styles.modalBackdrop}>
-          <View style={[styles.modalBoxSmall, { alignItems: 'center', padding: 24 }, isDark && styles.cardDark]}>
+        <View style={[styles.modalBackdrop, isMobile && styles.modalBackdropMobile]}>
+          <View style={[styles.modalBoxSmall, isMobile && styles.modalBoxSmallMobile, { alignItems: 'center', padding: isMobile ? 18 : 24 }, isDark && styles.cardDark]}>
             <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#fee2e2', alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
               <Ionicons name="log-out-outline" size={26} color="#dc2626" />
             </View>
@@ -3612,6 +4492,14 @@ export default function AdminScreen() {
           </View>
         </View>
       </Modal>
+      {/* ======================================================== */}
+      {/* MODAL 10: XUẤT & IN HÓA ĐƠN BÁN HÀNG CHO QUẢN TRỊ VIÊN    */}
+      {/* ======================================================== */}
+      <InvoiceModal
+        visible={invoiceModalVisible}
+        onClose={() => setInvoiceModalVisible(false)}
+        order={invoiceOrder}
+      />
     </View>
   );
 }
@@ -3635,6 +4523,327 @@ const styles = StyleSheet.create({
   },
   textMutedDark: {
     color: '#94a3b8',
+  },
+
+  /* REVENUE PERIOD PILLS & ANALYTICS */
+  revenuePeriodPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  revenuePeriodPillActive: {
+    backgroundColor: '#2563eb',
+    borderColor: '#2563eb',
+  },
+  revenuePeriodPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  revenuePeriodPillTextActive: {
+    color: '#ffffff',
+  },
+
+  inlineDateSelectorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginVertical: 6,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+  },
+  webDatePickerWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+  },
+  quickDatePill: {
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  quickDatePillDark: {
+    backgroundColor: '#1e293b',
+    borderColor: '#334155',
+  },
+  quickDatePillActive: {
+    backgroundColor: '#2563eb',
+    borderColor: '#2563eb',
+  },
+  quickDatePillText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  quickDatePillTextActive: {
+    color: '#ffffff',
+  },
+
+  revenueAnalyticsCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  revenueAnalyticsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 16,
+  },
+  revenueAnalyticsTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  revenueAnalyticsSub: {
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: 2,
+  },
+  revenueIconBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#eff6ff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chartModeSelector: {
+    flexDirection: 'row',
+    gap: 6,
+    flexWrap: 'wrap',
+  },
+  chartModeBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  chartModeBtnDark: {
+    backgroundColor: '#1e293b',
+    borderColor: '#334155',
+  },
+  chartModeBtnActive: {
+    backgroundColor: '#2563eb',
+    borderColor: '#2563eb',
+  },
+  chartModeBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  chartModeBtnTextActive: {
+    color: '#ffffff',
+  },
+
+  revenueKpiGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 16,
+  },
+  revenueKpiTile: {
+    flex: 1,
+    minWidth: 140,
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  revenueKpiTileDark: {
+    backgroundColor: '#0f172a',
+    borderColor: '#1e293b',
+  },
+  revenueKpiLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748b',
+    marginBottom: 4,
+  },
+  revenueKpiValue: {
+    fontSize: 16,
+    fontWeight: '900',
+  },
+
+  barChartContainer: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginBottom: 16,
+  },
+  barChartContainerDark: {
+    backgroundColor: '#0f172a',
+    borderColor: '#1e293b',
+  },
+  barChartScrollContent: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 14,
+    minWidth: '100%',
+    paddingTop: 20,
+    paddingBottom: 6,
+    justifyContent: 'space-around',
+  },
+  barColumnWrap: {
+    alignItems: 'center',
+    minWidth: 46,
+  },
+  barAmountText: {
+    fontSize: 10,
+    color: '#64748b',
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  barTrack: {
+    width: 24,
+    height: 140,
+    backgroundColor: '#e2e8f0',
+    borderRadius: 6,
+    justifyContent: 'flex-end',
+    overflow: 'hidden',
+  },
+  barFill: {
+    width: '100%',
+    borderRadius: 6,
+  },
+  barFillActive: {
+    backgroundColor: '#3b82f6',
+  },
+  barFillPeak: {
+    backgroundColor: '#16a34a',
+  },
+  barFillZero: {
+    backgroundColor: '#cbd5e1',
+  },
+  barLabelText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0f172a',
+    marginTop: 8,
+  },
+  barSubCountText: {
+    fontSize: 10,
+    color: '#94a3b8',
+    marginTop: 1,
+  },
+
+  revenueTableWrap: {
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    overflow: 'hidden',
+  },
+  revenueTableHeader: {
+    flexDirection: 'row',
+    backgroundColor: '#f1f5f9',
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    alignItems: 'center',
+  },
+  revTh: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#475569',
+    textTransform: 'uppercase',
+  },
+  revenueTableRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+  },
+  revenueTableRowAlt: {
+    backgroundColor: '#f8fafc',
+  },
+  revenueTableRowAltDark: {
+    backgroundColor: 'rgba(255,255,255,0.02)',
+  },
+  revTdTime: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  revTd: {
+    fontSize: 12,
+    color: '#334155',
+  },
+  shareBarTrack: {
+    width: 60,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#e2e8f0',
+    overflow: 'hidden',
+  },
+  shareBarFill: {
+    height: '100%',
+    backgroundColor: '#2563eb',
+    borderRadius: 3,
+  },
+  sharePctText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748b',
+    width: 32,
+    textAlign: 'right',
+  },
+
+  revenueModePillsRow: {
+    flexDirection: 'row',
+    gap: 6,
+    flexWrap: 'wrap',
+  },
+  revenueModePillBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  revenueModePillBtnDark: {
+    backgroundColor: '#1f293d',
+    borderColor: '#334155',
+  },
+  revenueModePillBtnActive: {
+    backgroundColor: '#2563eb',
+    borderColor: '#2563eb',
+  },
+  revenueModePillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  revenueModePillTextActive: {
+    color: '#ffffff',
   },
 
   /* ACCESS GUARD */
@@ -5292,6 +6501,39 @@ const styles = StyleSheet.create({
     gap: 8,
     alignItems: 'center',
   },
+  userCardRowMobile: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: 12,
+  },
+  userCardMain: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    flex: 1,
+  },
+  userCardMainMobile: {
+    width: '100%',
+  },
+  userInfoWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  userActionsGroupMobile: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+    width: '100%',
+  },
+  roleSwitcherGroupMobile: {
+    alignItems: 'flex-start',
+    gap: 4,
+  },
   roleFilterRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -5397,17 +6639,36 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 20,
   },
+  modalBackdropMobile: {
+    paddingHorizontal: 10,
+    paddingVertical: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
+  },
   modalBoxLarge: {
     backgroundColor: '#ffffff',
     borderRadius: 22,
     padding: 24,
     width: '100%',
-    maxWidth: 620,
+    maxWidth: 640,
     maxHeight: '90%',
+    display: 'flex',
+    flexDirection: 'column',
+    overflow: 'hidden',
     shadowColor: '#000',
     shadowOpacity: 0.2,
     shadowRadius: 24,
     elevation: 10,
+  },
+  modalBoxLargeMobile: {
+    borderRadius: 18,
+    padding: 14,
+    width: '100%',
+    maxWidth: '100%',
+    alignSelf: 'stretch',
+    height: '92%',
+    maxHeight: '92%',
   },
   modalBoxSmall: {
     backgroundColor: '#ffffff',
@@ -5415,10 +6676,22 @@ const styles = StyleSheet.create({
     padding: 24,
     width: '100%',
     maxWidth: 480,
+    maxHeight: '90%',
+    display: 'flex',
+    flexDirection: 'column',
+    overflow: 'hidden',
     shadowColor: '#000',
     shadowOpacity: 0.2,
     shadowRadius: 24,
     elevation: 10,
+  },
+  modalBoxSmallMobile: {
+    borderRadius: 18,
+    padding: 14,
+    width: '100%',
+    maxWidth: '100%',
+    alignSelf: 'stretch',
+    maxHeight: '92%',
   },
   modalHeaderRow: {
     flexDirection: 'row',
@@ -5565,14 +6838,87 @@ const styles = StyleSheet.create({
   },
   imageInputRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
+    alignItems: 'flex-start',
+    gap: 12,
   },
   imageInputThumb: {
-    width: 50,
-    height: 50,
-    borderRadius: 10,
+    width: 64,
+    height: 64,
+    borderRadius: 12,
     backgroundColor: '#cbd5e1',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  uploadBtnHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+  },
+  uploadBtnHeaderText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#2563eb',
+  },
+  imageThumbTouch: {
+    position: 'relative',
+  },
+  imageThumbOverlay: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(15, 23, 42, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  clearImgBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 8,
+    backgroundColor: '#f1f5f9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  uploadActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#f1f5f9',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+  },
+  uploadActionBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  localImgBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#f0fdf4',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+  },
+  localImgBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#15803d',
   },
   presetPhotoChip: {
     flexDirection: 'row',
@@ -5594,7 +6940,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'flex-end',
     gap: 10,
-    marginTop: 18,
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+  },
+  modalFooterActionsMobile: {
+    justifyContent: 'space-between',
+    gap: 8,
   },
   btnSecondary: {
     paddingHorizontal: 16,

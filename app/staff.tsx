@@ -1,6 +1,7 @@
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   Image,
   Modal,
   Platform,
@@ -10,23 +11,57 @@ import {
   Text,
   TextInput,
   useWindowDimensions,
-  View,
+  View
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 
 import { AdminSupportPanel } from '@/components/admin/AdminSupportPanel';
+import { InvoiceModal } from '@/components/InvoiceModal';
 import { useAppContext } from '@/context/AppContext';
 import { formatPrice, getProductFallbackImage } from '@/data/products';
-import { apiService, type Order, type Product, type User } from '@/services/api';
+import { apiService, type Order, type Product } from '@/services/api';
 
 type StaffTab = 'orders' | 'inventory' | 'support' | 'catalog';
+
+const getOrderStatusInfo = (status?: string) => {
+  switch (status) {
+    case 'pending':
+      return { label: 'Chờ duyệt', shortLabel: 'Chờ duyệt', color: '#b91c1c', bg: '#fee2e2', border: '#fca5a5' };
+    case 'confirmed':
+      return { label: 'Đã xác nhận', shortLabel: 'Đã xác nhận', color: '#0369a1', bg: '#e0f2fe', border: '#bae6fd' };
+    case 'shipping':
+      return { label: 'Đang giao hàng', shortLabel: 'Đang giao', color: '#7c3aed', bg: '#f5f3ff', border: '#ddd6fe' };
+    case 'delivered':
+      return { label: 'Đã giao tới (Chờ khách nhận)', shortLabel: 'Đã giao tới', color: '#15803d', bg: '#dcfce7', border: '#86efac' };
+    case 'completed':
+      return { label: 'Giao thành công', shortLabel: 'Thành công', color: '#15803d', bg: '#dcfce7', border: '#86efac' };
+    case 'cancelled':
+      return { label: 'Đã hủy', shortLabel: 'Đã hủy', color: '#64748b', bg: '#f1f5f9', border: '#e2e8f0' };
+    default:
+      return { label: status || 'Không rõ', shortLabel: status || 'Không rõ', color: '#64748b', bg: '#f1f5f9', border: '#e2e8f0' };
+  }
+};
+
+const cleanAddressText = (addr?: string) => {
+  if (!addr) return '';
+  const parts = addr.split(',').map((p) => p.trim()).filter(Boolean);
+  const seen = new Set<string>();
+  const uniqueParts: string[] = [];
+  for (const part of parts) {
+    const lower = part.toLowerCase();
+    if (!seen.has(lower)) {
+      seen.add(lower);
+      uniqueParts.push(part);
+    }
+  }
+  return uniqueParts.join(', ');
+};
 
 export default function StaffScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const isDesktop = width >= 900;
   const isTablet = width >= 600 && width < 900;
+  const isMobile = width < 600;
   const { user, isAdmin, isStaff, canManage, isDark, logout } = useAppContext();
 
   const [activeTab, setActiveTab] = useState<StaffTab>('orders');
@@ -35,6 +70,7 @@ export default function StaffScreen() {
   const [searchTerm, setSearchTerm] = useState('');
   const [updatingOrderId, setUpdatingOrderId] = useState<number | null>(null);
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
+  const [invoiceModalVisible, setInvoiceModalVisible] = useState(false);
 
   // Data lists
   const [orderList, setOrderList] = useState<Order[]>([]);
@@ -65,12 +101,17 @@ export default function StaffScreen() {
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      const [ordersData, productsData] = await Promise.all([
+      const [ordersData, productsData, ticketsData] = await Promise.all([
         apiService.getOrders().catch(() => []),
         apiService.getProducts().catch(() => []),
+        apiService.getSupportTickets('all').catch(() => []),
       ]);
       setOrderList(ordersData || []);
       setProductList(productsData || []);
+      if (Array.isArray(ticketsData)) {
+        const openCount = ticketsData.filter((t: any) => t.status === 'open').length;
+        setSupportPendingCount(openCount);
+      }
     } catch (err: any) {
       showToast('Lỗi tải dữ liệu: ' + (err.message || 'Thất bại'));
     } finally {
@@ -268,42 +309,46 @@ export default function StaffScreen() {
       ) : null}
 
       {/* HEADER CỔNG NHÂN VIÊN */}
-      <View style={[styles.header, isDark && styles.headerDark]}>
-        <View style={styles.headerLeft}>
+      <View style={[styles.header, isMobile && styles.headerMobile, isDark && styles.headerDark]}>
+        <View style={[styles.headerLeft, isMobile && { flex: 1, minWidth: 0, gap: 8 }]}>
           <Pressable style={styles.backBtn} onPress={() => router.push('/(tabs)' as any)}>
             <Ionicons name="storefront-outline" size={18} color="#2563eb" />
             {isDesktop && <Text style={styles.backBtnText}>Cửa hàng</Text>}
           </Pressable>
 
-          <View style={styles.brandGroup}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <View style={[styles.brandGroup, isMobile && { flex: 1, minWidth: 0 }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
               <Text style={[styles.headerBrand, isDark && styles.textDark]}>DANGVINHPC</Text>
               <View style={styles.staffBadge}>
-                <Ionicons name="briefcase" size={12} color="#ffffff" style={{ marginRight: 4 }} />
-                <Text style={styles.staffBadgeText}>STAFF PORTAL</Text>
+                <Ionicons name="briefcase" size={11} color="#ffffff" style={{ marginRight: 3 }} />
+                <Text style={styles.staffBadgeText}>STAFF</Text>
               </View>
             </View>
-            <Text style={[styles.headerSubtitle, isDark && styles.textMutedDark]}>
-              Bàn làm việc Nhân viên • Xử lý đơn hàng, điều phối kho & Chăm sóc khách hàng
-            </Text>
+            {!isMobile && (
+              <Text style={[styles.headerSubtitle, isDark && styles.textMutedDark]} numberOfLines={1}>
+                Bàn làm việc Nhân viên • Xử lý đơn hàng, điều phối kho & Chăm sóc khách hàng
+              </Text>
+            )}
           </View>
         </View>
 
-        <View style={styles.headerRight}>
-          {/* User pill */}
-          <View style={[styles.userPill, isDark && styles.userPillDark]}>
-            <View style={styles.userAvatar}>
-              <Text style={styles.userAvatarText}>
-                {(user?.name ? user.name[0] : user?.email ? user.email[0] : 'S').toUpperCase()}
-              </Text>
+        <View style={[styles.headerRight, isMobile && styles.headerRightMobile]}>
+          {/* User pill: ẩn bớt trên mobile cho thoáng */}
+          {!isMobile && (
+            <View style={[styles.userPill, isDark && styles.userPillDark]}>
+              <View style={styles.userAvatar}>
+                <Text style={styles.userAvatarText}>
+                  {(user?.name ? user.name[0] : user?.email ? user.email[0] : 'S').toUpperCase()}
+                </Text>
+              </View>
+              <View>
+                <Text style={[styles.userName, isDark && styles.textDark]}>{user?.name || 'Nhân viên trực'}</Text>
+                <Text style={styles.userRole}>
+                  {user?.role === 'admin' ? '👑 Quản Trị Viên' : '👔 Nhân Viên Cửa Hàng'}
+                </Text>
+              </View>
             </View>
-            <View>
-              <Text style={[styles.userName, isDark && styles.textDark]}>{user?.name || 'Nhân viên trực'}</Text>
-              <Text style={styles.userRole}>
-                {user?.role === 'admin' ? '👑 Quản Trị Viên' : '👔 Nhân Viên Cửa Hàng'}
-              </Text>
-            </View>
-          </View>
+          )}
 
           {isAdmin && (
             <Pressable
@@ -311,13 +356,13 @@ export default function StaffScreen() {
               onPress={() => router.push('/admin' as any)}
             >
               <Ionicons name="shield-checkmark" size={16} color="#7c3aed" />
-              {isDesktop && <Text style={styles.adminSwitchBtnText}>Admin Portal</Text>}
+              {isDesktop && <Text style={styles.adminSwitchBtnText}>Admin</Text>}
             </Pressable>
           )}
 
           <Pressable style={[styles.refreshBtn, isDark && styles.refreshBtnDark]} onPress={loadData} disabled={loading}>
             <Ionicons name="sync-outline" size={16} color="#2563eb" />
-            <Text style={styles.refreshBtnText}>Làm mới</Text>
+            {isDesktop && <Text style={styles.refreshBtnText}>Làm mới</Text>}
           </Pressable>
 
           <Pressable
@@ -499,18 +544,7 @@ export default function StaffScreen() {
             ) : (
               <View style={styles.orderListWrap}>
                 {filteredOrders.map((ord) => {
-                  const statusInfo =
-                    ord.status === 'pending'
-                      ? { label: 'Chờ duyệt', color: '#b91c1c', bg: '#fee2e2' }
-                      : ord.status === 'confirmed'
-                      ? { label: 'Đã xác nhận', color: '#0369a1', bg: '#e0f2fe' }
-                      : ord.status === 'shipping'
-                      ? { label: 'Đang giao hàng', color: '#7c3aed', bg: '#f5f3ff' }
-                      : ord.status === 'delivered'
-                      ? { label: 'Đã giao tới (Chờ khách nhận)', color: '#15803d', bg: '#dcfce7' }
-                      : ord.status === 'completed'
-                      ? { label: 'Giao thành công', color: '#15803d', bg: '#dcfce7' }
-                      : { label: 'Đã hủy', color: '#64748b', bg: '#f1f5f9' };
+                  const statusInfo = getOrderStatusInfo(ord.status);
 
                   return (
                     <View key={ord.id} style={styles.orderCard}>
@@ -531,7 +565,7 @@ export default function StaffScreen() {
                       {/* Thông tin giao hàng */}
                       <View style={styles.orderCustomerBox}>
                         <Text style={styles.orderCustomerLine}>
-                          📍 <Text style={{ fontWeight: '700' }}>Địa chỉ:</Text> {ord.shippingAddress}
+                          📍 <Text style={{ fontWeight: '700' }}>Địa chỉ:</Text> {cleanAddressText(ord.shippingAddress)}
                         </Text>
                         <Text style={styles.orderCustomerLine}>
                           💳 <Text style={{ fontWeight: '700' }}>Thanh toán:</Text>{' '}
@@ -692,24 +726,20 @@ export default function StaffScreen() {
 
                           {ord.status === 'shipping' && (
                             <Pressable
-                              style={[styles.btnCompleteOrder, { backgroundColor: '#16a34a' }]}
+                              style={[styles.btnCompleteOrder, { backgroundColor: '#0284c7' }]}
                               onPress={() => handleUpdateOrderStatus(ord.id || ord.orderNumber, 'delivered', ord.orderNumber)}
                               disabled={Boolean(updatingOrderId && (String(updatingOrderId) === String(ord.id) || updatingOrderId === ord.orderNumber))}
                             >
-                              <Ionicons name="checkmark-done" size={15} color="#ffffff" />
-                              <Text style={styles.btnWhiteText}>Báo đã giao xong</Text>
+                              <Ionicons name="location" size={14} color="#ffffff" />
+                              <Text style={styles.btnWhiteText}>Báo đã phát tới nơi</Text>
                             </Pressable>
                           )}
 
                           {ord.status === 'delivered' && (
-                            <Pressable
-                              style={[styles.btnCompleteOrder, { backgroundColor: '#059669' }]}
-                              onPress={() => handleUpdateOrderStatus(ord.id || ord.orderNumber, 'completed', ord.orderNumber)}
-                              disabled={Boolean(updatingOrderId && (String(updatingOrderId) === String(ord.id) || updatingOrderId === ord.orderNumber))}
-                            >
-                              <Ionicons name="shield-checkmark" size={15} color="#ffffff" />
-                              <Text style={styles.btnWhiteText}>Chốt hoàn tất</Text>
-                            </Pressable>
+                            <View style={styles.waitingCustomerBadge}>
+                              <Ionicons name="hourglass-outline" size={13} color="#0284c7" />
+                              <Text style={styles.waitingCustomerText}>Chờ khách ấn đã nhận</Text>
+                            </View>
                           )}
                         </View>
                       </View>
@@ -862,82 +892,331 @@ export default function StaffScreen() {
       </ScrollView>
 
       {/* MODAL: XEM CHI TIẾT ĐƠN HÀNG */}
-      <Modal visible={!!viewingOrder} transparent animationType="fade">
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalBox}>
+      <Modal visible={!!viewingOrder} transparent animationType="fade" onRequestClose={() => setViewingOrder(null)}>
+        <View style={[styles.modalBackdrop, isMobile && styles.modalBackdropMobile]}>
+          <View style={[
+            styles.modalBox,
+            isDark && styles.modalBoxDark,
+            isMobile && styles.modalBoxMobile
+          ]}>
+            {/* Header */}
             <View style={styles.modalHeader}>
-              <View>
-                <Text style={styles.modalTitle}>Chi tiết đơn hàng #{viewingOrder?.orderNumber}</Text>
-                <Text style={styles.modalSub}>{viewingOrder?.createdAt ? new Date(viewingOrder.createdAt).toLocaleString('vi-VN') : ''}</Text>
+              <View style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <Text style={[styles.modalTitle, isDark && styles.textDark]}>
+                    Chi tiết đơn hàng
+                  </Text>
+                  {viewingOrder?.status ? (() => {
+                    const st = getOrderStatusInfo(viewingOrder.status);
+                    return (
+                      <View style={[styles.orderStatusBadge, { backgroundColor: st.bg, borderColor: st.border, borderWidth: 1, paddingVertical: 2, paddingHorizontal: 8 }]}>
+                        <Text style={[styles.orderStatusBadgeText, { color: st.color, fontSize: 11 }]}>
+                          {st.shortLabel}
+                        </Text>
+                      </View>
+                    );
+                  })() : null}
+                </View>
+                <Text style={[styles.modalOrderCodeText, isDark && styles.textMutedDark]} numberOfLines={1} ellipsizeMode="middle" selectable>
+                  #{viewingOrder?.orderNumber}
+                </Text>
+                <Text style={[styles.modalSub, isDark && styles.textMutedDark]}>
+                  ⏰ {viewingOrder?.createdAt ? new Date(viewingOrder.createdAt).toLocaleString('vi-VN') : ''}
+                </Text>
               </View>
-              <Pressable onPress={() => setViewingOrder(null)}>
-                <Ionicons name="close" size={24} color="#64748b" />
+              <Pressable
+                style={[styles.modalCloseBtn, isDark && styles.modalCloseBtnDark]}
+                onPress={() => setViewingOrder(null)}
+                accessibilityLabel="Đóng modal"
+              >
+                <Ionicons name="close" size={20} color={isDark ? '#cbd5e1' : '#64748b'} />
               </Pressable>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 400, marginVertical: 12 }}>
-              <View style={styles.modalSection}>
-                <Text style={styles.modalSecTitle}>Thông tin nhận hàng:</Text>
-                <Text style={styles.modalText}>📍 Địa chỉ: {viewingOrder?.shippingAddress}</Text>
-                <Text style={styles.modalText}>💳 Thanh toán: {viewingOrder?.paymentMethod === 'cod' ? 'Thu hộ khi nhận hàng (COD)' : viewingOrder?.paymentMethod}</Text>
-                <Text style={styles.modalText}>🚚 Phương thức: {viewingOrder?.shippingMethod === 'fast' ? 'Giao hỏa tốc' : 'Tiêu chuẩn'}</Text>
-              </View>
-
-              <View style={styles.modalSection}>
-                <Text style={styles.modalSecTitle}>Danh sách mặt hàng:</Text>
-                {viewingOrder?.items?.map((item, idx) => (
-                  <View key={idx} style={styles.modalItemRow}>
-                    <Text style={{ flex: 1, fontSize: 13, fontWeight: '600', color: '#0f172a' }}>{item.name}</Text>
-                    <Text style={{ fontSize: 13, color: '#64748b', marginHorizontal: 8 }}>x{item.quantity}</Text>
-                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#2563eb' }}>{formatPrice(item.price * item.quantity)}</Text>
+            {/* Scrollable Content */}
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              style={{ flexGrow: 1, flexShrink: 1, marginVertical: 8 }}
+              contentContainerStyle={{ paddingBottom: 6 }}
+            >
+              {/* Cảnh báo yêu cầu đổi trả nếu có */}
+              {viewingOrder?.returnStatus ? (
+                <View
+                  style={[
+                    styles.modalReturnBanner,
+                    viewingOrder.returnStatus === 'pending'
+                      ? styles.staffReturnPending
+                      : styles.staffReturnProcessed,
+                  ]}
+                >
+                  <Ionicons
+                    name={viewingOrder.returnStatus === 'pending' ? 'alert-circle' : 'checkmark-circle'}
+                    size={18}
+                    color={viewingOrder.returnStatus === 'pending' ? '#b45309' : '#15803d'}
+                  />
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={styles.staffReturnTitle}>
+                      {viewingOrder.returnStatus === 'pending'
+                        ? `Khách yêu cầu đổi trả: ${viewingOrder.returnReason || 'Lỗi sản phẩm'}`
+                        : `Trạng thái đổi trả: ${viewingOrder.returnStatus === 'approved' ? 'Đã duyệt' : 'Từ chối'}`}
+                    </Text>
+                    {viewingOrder.returnMedia && viewingOrder.returnMedia.length > 0 && (
+                      <View style={{ marginTop: 6 }}>
+                        <Text style={styles.staffProofLabel}>
+                          Minh chứng ({viewingOrder.returnMedia.length} file - nhấn để phóng to):
+                        </Text>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexDirection: 'row', gap: 6, marginTop: 4 }}>
+                          {viewingOrder.returnMedia.map((mediaUrl: string, idx: number) => {
+                            const isVideo = mediaUrl.includes('video') || mediaUrl.endsWith('.mp4');
+                            return (
+                              <Pressable
+                                key={idx}
+                                style={styles.staffProofThumb}
+                                onPress={() => setPreviewMediaUrl(mediaUrl)}
+                              >
+                                {isVideo ? (
+                                  <View style={styles.staffVideoBox}>
+                                    <Ionicons name="videocam" size={20} color="#ffffff" />
+                                    <Text style={styles.staffVideoText}>Video lỗi</Text>
+                                  </View>
+                                ) : (
+                                  <>
+                                    <Image source={{ uri: mediaUrl }} style={styles.staffProofImg} resizeMode="cover" />
+                                    <View style={styles.staffProofZoomIcon}>
+                                      <Ionicons name="scan-outline" size={12} color="#ffffff" />
+                                    </View>
+                                  </>
+                                )}
+                              </Pressable>
+                            );
+                          })}
+                        </ScrollView>
+                      </View>
+                    )}
                   </View>
-                ))}
+                </View>
+              ) : null}
+
+              {/* Thông tin nhận hàng */}
+              <View style={[styles.modalCard, isDark && styles.modalCardDark]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                  <Ionicons name="location-outline" size={16} color="#2563eb" />
+                  <Text style={[styles.modalCardTitle, isDark && styles.textDark]}>Thông tin nhận hàng</Text>
+                </View>
+
+                <View style={styles.modalInfoRow}>
+                  <Text style={[styles.modalAddressText, isDark && styles.textDark]} selectable>
+                    {cleanAddressText(viewingOrder?.shippingAddress)}
+                  </Text>
+                </View>
+
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                  <View style={[styles.modalPill, isDark && styles.modalPillDark]}>
+                    <Ionicons name="card-outline" size={13} color={isDark ? '#94a3b8' : '#475569'} />
+                    <Text style={[styles.modalPillText, isDark && styles.textDark]}>
+                      {viewingOrder?.paymentMethod === 'cod'
+                        ? 'Thu hộ tiền mặt (COD)'
+                        : viewingOrder?.paymentMethod?.toUpperCase() || 'Chuyển khoản'}
+                    </Text>
+                  </View>
+
+                  <View style={[styles.modalPill, isDark && styles.modalPillDark]}>
+                    <Ionicons name="car-outline" size={13} color={isDark ? '#94a3b8' : '#475569'} />
+                    <Text style={[styles.modalPillText, isDark && styles.textDark]}>
+                      {viewingOrder?.shippingMethod === 'fast' ? 'Hỏa tốc' : 'Tiêu chuẩn'}
+                    </Text>
+                  </View>
+                </View>
               </View>
 
-              <View style={styles.modalTotalRow}>
-                <Text style={{ fontSize: 15, fontWeight: '800', color: '#0f172a' }}>Tổng thanh toán:</Text>
-                <Text style={{ fontSize: 18, fontWeight: '900', color: '#dc2626' }}>
-                  {formatPrice(viewingOrder?.totalAmount || 0)}
-                </Text>
+              {/* Danh sách mặt hàng */}
+              <View style={[styles.modalCard, isDark && styles.modalCardDark, { marginTop: 10 }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Ionicons name="cube-outline" size={16} color="#2563eb" />
+                    <Text style={[styles.modalCardTitle, isDark && styles.textDark]}>
+                      Danh sách sản phẩm
+                    </Text>
+                  </View>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#64748b' }}>
+                    {viewingOrder?.items?.length || 0} sản phẩm
+                  </Text>
+                </View>
+
+                <View style={{ gap: 8 }}>
+                  {viewingOrder?.items?.map((item, idx) => (
+                    <View key={idx} style={[styles.modalProductItem, isDark && styles.modalProductItemDark]}>
+                      <Image
+                        source={{ uri: item.image || getProductFallbackImage(item) }}
+                        style={styles.modalProductImg}
+                        resizeMode="cover"
+                        onError={(e) => {
+                          const fallback = getProductFallbackImage(item);
+                          if (fallback) (e.target as any).src = fallback;
+                        }}
+                      />
+                      <View style={{ flex: 1, minWidth: 0, justifyContent: 'center' }}>
+                        <Text
+                          style={[styles.modalProductName, isDark && styles.textDark]}
+                          numberOfLines={2}
+                          ellipsizeMode="tail"
+                        >
+                          {item.name}
+                        </Text>
+                        {item.selectedConfig ? (
+                          <Text style={styles.modalProductConfig} numberOfLines={1}>
+                            Cấu hình: {item.selectedConfig}
+                          </Text>
+                        ) : null}
+
+                        {/* THỜI HẠN BẢO HÀNH DỰ KIẾN KHI MUA MÁY */}
+                        {(() => {
+                          const nameLower = (item.name || '').toLowerCase();
+                          let months = item.warrantyMonths || 24;
+                          if (!item.warrantyMonths) {
+                            if (nameLower.includes('laptop') || nameLower.includes('macbook')) months = 24;
+                            else if (nameLower.includes('màn hình') || nameLower.includes('pc') || nameLower.includes('vga') || nameLower.includes('rtx')) months = 36;
+                            else if (nameLower.includes('chuột') || nameLower.includes('bàn phím') || nameLower.includes('tai nghe')) months = 12;
+                          }
+                          const orderDate = viewingOrder.createdAt ? new Date(viewingOrder.createdAt) : new Date();
+                          const pad = (n: number) => String(n).padStart(2, '0');
+                          const formatD = (d: Date) => `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+                          const purchaseStr = item.purchaseDate || formatD(orderDate);
+                          const expDate = new Date(orderDate);
+                          expDate.setMonth(expDate.getMonth() + months);
+                          const expiryStr = item.warrantyExpiry || formatD(expDate);
+                          const range = item.warrantyRange || `${purchaseStr} đến ${expiryStr}`;
+                          const remainingDays = Math.max(0, Math.ceil((expDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+
+                          return (
+                            <View style={styles.staffWarrantyBadge}>
+                              <Ionicons name="shield-checkmark" size={11} color="#16a34a" />
+                              <Text style={styles.staffWarrantyText}>
+                                BH dự kiến: <Text style={{ fontWeight: '700', color: isDark ? '#4ade80' : '#15803d' }}>{range}</Text> ({months}T • Còn {remainingDays} ngày)
+                              </Text>
+                            </View>
+                          );
+                        })()}
+
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                          <Text style={[styles.modalProductQty, isDark && styles.modalProductQtyDark]}>
+                            SL: x{item.quantity}
+                          </Text>
+                          <Text style={[styles.modalProductUnitPrice, isDark && styles.textMutedDark]}>
+                            {formatPrice(item.price)}
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={{ alignItems: 'flex-end', justifyContent: 'center', paddingLeft: 6 }}>
+                        <Text style={styles.modalProductTotal}>
+                          {formatPrice(item.price * item.quantity)}
+                        </Text>
+                      </View>
+                    </View>
+                  ))}
+                </View>
               </View>
             </ScrollView>
 
-            <View style={styles.modalActions}>
-              <Pressable style={styles.btnSecondary} onPress={() => setViewingOrder(null)}>
-                <Text style={styles.btnSecondaryText}>Đóng</Text>
-              </Pressable>
-              {viewingOrder?.status === 'pending' && (
-                <>
-                  <Pressable
-                    style={[styles.btnPrimary, { backgroundColor: '#16a34a' }]}
-                    onPress={() => handleUpdateOrderStatus(viewingOrder.id || viewingOrder.orderNumber, 'confirmed', viewingOrder.orderNumber)}
-                  >
-                    <Text style={styles.btnPrimaryText}>Xác nhận đơn</Text>
-                  </Pressable>
-                  <Pressable
-                    style={[styles.btnSecondary, { borderColor: '#fca5a5', backgroundColor: '#fef2f2' }]}
-                    onPress={() => handleUpdateOrderStatus(viewingOrder.id || viewingOrder.orderNumber, 'cancelled', viewingOrder.orderNumber)}
-                  >
-                    <Text style={{ color: '#dc2626', fontWeight: '700' }}>Từ chối / Hủy đơn</Text>
-                  </Pressable>
-                </>
-              )}
-              {viewingOrder?.status === 'confirmed' && (
+            {/* Fixed Footer: Total + Actions */}
+            <View style={[styles.modalFooter, isDark && styles.modalFooterDark]}>
+              <View style={styles.modalTotalBar}>
+                <Text style={[styles.modalTotalLabel, isDark && styles.textDark]}>Tổng thanh toán:</Text>
+                <Text style={styles.modalTotalValue} numberOfLines={1}>
+                  {formatPrice(viewingOrder?.totalAmount || 0)}
+                </Text>
+              </View>
+
+              <View style={[styles.modalActionButtons, isMobile && { flexDirection: 'row', gap: 6 }]}>
                 <Pressable
-                  style={[styles.btnPrimary, { backgroundColor: '#0284c7' }]}
-                  onPress={() => handleUpdateOrderStatus(viewingOrder.id || viewingOrder.orderNumber, 'shipping', viewingOrder.orderNumber)}
+                  style={[
+                    styles.btnSecondary,
+                    isDark && { backgroundColor: '#334155' },
+                    isMobile && { flex: 1, paddingVertical: 10, paddingHorizontal: 6, alignItems: 'center', justifyContent: 'center' }
+                  ]}
+                  onPress={() => setViewingOrder(null)}
                 >
-                  <Text style={styles.btnPrimaryText}>Xuất kho giao hàng</Text>
+                  <Text style={[styles.btnSecondaryText, isDark && { color: '#cbd5e1' }, isMobile && { fontSize: 12 }]}>Đóng</Text>
                 </Pressable>
-              )}
-              {viewingOrder?.status === 'shipping' && (
+
                 <Pressable
-                  style={[styles.btnPrimary, { backgroundColor: '#16a34a' }]}
-                  onPress={() => handleUpdateOrderStatus(viewingOrder.id || viewingOrder.orderNumber, 'completed', viewingOrder.orderNumber)}
+                  style={[
+                    styles.btnSecondary,
+                    { borderColor: '#bfdbfe', backgroundColor: '#eff6ff' },
+                    isMobile && { flex: 1.2, paddingVertical: 10, paddingHorizontal: 6, alignItems: 'center', justifyContent: 'center' }
+                  ]}
+                  onPress={() => setInvoiceModalVisible(true)}
                 >
-                  <Text style={styles.btnPrimaryText}>Giao thành công</Text>
+                  <Ionicons name="receipt-outline" size={14} color="#2563eb" style={{ marginRight: 4 }} />
+                  <Text style={{ color: '#2563eb', fontWeight: '700', fontSize: isMobile ? 12 : 13 }}>In hóa đơn</Text>
                 </Pressable>
-              )}
+
+                {viewingOrder?.status === 'pending' && (
+                  <>
+                    <Pressable
+                      style={[
+                        styles.btnSecondary,
+                        { borderColor: '#fca5a5', backgroundColor: '#fef2f2' },
+                        isMobile && { flex: 1.2, paddingVertical: 10, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center' }
+                      ]}
+                      onPress={() => handleUpdateOrderStatus(viewingOrder.id || viewingOrder.orderNumber, 'cancelled', viewingOrder.orderNumber)}
+                      disabled={Boolean(updatingOrderId)}
+                    >
+                      <Text style={{ color: '#dc2626', fontWeight: '700', fontSize: isMobile ? 12 : 13 }}>Từ chối / Hủy</Text>
+                    </Pressable>
+                    <Pressable
+                      style={[
+                        styles.btnPrimary,
+                        { backgroundColor: '#16a34a' },
+                        isMobile && { flex: 1.3, paddingVertical: 10, paddingHorizontal: 6, alignItems: 'center', justifyContent: 'center' }
+                      ]}
+                      onPress={() => handleUpdateOrderStatus(viewingOrder.id || viewingOrder.orderNumber, 'confirmed', viewingOrder.orderNumber)}
+                      disabled={Boolean(updatingOrderId)}
+                    >
+                      <Text style={[styles.btnPrimaryText, isMobile && { fontSize: 12 }]}>Xác nhận đơn</Text>
+                    </Pressable>
+                  </>
+                )}
+
+                {viewingOrder?.status === 'confirmed' && (
+                  <Pressable
+                    style={[
+                      styles.btnPrimary,
+                      { backgroundColor: '#0284c7' },
+                      isMobile && { flex: 2, paddingVertical: 10, paddingHorizontal: 8, alignItems: 'center', justifyContent: 'center' }
+                    ]}
+                    onPress={() => handleUpdateOrderStatus(viewingOrder.id || viewingOrder.orderNumber, 'shipping', viewingOrder.orderNumber)}
+                    disabled={Boolean(updatingOrderId)}
+                  >
+                    <Ionicons name="airplane" size={15} color="#ffffff" style={{ marginRight: 4 }} />
+                    <Text style={styles.btnPrimaryText}>Xuất kho giao hàng</Text>
+                  </Pressable>
+                )}
+
+                {viewingOrder?.status === 'shipping' && (
+                  <Pressable
+                    style={[
+                      styles.btnPrimary,
+                      { backgroundColor: '#0284c7' },
+                      isMobile && { flex: 2, paddingVertical: 10, paddingHorizontal: 8, alignItems: 'center', justifyContent: 'center' }
+                    ]}
+                    onPress={() => handleUpdateOrderStatus(viewingOrder.id || viewingOrder.orderNumber, 'delivered', viewingOrder.orderNumber)}
+                    disabled={Boolean(updatingOrderId)}
+                  >
+                    <Ionicons name="location" size={15} color="#ffffff" style={{ marginRight: 4 }} />
+                    <Text style={styles.btnPrimaryText}>Báo đã phát tới nơi</Text>
+                  </Pressable>
+                )}
+
+                {viewingOrder?.status === 'delivered' && (
+                  <View style={[styles.waitingCustomerBadge, { paddingVertical: 9, paddingHorizontal: 14 }]}>
+                    <Ionicons name="hourglass-outline" size={16} color="#0284c7" />
+                    <Text style={[styles.waitingCustomerText, { fontSize: 13 }]}>
+                      Đang chờ khách kiểm tra & ấn Đã nhận hàng
+                    </Text>
+                  </View>
+                )}
+              </View>
             </View>
           </View>
         </View>
@@ -1035,6 +1314,13 @@ export default function StaffScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* MODAL: XUẤT HÓA ĐƠN BÁN HÀNG CHO NHÂN VIÊN */}
+      <InvoiceModal
+        visible={invoiceModalVisible}
+        onClose={() => setInvoiceModalVisible(false)}
+        order={viewingOrder}
+      />
     </View>
   );
 }
@@ -1043,6 +1329,8 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8fafc',
+    width: '100%',
+    maxWidth: '100%',
   },
   containerDark: {
     backgroundColor: '#0f172a',
@@ -1083,6 +1371,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     borderBottomWidth: 1,
     borderColor: '#e2e8f0',
+  },
+  headerMobile: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 8,
   },
   headerDark: {
     backgroundColor: '#1e293b',
@@ -1137,6 +1430,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+  },
+  headerRightMobile: {
+    gap: 6,
   },
   userPill: {
     flexDirection: 'row',
@@ -1674,21 +1970,35 @@ const styles = StyleSheet.create({
   /* MODAL */
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    backgroundColor: 'rgba(15, 23, 42, 0.7)',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 20,
+    padding: 16,
+  },
+  modalBackdropMobile: {
+    padding: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   modalBox: {
     backgroundColor: '#ffffff',
-    borderRadius: 18,
+    borderRadius: 20,
     padding: 20,
     width: '100%',
-    maxWidth: 520,
+    maxWidth: 540,
+    maxHeight: '90%',
     shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 20,
-    elevation: 8,
+    shadowOpacity: 0.25,
+    shadowRadius: 24,
+    elevation: 10,
+    overflow: 'hidden',
+  },
+  modalBoxMobile: {
+    width: '100%',
+    maxWidth: '100%',
+    padding: 14,
+    maxHeight: '94%',
+    borderRadius: 16,
   },
   modalBoxDark: {
     backgroundColor: '#1e293b',
@@ -1698,17 +2008,209 @@ const styles = StyleSheet.create({
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderColor: '#f1f5f9',
   },
   modalTitle: {
     fontSize: 17,
     fontWeight: '800',
     color: '#0f172a',
   },
+  modalOrderCodeText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#2563eb',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    marginTop: 2,
+  },
   modalSub: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#64748b',
     marginTop: 2,
+  },
+  modalCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCloseBtnDark: {
+    backgroundColor: '#334155',
+  },
+  modalCard: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  modalCardDark: {
+    backgroundColor: '#0f172a',
+    borderColor: '#334155',
+  },
+  modalCardTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  modalAddressText: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: '#334155',
+    fontWeight: '500',
+  },
+  modalInfoRow: {
+    marginTop: 2,
+  },
+  modalPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  modalPillDark: {
+    backgroundColor: '#1e293b',
+    borderColor: '#334155',
+  },
+  modalPillText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  modalProductItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderRadius: 10,
+    padding: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    gap: 10,
+  },
+  modalProductItemDark: {
+    backgroundColor: '#1e293b',
+    borderColor: '#334155',
+  },
+  modalProductImg: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    backgroundColor: '#f1f5f9',
+  },
+  modalProductName: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0f172a',
+    lineHeight: 16,
+  },
+  modalProductConfig: {
+    fontSize: 11,
+    color: '#64748b',
+    marginTop: 2,
+  },
+  staffWarrantyBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f0fdf4',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    alignSelf: 'flex-start',
+    gap: 4,
+    marginTop: 3,
+  },
+  staffWarrantyText: {
+    fontSize: 10,
+    color: '#166534',
+    fontWeight: '500',
+  },
+  waitingCustomerBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+  },
+  waitingCustomerText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0284c7',
+  },
+  modalProductQty: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0f172a',
+    backgroundColor: '#f1f5f9',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  modalProductQtyDark: {
+    color: '#f8fafc',
+    backgroundColor: '#334155',
+  },
+  modalProductUnitPrice: {
+    fontSize: 11,
+    color: '#64748b',
+  },
+  modalProductTotal: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#2563eb',
+  },
+  modalFooter: {
+    borderTopWidth: 1,
+    borderColor: '#e2e8f0',
+    paddingTop: 12,
+    marginTop: 6,
+  },
+  modalFooterDark: {
+    borderColor: '#334155',
+  },
+  modalTotalBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  modalTotalLabel: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  modalTotalValue: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#dc2626',
+  },
+  modalActionButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  modalReturnBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    padding: 10,
+    borderRadius: 10,
+    marginBottom: 10,
+    borderWidth: 1,
   },
   modalSection: {
     marginVertical: 6,
