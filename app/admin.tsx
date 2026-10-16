@@ -686,7 +686,12 @@ export default function AdminScreen() {
       setOrderList((prev) =>
         prev.map((o) =>
           String(o.id) === String(orderId) || (currentOrder?.orderNumber && o.orderNumber === currentOrder.orderNumber)
-            ? { ...o, returnStatus: status }
+            ? {
+                ...o,
+                returnStatus: status,
+                // Khi duyệt đổi trả → đổi status đơn thành cancelled để trừ doanh số ngay lập tức
+                ...(status === 'approved' ? { status: 'cancelled' } : {}),
+              }
             : o
         )
       );
@@ -695,11 +700,15 @@ export default function AdminScreen() {
         (String(viewingOrder.id) === String(orderId) ||
           (currentOrder?.orderNumber && viewingOrder.orderNumber === currentOrder.orderNumber))
       ) {
-        setViewingOrder({ ...viewingOrder, returnStatus: status });
+        setViewingOrder({
+          ...viewingOrder,
+          returnStatus: status,
+          ...(status === 'approved' ? { status: 'cancelled' } : {}),
+        });
       }
       showToast(
         status === 'approved'
-          ? `Đã duyệt yêu cầu đổi trả đơn #${currentOrder?.orderNumber || orderId}`
+          ? `Đã duyệt đổi trả đơn #${currentOrder?.orderNumber || orderId} — doanh số đã được trừ`
           : `Đã từ chối yêu cầu đổi trả đơn #${currentOrder?.orderNumber || orderId}`
       );
       setTimeout(() => loadData(), 400);
@@ -1159,11 +1168,10 @@ export default function AdminScreen() {
         setStats((prev) => ({ ...prev, totalProducts: Math.max(0, prev.totalProducts - 1) }));
         showToast(`Đã xóa "${title}"`);
       } else if (type === 'order') {
-        await apiService.deleteOrder(id as number);
-        setOrderList((prev) => prev.filter((o) => o.id !== id));
-        setStats((prev) => ({ ...prev, totalOrders: Math.max(0, prev.totalOrders - 1) }));
-        if (viewingOrder?.id === id) setViewingOrder(null);
-        showToast(`Đã xóa đơn hàng #${title}`);
+        // Đơn hàng KHÔNG được phép xóa — phải lưu trữ vĩnh viễn
+        showToast('⚠️ Không thể xóa đơn hàng! Đây là bằng chứng giao dịch, phải lưu trữ theo quy định. Hãy hủy đơn nếu cần.');
+        setDeleteConfirm(null);
+        return;
       } else if (type === 'category') {
         await apiService.deleteCategory(id.toString());
         setCategoryList((prev) => prev.filter((c) => c.id !== id));
@@ -1856,7 +1864,7 @@ export default function AdminScreen() {
                 </View>
               )}
             </View>
-            <Text style={[styles.statValue, isDark && styles.textDark]}>{stats.totalOrders} đơn hàng</Text>
+            <Text style={[styles.statValue, isDark && styles.textDark]}>{orderList.filter(o => o.status !== 'cancelled').length} đơn hàng</Text>
             <Text style={[styles.statLabel, isDark && styles.textMutedDark]}>Tổng giao dịch phát sinh</Text>
           </View>
 
@@ -2712,12 +2720,6 @@ export default function AdminScreen() {
                             <Text style={styles.viewDetailBtnText}>Chi tiết / In</Text>
                           </Pressable>
 
-                          <Pressable
-                            style={styles.deleteOrderIconBtn}
-                            onPress={() => setDeleteConfirm({ type: 'order', id: order.id, title: order.orderNumber || order.id.toString() })}
-                          >
-                            <Ionicons name="trash-outline" size={16} color="#ef4444" />
-                          </Pressable>
                         </View>
                       </View>
                     </View>

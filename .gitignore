@@ -41,3 +41,6 @@ app-example
 # generated native folders
 /ios
 /android
+# Local database migration backups (contain customer order data)
+server/backups/
+.unit-codes-*.log

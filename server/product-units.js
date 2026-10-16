@@ -1,0 +1,119 @@
+const { randomUUID } = require('node:crypto');
+
+const unitSchema = `CREATE TABLE IF NOT EXISTS product_units (
+  code VARCHAR(40) PRIMARY KEY,
+  productId VARCHAR(50) NOT NULL,
+  manufacturerSerial VARCHAR(100) UNIQUE NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'available',
+  orderId INT NULL,
+  createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX units_product_status (productId, status),
+  INDEX units_order (orderId)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`;
+
+function quantity(value) {
+  const n = Number(value);
+  if (!Number.isSafeInteger(n) || n < 1) throw new Error('Số lượng phải là số nguyên dương');
+  return n;
+}
+
+function parseItems(items) {
+  return typeof items === 'string' ? JSON.parse(items) : (items || []);
+}
+
+async function createUnits(connection, productId, count, status = 'available', orderId = null) {
+  const codes = Array.from({ length: count }, () => `BH-${randomUUID().replace(/-/g, '').toUpperCase()}`);
+  // Bound query size for large inventories.
+  for (let start = 0; start < codes.length; start += 500) {
+    await connection.query('INSERT INTO product_units (code, productId, status, orderId) VALUES ?',
+      [codes.slice(start, start + 500).map(code => [code, productId, status, orderId])]);
+  }
+  return codes;
+}
+
+// Caller must hold the product row lock inside a transaction.
+async function syncStockUnits(connection, productId) {
+  const [[product]] = await connection.query('SELECT stock FROM products WHERE id = ? FOR UPDATE', [productId]);
+  if (!product) throw new Error('Không tìm thấy sản phẩm');
+  const target = Number(product.stock);
+  if (!Number.isSafeInteger(target) || target < 0) throw new Error('Tồn kho phải là số nguyên không âm');
+  const [available] = await connection.query(
+    "SELECT code FROM product_units WHERE productId = ? AND status = 'available' ORDER BY createdAt, code FOR UPDATE", [productId]);
+  if (available.length < target) await createUnits(connection, productId, target - available.length);
+  if (available.length > target) {
+    await connection.query("UPDATE product_units SET status = 'removed' WHERE code IN (?)",
+      [available.slice(target).map(unit => unit.code)]);
+  }
+}
+
+async function allocateUnits(connection, productId, count) {
+  count = quantity(count);
+  await syncStockUnits(connection, productId);
+  const [units] = await connection.query(
+    "SELECT code FROM product_units WHERE productId = ? AND status = 'available' ORDER BY createdAt, code LIMIT ? FOR UPDATE",
+    [productId, count]);
+  if (units.length !== count) throw new Error('Không đủ máy trong kho để cấp mã bảo hành');
+  const codes = units.map(unit => unit.code);
+  await connection.query("UPDATE product_units SET status = 'allocated' WHERE code IN (?)", [codes]);
+  return codes;
+}
+
+async function releaseOrderUnits(connection, orderId) {
+  await connection.query("UPDATE product_units SET status = 'available', orderId = NULL WHERE orderId = ? AND status = 'allocated'", [orderId]);
+}
+
+async function hydrateOrders(connection, orders) {
+  const parsed = orders.map(order => ({ ...order, items: parseItems(order.items) }));
+  const codes = [...new Set(parsed.flatMap(order => order.items.flatMap(item => item.serialNumbers || [])))];
+  if (!codes.length) return parsed;
+  const [units] = await connection.query('SELECT code, manufacturerSerial FROM product_units WHERE code IN (?)', [codes]);
+  const byCode = new Map(units.map(unit => [unit.code, unit]));
+  return parsed.map(order => ({ ...order, items: order.items.map(item => ({ ...item,
+    deviceUnits: (item.serialNumbers || []).map(code => ({ code, manufacturerSerial: byCode.get(code)?.manufacturerSerial || null })),
+  })) }));
+}
+
+async function initializeUnits(pool) {
+  const connection = await pool.getConnection();
+  let locked = false;
+  try {
+    const [[lock]] = await connection.query("SELECT GET_LOCK('dpc_product_units_migration', 30) AS acquired");
+    if (!lock.acquired) throw new Error('Không thể khóa migration mã bảo hành');
+    locked = true;
+    await connection.query(unitSchema);
+    await connection.beginTransaction();
+    const [orders] = await connection.query('SELECT id, orderNumber, status, items FROM orders ORDER BY id FOR UPDATE');
+    for (const order of orders) {
+      const items = parseItems(order.items);
+      let changed = false;
+      for (const [index, item] of items.entries()) {
+        const count = quantity(item.quantity || 1);
+        if (!item.legacySerialNumber && item.unitCodeSource !== 'inventory') {
+          const digits = String(order.orderNumber || order.id).replace(/[^0-9]/g, '');
+          item.legacySerialNumber = item.serialNumber && item.unitCodeSource !== 'backfill'
+            ? item.serialNumber : `SN-DPC-${digits.slice(-8) || order.id}-${index + 1}`;
+          changed = true;
+        }
+        if (item.serialNumbers?.length === count) continue;
+        const codes = await createUnits(connection, item.productId, count,
+          order.status === 'cancelled' ? 'retired' : 'allocated', order.id);
+        item.serialNumbers = codes;
+        item.serialNumber = codes[0];
+        item.unitCodeSource = 'backfill';
+        changed = true;
+      }
+      if (changed) await connection.query('UPDATE orders SET items = ?, updatedAt = updatedAt WHERE id = ?', [JSON.stringify(items), order.id]);
+    }
+    const [products] = await connection.query('SELECT id FROM products ORDER BY id FOR UPDATE');
+    for (const product of products) await syncStockUnits(connection, product.id);
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    if (locked) await connection.query("SELECT RELEASE_LOCK('dpc_product_units_migration')");
+    connection.release();
+  }
+}
+
+module.exports = { unitSchema, quantity, createUnits, syncStockUnits, allocateUnits, releaseOrderUnits, hydrateOrders, initializeUnits };

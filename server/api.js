@@ -2,6 +2,7 @@ require('dotenv').config({ path: '.env.local' });
 const express = require('express');
 const mysql = require('mysql2/promise');
 const cors = require('cors');
+const { initializeUnits, syncStockUnits, allocateUnits, releaseOrderUnits, hydrateOrders, quantity } = require('./product-units');
 
 const app = express();
 
@@ -287,7 +288,7 @@ async function initTables() {
     console.warn('💡 Hãy chắc chắn XAMPP MySQL đang chạy và database "maytinh" đã được tạo');
   }
 }
-initTables();
+const databaseReady = initTables().then(() => initializeUnits(pool));
 
 
 // Auth Middleware: kiểm tra quyền Quản trị viên (Admin)
@@ -465,7 +466,7 @@ app.get(['/categories', '/api/categories'], async (req, res) => {
     if (req.path.startsWith('/api')) {
       return res.status(500).json({ success: false, message: error.message, data: [] });
     }
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
@@ -488,7 +489,7 @@ app.get('/categories/:id', async (req, res) => {
     res.json(rows[0]);
   } catch (error) {
     console.error('Error fetching category:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
@@ -504,7 +505,7 @@ app.post('/categories', requireAdmin, async (req, res) => {
     res.status(201).json({ message: 'Category saved successfully', category: { id, name, count, icon } });
   } catch (error) {
     console.error('Error creating category:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
@@ -523,7 +524,7 @@ app.put('/categories/:id', requireAdmin, async (req, res) => {
     res.json({ message: 'Category updated successfully' });
   } catch (error) {
     console.error('Error updating category:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
@@ -548,7 +549,7 @@ app.delete('/categories/:id', requireAdmin, async (req, res) => {
     res.json({ message: 'Category deleted successfully' });
   } catch (error) {
     console.error('Error deleting category:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
@@ -647,7 +648,7 @@ app.get('/products', async (req, res) => {
     res.json(products);
   } catch (error) {
     console.error('Error fetching products:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
@@ -698,13 +699,16 @@ app.get('/products/:id', async (req, res) => {
     res.json(product);
   } catch (error) {
     console.error('Error fetching product:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
 app.post('/products', requireAdmin, async (req, res) => {
+  let connection;
   try {
-    const connection = await pool.getConnection();
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+    if (req.body.stock !== undefined && (!Number.isSafeInteger(Number(req.body.stock)) || Number(req.body.stock) < 0)) throw new Error('Invalid inventory quantity');
     const p = req.body;
     const catId = p.category_id || p.category || 'accessories';
 
@@ -746,17 +750,24 @@ app.post('/products', requireAdmin, async (req, res) => {
       typeof p.features === 'string' ? p.features : JSON.stringify(p.features || [])
     ]);
 
+    await syncStockUnits(connection, p.id);
+    await connection.commit();
     connection.release();
+    connection = null;
     res.status(201).json({ message: 'Product created successfully' });
   } catch (error) {
+    if (connection) { await connection.rollback(); connection.release(); }
     console.error('Error creating product:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
 app.put('/products/:id', requireStaffOrAdmin, async (req, res) => {
+  let connection;
   try {
-    const connection = await pool.getConnection();
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+    if (req.body.stock !== undefined && (!Number.isSafeInteger(Number(req.body.stock)) || Number(req.body.stock) < 0)) throw new Error('Invalid inventory quantity');
     const {
       name,
       category_id,
@@ -820,7 +831,10 @@ app.put('/products/:id', requireStaffOrAdmin, async (req, res) => {
       req.params.id,
     ]);
 
+    if (result.affectedRows) await syncStockUnits(connection, req.params.id);
+    await connection.commit();
     connection.release();
+    connection = null;
 
     if (result.affectedRows === 0) {
       return res.status(404).json({ error: 'Product not found' });
@@ -828,14 +842,52 @@ app.put('/products/:id', requireStaffOrAdmin, async (req, res) => {
 
     res.json({ message: 'Product updated successfully' });
   } catch (error) {
+    if (connection) { await connection.rollback(); connection.release(); }
     console.error('Error updating product:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
+  }
+});
+
+app.get('/products/:id/units', requireStaffOrAdmin, async (req, res) => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+    await syncStockUnits(connection, req.params.id);
+    const [units] = await connection.query(
+      'SELECT * FROM product_units WHERE productId = ? ORDER BY status, createdAt, code', [req.params.id]);
+    await connection.commit();
+    res.json(units);
+  } catch (error) {
+    if (connection) await connection.rollback();
+    res.status(400).json({ error: error.message });
+  } finally {
+    if (connection) connection.release();
+  }
+});
+
+app.put('/product-units/:code', requireStaffOrAdmin, async (req, res) => {
+  try {
+    if (typeof req.body.manufacturerSerial !== 'string' || req.body.manufacturerSerial.trim().length > 100) {
+      return res.status(400).json({ error: 'Serial trên tem máy tối đa 100 ký tự' });
+    }
+    const serial = req.body.manufacturerSerial.trim().toUpperCase() || null;
+    const [result] = await pool.query('UPDATE product_units SET manufacturerSerial = ? WHERE code = ?', [serial, req.params.code]);
+    if (!result.affectedRows) return res.status(404).json({ error: 'Không tìm thấy mã máy' });
+    res.json({ message: 'Đã lưu serial trên tem máy' });
+  } catch (error) {
+    res.status(400).json({ error: error.code === 'ER_DUP_ENTRY' ? 'Serial này đã được gán cho máy khác' : error.message });
   }
 });
 
 app.delete('/products/:id', requireAdmin, async (req, res) => {
   try {
     const connection = await pool.getConnection();
+    const [[registered]] = await connection.query('SELECT COUNT(*) AS total FROM product_units WHERE productId = ?', [req.params.id]);
+    if (registered.total > 0) {
+      connection.release();
+      return res.status(400).json({ error: 'Sản phẩm đã có mã máy. Hãy ẩn sản phẩm để giữ lịch sử bảo hành.' });
+    }
     const [result] = await connection.query('DELETE FROM products WHERE id = ?', [req.params.id]);
     connection.release();
 
@@ -846,7 +898,7 @@ app.delete('/products/:id', requireAdmin, async (req, res) => {
     res.json({ message: 'Product deleted successfully' });
   } catch (error) {
     console.error('Error deleting product:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
@@ -892,7 +944,7 @@ app.post('/users/register', async (req, res) => {
     res.status(201).json({ message: 'User registered successfully', role: userRole });
   } catch (error) {
     console.error('Error registering user:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
@@ -920,7 +972,7 @@ app.post('/users/login', async (req, res) => {
     res.json(rows[0]);
   } catch (error) {
     console.error('Error logging in:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
@@ -937,7 +989,7 @@ app.get('/users/:id', async (req, res) => {
     res.json(rows[0]);
   } catch (error) {
     console.error('Error fetching user:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
@@ -975,7 +1027,7 @@ app.put('/users/:id', async (req, res) => {
     res.json({ message: 'User updated successfully', user: rows[0] });
   } catch (error) {
     console.error('Error updating user:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
@@ -1000,7 +1052,7 @@ app.put('/users/:id/password', async (req, res) => {
     res.json({ message: 'Đổi mật khẩu thành công' });
   } catch (error) {
     console.error('Error updating password:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
@@ -1012,7 +1064,7 @@ app.get('/users', requireAdmin, async (req, res) => {
     res.json(rows);
   } catch (error) {
     console.error('Error fetching users:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
@@ -1032,7 +1084,7 @@ app.delete('/users/:id', requireAdmin, async (req, res) => {
     res.json({ message: 'User deleted successfully' });
   } catch (error) {
     console.error('Error deleting user:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
@@ -1065,7 +1117,7 @@ app.patch('/users/:id/role', requireAdmin, async (req, res) => {
     res.json({ message: `Đã đổi vai trò người dùng thành ${roleName}` });
   } catch (error) {
     console.error('Error updating user role:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
@@ -1109,7 +1161,7 @@ app.post('/users/create-user', requireAdmin, async (req, res) => {
   } catch (error) {
     if (connection) connection.release();
     console.error('Error creating user:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
@@ -1132,7 +1184,8 @@ app.get('/orders', async (req, res) => {
     const [rows] = await connection.query(query, params);
     connection.release();
 
-    const orders = rows.map(order => ({
+    const hydrated = await hydrateOrders(pool, rows);
+    const orders = hydrated.map(order => ({
       ...order,
       items: order.items
         ? (typeof order.items === 'string' ? JSON.parse(order.items) : order.items)
@@ -1145,7 +1198,7 @@ app.get('/orders', async (req, res) => {
     res.json(orders);
   } catch (error) {
     console.error('Error fetching orders:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
@@ -1160,10 +1213,11 @@ app.get('/orders/:id', async (req, res) => {
       return res.status(404).json({ error: 'Order not found' });
     }
 
+    const [hydrated] = await hydrateOrders(pool, rows);
     const order = {
-      ...rows[0],
-      items: rows[0].items
-        ? (typeof rows[0].items === 'string' ? JSON.parse(rows[0].items) : rows[0].items)
+      ...hydrated,
+      items: hydrated.items
+        ? hydrated.items
         : [],
       returnMedia: rows[0].returnMedia
         ? (typeof rows[0].returnMedia === 'string' ? JSON.parse(rows[0].returnMedia) : rows[0].returnMedia)
@@ -1173,7 +1227,7 @@ app.get('/orders/:id', async (req, res) => {
     res.json(order);
   } catch (error) {
     console.error('Error fetching order:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
@@ -1213,7 +1267,7 @@ app.post('/orders', async (req, res) => {
         return res.status(400).json({ error: `Sản phẩm "${prod.name}" hiện đã ngừng kinh doanh` });
       }
 
-      const reqQty = Number(it.quantity) || 1;
+      const reqQty = quantity(it.quantity);
       const currentStock = prod.stock ?? 0;
       if (currentStock < reqQty) {
         await connection.rollback();
@@ -1222,11 +1276,11 @@ app.post('/orders', async (req, res) => {
           error: `Sản phẩm "${prod.name}" trong kho chỉ còn ${currentStock} cái, không đủ số lượng bạn đặt (${reqQty})`
         });
       }
-    }
-
-    // Trừ kho từng sản phẩm
-    for (const it of parsedItems) {
-      const reqQty = Number(it.quantity) || 1;
+      it.serialNumbers = await allocateUnits(connection, it.productId, reqQty);
+      it.serialNumber = it.serialNumbers[0];
+      delete it.deviceUnits;
+      delete it.legacySerialNumber;
+      it.unitCodeSource = 'inventory';
       await connection.query('UPDATE products SET stock = stock - ? WHERE id = ?', [reqQty, it.productId]);
     }
 
@@ -1274,6 +1328,10 @@ app.post('/orders', async (req, res) => {
       paymentMethod,
     ]);
 
+    for (const item of enrichedItems) {
+      await connection.query('UPDATE product_units SET orderId = ? WHERE code IN (?)', [result.insertId, item.serialNumbers]);
+    }
+
     // Nếu đơn hàng có dùng voucher, lưu vào user_vouchers để đánh dấu đã sử dụng
     if (voucherCode && userId) {
       const cleanVoucher = String(voucherCode).trim().toUpperCase();
@@ -1290,6 +1348,29 @@ app.post('/orders', async (req, res) => {
     await connection.commit();
     connection.release();
 
+    // Gửi thông báo đơn hàng mới cho TẤT CẢ admin + staff
+    try {
+      const conn2 = await pool.getConnection();
+      const [staffAdmins] = await conn2.query("SELECT id FROM users WHERE role IN ('admin', 'staff')");
+      if (staffAdmins.length > 0) {
+        const customerName = shippingAddress ? shippingAddress.split(' - ')[0] : `User #${userId}`;
+        const notiValues = staffAdmins.map(u => [
+          u.id,
+          result.insertId,
+          `🛒 Đơn hàng mới #${orderNumber}`,
+          `Khách hàng ${customerName} vừa đặt đơn ${Number(totalAmount).toLocaleString('vi-VN')}₫. Hãy xác nhận và xử lý ngay!`,
+          'new_order',
+        ]);
+        await conn2.query(
+          'INSERT INTO notifications (userId, orderId, title, message, type) VALUES ?',
+          [notiValues]
+        );
+      }
+      conn2.release();
+    } catch (nErr) {
+      console.warn('Could not send new-order notification to staff/admin:', nErr.message);
+    }
+
     res.status(201).json({
       message: 'Order created successfully',
       orderNumber,
@@ -1301,7 +1382,7 @@ app.post('/orders', async (req, res) => {
       connection.release();
     }
     console.error('Error creating order:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
@@ -1353,6 +1434,10 @@ app.put('/orders/:id/status', requireStaffAdminOrCustomerReceipt, async (req, re
     }
 
     await connection.beginTransaction();
+    const [[lockedOrder]] = await connection.query('SELECT status, returnStatus FROM orders WHERE id = ? FOR UPDATE', [realOrderId]);
+    if (!lockedOrder || lockedOrder.status === 'cancelled') throw Object.assign(new Error('Order already cancelled'), { status: 400 });
+    if (lockedOrder.status !== currentStatus) throw Object.assign(new Error('Order status changed; please reload'), { status: 400 });
+
 
     // Nếu đơn hàng bị hủy: hoàn lại số lượng tồn kho cho các sản phẩm
     if (status === 'cancelled') {
@@ -1366,6 +1451,7 @@ app.put('/orders/:id/status', requireStaffAdminOrCustomerReceipt, async (req, re
       }
     }
 
+    if (status === 'cancelled') await releaseOrderUnits(connection, realOrderId);
     await connection.query('UPDATE orders SET status = ? WHERE id = ?', [status, realOrderId]);
 
     // TẠO THÔNG BÁO CHO TÀI KHOẢN KHÁCH HÀNG KHI ADMIN CẬP NHẬT TRẠNG THÁI
@@ -1403,6 +1489,28 @@ app.put('/orders/:id/status', requireStaffAdminOrCustomerReceipt, async (req, re
       }
     }
 
+    // Khi đơn giao thành công → thông báo cho admin + staff biết doanh thu tăng
+    if (status === 'completed') {
+      try {
+        const [staffAdmins] = await connection.query("SELECT id FROM users WHERE role IN ('admin', 'staff')");
+        if (staffAdmins.length > 0) {
+          const notiValues = staffAdmins.map(u => [
+            u.id,
+            realOrderId,
+            `✅ Đơn #${orderNumber} giao thành công!`,
+            `Khách hàng đã xác nhận nhận hàng. Doanh thu +${Number(rows[0]?.totalAmount || 0).toLocaleString('vi-VN')}₫ đã được ghi nhận.`,
+            'order_completed',
+          ]);
+          await connection.query(
+            'INSERT INTO notifications (userId, orderId, title, message, type) VALUES ?',
+            [notiValues]
+          );
+        }
+      } catch (nErr) {
+        console.warn('Could not send completed notification to staff/admin:', nErr.message);
+      }
+    }
+
     await connection.commit();
     connection.release();
 
@@ -1413,7 +1521,7 @@ app.put('/orders/:id/status', requireStaffAdminOrCustomerReceipt, async (req, re
       connection.release();
     }
     console.error('Error updating order status:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
@@ -1477,26 +1585,15 @@ app.put('/orders/:id/receive', async (req, res) => {
   } catch (error) {
     if (connection) connection.release();
     console.error('Error confirming order receipt:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
 app.delete('/orders/:id', requireAdmin, async (req, res) => {
-  try {
-    const connection = await pool.getConnection();
-    const lookup = buildOrderLookup(req.params.id);
-    const [result] = await connection.query(`DELETE FROM orders WHERE ${lookup.sql}`, lookup.params);
-    connection.release();
-
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ error: 'Order not found' });
-    }
-
-    res.json({ message: 'Order deleted successfully' });
-  } catch (error) {
-    console.error('Error deleting order:', error);
-    res.status(500).json({ error: error.message });
-  }
+  // Đơn hàng của khách PHẢI được lưu trữ vĩnh viễn — không cho phép xóa
+  return res.status(403).json({
+    error: 'Không được phép xóa đơn hàng. Đơn hàng là bằng chứng giao dịch và phải được lưu trữ vĩnh viễn theo quy định. Hãy chuyển trạng thái đơn thành "Đã hủy" nếu cần.'
+  });
 });
 
 // ==================== CART ====================
@@ -1522,7 +1619,7 @@ app.get('/cart/:userId', async (req, res) => {
     res.json(cart);
   } catch (error) {
     console.error('Error fetching cart:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
@@ -1554,7 +1651,7 @@ app.post('/cart/:userId', async (req, res) => {
     res.json({ message: 'Giỏ hàng đã được cập nhật thành công' });
   } catch (error) {
     console.error('Error updating cart:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
@@ -1577,6 +1674,10 @@ app.put('/orders/:id/cancel', async (req, res) => {
     }
 
     await connection.beginTransaction();
+    const [[lockedOrder]] = await connection.query('SELECT status, returnStatus FROM orders WHERE id = ? FOR UPDATE', [realOrderId]);
+    if (!lockedOrder || lockedOrder.status === 'cancelled') throw Object.assign(new Error('Order already cancelled'), { status: 400 });
+    if (lockedOrder.status !== 'pending') throw Object.assign(new Error('Only pending orders can be cancelled'), { status: 400 });
+
 
     // Hoàn lại tồn kho khi khách hàng hủy đơn pending
     const orderItems = rows[0].items
@@ -1588,6 +1689,7 @@ app.put('/orders/:id/cancel', async (req, res) => {
       }
     }
 
+    await releaseOrderUnits(connection, realOrderId);
     await connection.query("UPDATE orders SET status = 'cancelled' WHERE id = ?", [realOrderId]);
     await connection.commit();
     connection.release();
@@ -1599,7 +1701,7 @@ app.put('/orders/:id/cancel', async (req, res) => {
       connection.release();
     }
     console.error('Error cancelling order:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
@@ -1670,7 +1772,7 @@ app.post('/orders/:id/return', async (req, res) => {
   } catch (error) {
     if (connection) connection.release();
     console.error('Error creating return request:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
@@ -1695,6 +1797,12 @@ app.put('/orders/:id/return-status', requireStaffOrAdmin, async (req, res) => {
 
     const order = rows[0];
 
+    await connection.beginTransaction();
+    const [[lockedOrder]] = await connection.query('SELECT status, returnStatus FROM orders WHERE id = ? FOR UPDATE', [order.id]);
+    if (!lockedOrder || lockedOrder.status === 'cancelled') throw Object.assign(new Error('Order already cancelled'), { status: 400 });
+    if (!['approved', 'rejected'].includes(status) || lockedOrder.returnStatus !== 'pending') throw Object.assign(new Error('Return request already processed or invalid'), { status: 400 });
+
+
     await connection.query(
       'UPDATE return_requests SET status = ?, adminNote = ? WHERE orderId = ?',
       [status, adminNote || null, order.id]
@@ -1704,6 +1812,28 @@ app.put('/orders/:id/return-status', requireStaffOrAdmin, async (req, res) => {
       'UPDATE orders SET returnStatus = ? WHERE id = ?',
       [status, order.id]
     );
+
+    // Khi duyệt đổi trả: đổi status đơn → 'cancelled' để trừ doanh số + hoàn lại tồn kho
+    if (status === 'approved') {
+      // Lấy items để hoàn lại stock
+      const [orderRows] = await connection.query('SELECT items FROM orders WHERE id = ?', [order.id]);
+      const orderItems = orderRows[0]?.items
+        ? (typeof orderRows[0].items === 'string' ? JSON.parse(orderRows[0].items) : orderRows[0].items)
+        : [];
+      for (const it of orderItems) {
+        if (it.productId && it.quantity) {
+          await connection.query(
+            'UPDATE products SET stock = stock + ? WHERE id = ?',
+            [Number(it.quantity) || 1, it.productId]
+          );
+        }
+      }
+      // Chuyển đơn sang cancelled để loại khỏi doanh thu
+      await releaseOrderUnits(connection, order.id);
+      await connection.query("UPDATE orders SET status = 'cancelled' WHERE id = ?", [order.id]);
+    }
+
+    await connection.commit();
 
     const isApproved = status === 'approved';
     const notiTitle = isApproved
@@ -1721,11 +1851,11 @@ app.put('/orders/:id/return-status', requireStaffOrAdmin, async (req, res) => {
     } catch (nErr) {}
 
     connection.release();
-    res.json({ message: 'Cập nhật trạng thái đổi trả thành công', returnStatus: status });
+    res.json({ message: 'Cập nhật trạng thái đổi trả thành công', returnStatus: status, orderStatus: isApproved ? 'cancelled' : undefined });
   } catch (error) {
     if (connection) connection.release();
     console.error('Error updating return status:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
@@ -1737,7 +1867,7 @@ app.delete('/cart/:userId', async (req, res) => {
     res.json({ message: 'Cart cleared successfully' });
   } catch (error) {
     console.error('Error clearing cart:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
@@ -1760,7 +1890,7 @@ app.get('/notifications', async (req, res) => {
   } catch (error) {
     if (connection) connection.release();
     console.error('Error fetching notifications:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
@@ -1773,7 +1903,7 @@ app.put('/notifications/:id/read', async (req, res) => {
     res.json({ message: 'Marked as read' });
   } catch (error) {
     if (connection) connection.release();
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
@@ -1789,7 +1919,7 @@ app.put('/notifications/read-all', async (req, res) => {
     res.json({ message: 'All marked as read' });
   } catch (error) {
     if (connection) connection.release();
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
@@ -1815,7 +1945,7 @@ app.get('/wishlist/:userId', async (req, res) => {
     res.json(wishlist);
   } catch (error) {
     console.error('Error fetching wishlist:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
@@ -1831,7 +1961,7 @@ app.post('/wishlist/:userId', async (req, res) => {
     res.status(201).json({ message: 'Đã thêm vào danh sách yêu thích', productId });
   } catch (error) {
     console.error('Error adding to wishlist:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
@@ -1846,7 +1976,7 @@ app.delete('/wishlist/:userId/:productId', async (req, res) => {
     res.json({ message: 'Đã xóa khỏi danh sách yêu thích' });
   } catch (error) {
     console.error('Error removing from wishlist:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
@@ -1870,7 +2000,7 @@ app.get(['/reviews/recent', '/reviews'], async (req, res) => {
     res.json(parsed);
   } catch (error) {
     console.error('Error fetching recent reviews:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
@@ -1889,7 +2019,7 @@ app.get('/products/:id/reviews', async (req, res) => {
     res.json(parsed);
   } catch (error) {
     console.error('Error fetching reviews:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
@@ -1926,7 +2056,7 @@ app.post('/products/:id/reviews', async (req, res) => {
     res.status(201).json({ message: 'Đánh giá đã được gửi thành công' });
   } catch (error) {
     console.error('Error posting review:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
@@ -1939,7 +2069,7 @@ app.get('/vouchers', async (req, res) => {
     res.json(rows);
   } catch (error) {
     console.error('Error fetching vouchers:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
@@ -1952,7 +2082,7 @@ app.get('/vouchers/user/:userId', async (req, res) => {
     res.json(rows.map((r) => r.voucherCode));
   } catch (error) {
     console.error('Error fetching used vouchers:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
@@ -1973,7 +2103,7 @@ app.post('/vouchers/use', async (req, res) => {
     res.json({ message: 'Đã đánh dấu mã giảm giá đã sử dụng', code: cleanCode });
   } catch (error) {
     console.error('Error recording voucher usage:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
@@ -2034,7 +2164,7 @@ app.post('/vouchers/validate', async (req, res) => {
     });
   } catch (error) {
     console.error('Error validating voucher:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
@@ -2054,7 +2184,7 @@ app.post('/vouchers', requireAdmin, async (req, res) => {
     res.status(201).json({ message: 'Lưu voucher thành công', code: cleanCode });
   } catch (error) {
     console.error('Error creating voucher:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
@@ -2070,7 +2200,7 @@ app.delete('/vouchers/:code', requireAdmin, async (req, res) => {
     res.json({ message: 'Đã xóa voucher thành công' });
   } catch (error) {
     console.error('Error deleting voucher:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
@@ -2120,7 +2250,7 @@ app.post('/support/tickets', async (req, res) => {
     res.status(201).json(ticket);
   } catch (error) {
     console.error('Error creating support ticket:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   } finally {
     if (connection) connection.release();
   }
@@ -2191,7 +2321,7 @@ app.get('/support/tickets', async (req, res) => {
     res.json(rows);
   } catch (error) {
     console.error('Error fetching support tickets:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   } finally {
     if (connection) connection.release();
   }
@@ -2213,7 +2343,7 @@ app.get('/support/tickets/:id', async (req, res) => {
     res.json(ticket);
   } catch (error) {
     console.error('Error fetching support ticket:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   } finally {
     if (connection) connection.release();
   }
@@ -2245,7 +2375,7 @@ app.post('/support/tickets/:id/messages', async (req, res) => {
     res.status(201).json(await getTicketWithMessages(connection, req.params.id));
   } catch (error) {
     console.error('Error sending support message:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   } finally {
     if (connection) connection.release();
   }
@@ -2263,7 +2393,7 @@ app.patch('/support/tickets/:id', async (req, res) => {
     res.json(await getTicketWithMessages(connection, req.params.id));
   } catch (error) {
     console.error('Error updating support ticket:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   } finally {
     if (connection) connection.release();
   }
@@ -2278,7 +2408,7 @@ app.delete('/support/tickets/:id', requireStaffOrAdmin, async (req, res) => {
     res.json({ message: 'Đã xóa hội thoại hỗ trợ' });
   } catch (error) {
     console.error('Error deleting support ticket:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   } finally {
     if (connection) connection.release();
   }
@@ -2289,10 +2419,11 @@ app.get('/admin/stats', requireAdmin, async (req, res) => {
   try {
     const connection = await pool.getConnection();
     const [[productsCount]] = await connection.query('SELECT COUNT(*) as total FROM products');
-    const [[ordersCount]] = await connection.query('SELECT COUNT(*) as total FROM orders');
+    // Chỉ đếm đơn hàng chưa bị hủy (không tính cancelled)
+    const [[ordersCount]] = await connection.query("SELECT COUNT(*) as total FROM orders WHERE status != 'cancelled'");
     const [[usersCount]] = await connection.query('SELECT COUNT(*) as total FROM users');
     const [[categoriesCount]] = await connection.query('SELECT COUNT(*) as total FROM categories');
-    // Chỉ ghi nhận doanh thu cho đơn hàng hoàn thành (completed)
+    // Chỉ ghi nhận doanh thu cho đơn hàng hoàn thành (completed), trừ đơn đã hủy/đổi trả
     const [[revenueResult]] = await connection.query("SELECT COALESCE(SUM(totalAmount), 0) as totalRevenue FROM orders WHERE status = 'completed'");
     const [recentOrders] = await connection.query('SELECT * FROM orders ORDER BY createdAt DESC LIMIT 5');
     connection.release();
@@ -2307,14 +2438,18 @@ app.get('/admin/stats', requireAdmin, async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching admin stats:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
 // Start server
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
+databaseReady.then(() => app.listen(PORT, () => {
   console.log(`🚀 API Server running on http://localhost:${PORT}`);
   console.log(`📊 Database: ${process.env.DB_NAME || 'maytinh'}`);
   console.log(`👤 DB User: ${process.env.DB_USER || 'root'}`);
+})).catch(error => {
+  console.error('Warranty initialization failed:', error.message);
+  process.exitCode = 1;
+  pool.end();
 });

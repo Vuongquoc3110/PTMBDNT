@@ -13,6 +13,7 @@ import {
 
 import { formatPrice } from '@/data/products';
 import { type Order } from '@/services/api';
+import { formatUnitCodes } from '@/utils/deviceUnits';
 
 // Hàm đọc số tiền thành chữ Tiếng Việt chuẩn ngân hàng
 function numberToVietnameseWords(num: number): string {
@@ -108,8 +109,7 @@ export function InvoiceModal({
     }
 
     const items = (order.items || []).map((it: any, idx: number) => {
-      const rawDigits = orderNum.replace(/[^0-9]/g, '');
-      const serial = it.serialNumber || `SN-DPC-${rawDigits.slice(-8) || order.id || '88392102'}-${idx + 1}`;
+      const serial = formatUnitCodes(it);
       const qty = Number(it.quantity) || 1;
       const price = Number(it.price) || 0;
       return {
@@ -277,7 +277,7 @@ export function InvoiceModal({
               <View style={styles.tableHeader}>
                 <Text style={[styles.thText, { width: 36, textAlign: 'center' }]}>STT</Text>
                 <Text style={[styles.thText, { flex: 3 }]}>Tên sản phẩm / Linh kiện</Text>
-                <Text style={[styles.thText, { flex: 2 }]}>Mã S/N (Bảo hành)</Text>
+                <Text style={[styles.thText, { flex: 2 }]}>Mã bảo hành / S/N</Text>
                 <Text style={[styles.thText, { width: 50, textAlign: 'center' }]}>SL</Text>
                 <Text style={[styles.thText, { flex: 1.8, textAlign: 'right' }]}>Đơn giá</Text>
                 <Text style={[styles.thText, { flex: 2, textAlign: 'right' }]}>Thành tiền</Text>

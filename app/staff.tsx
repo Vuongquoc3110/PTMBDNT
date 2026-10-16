@@ -16,6 +16,8 @@ import {
 
 import { AdminSupportPanel } from '@/components/admin/AdminSupportPanel';
 import { InvoiceModal } from '@/components/InvoiceModal';
+import { ProductUnitsModal } from '@/components/ProductUnitsModal';
+import { formatUnitCodes } from '@/utils/deviceUnits';
 import { useAppContext } from '@/context/AppContext';
 import { formatPrice, getProductFallbackImage } from '@/data/products';
 import { apiService, type Order, type Product } from '@/services/api';
@@ -68,7 +70,7 @@ export default function StaffScreen() {
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
-  const [updatingOrderId, setUpdatingOrderId] = useState<number | null>(null);
+  const [updatingOrderId, setUpdatingOrderId] = useState<number | string | null>(null);
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
   const [invoiceModalVisible, setInvoiceModalVisible] = useState(false);
 
@@ -84,6 +86,8 @@ export default function StaffScreen() {
 
   // Modals
   const [viewingOrder, setViewingOrder] = useState<Order | null>(null);
+  const [unitProduct, setUnitProduct] = useState<{ id: string; name: string } | null>(null);
+  const [unitCodes, setUnitCodes] = useState<string[] | undefined>();
   const [previewMediaUrl, setPreviewMediaUrl] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
@@ -145,7 +149,7 @@ export default function StaffScreen() {
   const handleUpdateOrderStatus = async (orderId: number | string, nextStatus: string, orderNumber?: string) => {
     try {
       setUpdatingOrderId(Number(orderId) || (orderId as any));
-      const targetParam = orderId || orderNumber;
+      const targetParam = orderId || orderNumber || String(orderId);
       await apiService.updateOrderStatus(targetParam, nextStatus);
       setOrderList((prev) =>
         prev.map((o) =>
@@ -793,6 +797,9 @@ export default function StaffScreen() {
                       </View>
                     </View>
 
+                    <Pressable onPress={() => { setUnitCodes(undefined); setUnitProduct(p); }} style={{ padding: 10 }}>
+                      <Text style={{ color: '#2563eb', fontWeight: '700' }}>Mã máy / BH</Text>
+                    </Pressable>
                     {/* Stock badge */}
                     <View style={[styles.stockBadge, isOut ? styles.stockBadgeOut : isLow ? styles.stockBadgeLow : styles.stockBadgeOk]}>
                       <Text style={[styles.stockBadgeText, isOut ? { color: '#dc2626' } : isLow ? { color: '#d97706' } : { color: '#15803d' }]}>
@@ -1069,6 +1076,10 @@ export default function StaffScreen() {
                           </Text>
                         ) : null}
 
+                        <Text selectable style={{ color: isDark ? '#93c5fd' : '#1d4ed8', marginTop: 6 }}>{formatUnitCodes(item)}</Text>
+                        <Pressable onPress={() => { setUnitCodes(item.serialNumbers); setUnitProduct({ id: item.productId, name: item.name }); }} style={{ paddingVertical: 8 }}>
+                          <Text style={{ color: '#2563eb', fontWeight: '700' }}>Nhập serial trên tem máy</Text>
+                        </Pressable>
                         {/* THỜI HẠN BẢO HÀNH DỰ KIẾN KHI MUA MÁY */}
                         {(() => {
                           const nameLower = (item.name || '').toLowerCase();
@@ -1315,6 +1326,11 @@ export default function StaffScreen() {
         </View>
       </Modal>
 
+      <ProductUnitsModal product={unitProduct} codes={unitCodes} isDark={isDark}
+        onClose={() => setUnitProduct(null)} onSaved={() => {
+          loadData();
+          if (viewingOrder) apiService.getOrderById(viewingOrder.id).then(setViewingOrder).catch(() => {});
+        }} />
       {/* MODAL: XUẤT HÓA ĐƠN BÁN HÀNG CHO NHÂN VIÊN */}
       <InvoiceModal
         visible={invoiceModalVisible}

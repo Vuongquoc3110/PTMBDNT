@@ -6,6 +6,7 @@ import {
   Alert,
   Image,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -21,6 +22,7 @@ import { formatPrice, products as fallbackProducts, getProductFallbackImage, isI
 import { apiService, type Order } from '@/services/api';
 import { useAppContext } from '@/context/AppContext';
 import { playSuccessChime } from '@/utils/sound';
+import { formatUnitCodes } from '@/utils/deviceUnits';
 
 const RETURN_REASONS = [
   'Lỗi phần cứng / Không lên nguồn',
@@ -856,8 +858,7 @@ export default function OrderDetailScreen() {
                           {/* THỜI HẠN BẢO HÀNH DỰ KIẾN TỪNG SẢN PHẨM & MÃ SERIAL NUMBER */}
                           {(() => {
                             const w = calculateWarrantyInfo(order.createdAt, item);
-                            const rawDigits = (order.orderNumber || String(order.id)).replace(/[^0-9]/g, '');
-                            const serialNum = (item as any).serialNumber || `SN-DPC-${rawDigits.slice(-8) || order.id}-${idx + 1}`;
+                            const serialNum = formatUnitCodes(item);
                             return (
                               <View style={{ gap: 4, marginTop: 4, marginBottom: 4 }}>
                                 <View style={styles.itemWarrantyBadge}>
@@ -872,7 +873,7 @@ export default function OrderDetailScreen() {
                                 >
                                   <Ionicons name="barcode-outline" size={13} color="#2563eb" />
                                   <Text style={{ fontSize: 11, fontWeight: '700', color: '#2563eb' }}>
-                                    Mã S/N: {serialNum}
+                                    Mã bảo hành: {serialNum}
                                   </Text>
                                   <Ionicons name="open-outline" size={11} color="#2563eb" />
                                 </Pressable>

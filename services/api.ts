@@ -67,7 +67,20 @@ export interface Order {
   updatedAt?: string;
 }
 
+export interface ProductUnit {
+  code: string;
+  productId: string;
+  manufacturerSerial: string | null;
+  status: 'available' | 'allocated' | 'removed' | 'retired';
+  orderId: number | null;
+}
+
 export interface OrderItem {
+  serialNumber?: string;
+  serialNumbers?: string[];
+  legacySerialNumber?: string;
+  unitCodeSource?: 'inventory' | 'backfill';
+  deviceUnits?: { code: string; manufacturerSerial: string | null }[];
   productId: string;
   name: string;
   price: number;
@@ -430,6 +443,16 @@ class ApiService {
     return res;
   }
 
+  async getProductUnits(id: string): Promise<ProductUnit[]> {
+    return this.request(`/products/${encodeURIComponent(id)}/units`);
+  }
+
+  async updateUnitSerial(code: string, manufacturerSerial: string) {
+    return this.request(`/product-units/${encodeURIComponent(code)}`, {
+      method: 'PUT', body: JSON.stringify({ manufacturerSerial }),
+    });
+  }
+
   async deleteProduct(id: string) {
     const res = await this.request(`/products/${id}`, {
       method: 'DELETE',
@@ -788,35 +811,11 @@ class ApiService {
     paymentMethod: string;
     voucherCode?: string;
   }): Promise<{ message: string; orderNumber: string; orderId?: number }> {
-    try {
-      const res = await this.request<any>('/orders', {
-        method: 'POST',
-        body: JSON.stringify(orderData),
-      });
-      if (orderData.voucherCode && orderData.userId) {
-        this.useVoucher(orderData.userId, orderData.voucherCode, res.orderId).catch(() => {});
-      }
-      return res;
-    } catch {
-      const orderNumber = `ORD-${Date.now()}`;
-      const newOrder: Order = {
-        id: Date.now(),
-        userId: Number(orderData.userId) || 1,
-        orderNumber,
-        items: orderData.items,
-        totalAmount: orderData.totalAmount,
-        shippingAddress: orderData.shippingAddress,
-        shippingMethod: orderData.shippingMethod,
-        paymentMethod: orderData.paymentMethod,
-        status: 'pending',
-        createdAt: new Date().toISOString(),
-      };
-      localOrders = [newOrder, ...localOrders];
-      if (orderData.voucherCode && orderData.userId) {
-        this.useVoucher(orderData.userId, orderData.voucherCode, newOrder.id).catch(() => {});
-      }
-      return { message: 'Đơn hàng tạo thành công', orderNumber, orderId: newOrder.id };
-    }
+    // Checkout must succeed in MySQL so every purchased unit has a durable warranty code.
+    return this.request('/orders', {
+      method: 'POST',
+      body: JSON.stringify(orderData),
+    });
   }
 
   async updateOrderStatus(orderId: number | string, status: string) {

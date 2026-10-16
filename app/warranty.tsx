@@ -19,6 +19,7 @@ import { Footer } from '@/components/Footer';
 import { Header } from '@/components/Header';
 import { useAppContext } from '@/context/AppContext';
 import { apiService, type Order } from '@/services/api';
+import { expandOrderUnits } from '@/utils/deviceUnits';
 
 interface WarrantyItem {
   id: string;
@@ -85,52 +86,6 @@ function isPhoneMatch(queryDigits: string, targetStr: string): boolean {
 
   return false;
 }
-
-const MOCK_WARRANTY_DATA: Record<string, WarrantyItem[]> = {
-  '0988888888': [
-    {
-      id: 'WAR-001',
-      name: 'Pro Gaming Laptop X15 (RTX 4070 / i7-13700H)',
-      category: 'Laptop',
-      serialNumber: 'SN-LAP-X15-99281',
-      purchaseDate: '01/10/2026',
-      expiryDate: '01/10/2028',
-      warrantyRange: '01/10/2026 đến 01/10/2028',
-      warrantyPeriod: '24 tháng',
-      status: 'valid',
-      remainingDays: 715,
-      showroom: '191 Nguyễn Thị Duệ, TP. Hải Dương',
-    },
-    {
-      id: 'WAR-002',
-      name: 'Màn hình Gaming UltraSharp 27" 2K 165Hz',
-      category: 'Màn hình',
-      serialNumber: 'SN-MON-27U-10294',
-      purchaseDate: '10/02/2026',
-      expiryDate: '10/02/2029',
-      warrantyRange: '10/02/2026 đến 10/02/2029',
-      warrantyPeriod: '36 tháng',
-      status: 'valid',
-      remainingDays: 1040,
-      showroom: '191 Nguyễn Thị Duệ, TP. Hải Dương',
-    },
-  ],
-  '0909123456': [
-    {
-      id: 'WAR-003',
-      name: 'Card đồ họa ASUS ROG Strix GeForce RTX 4080 16GB',
-      category: 'Linh kiện',
-      serialNumber: 'SN-VGA-ROG-4080-88',
-      purchaseDate: '20/12/2025',
-      expiryDate: '20/12/2028',
-      warrantyRange: '20/12/2025 đến 20/12/2028',
-      warrantyPeriod: '36 tháng',
-      status: 'valid',
-      remainingDays: 980,
-      showroom: '123 Lê Lợi, Q.1, TP.HCM',
-    },
-  ],
-};
 
 const WARRANTY_CATEGORIES = [
   {
@@ -279,9 +234,10 @@ export default function WarrantyScreen() {
 
       // 2. Tra cứu trong các đơn hàng thực tế
       orders.forEach((order: Order) => {
+        if (order.status === 'cancelled' || !['delivered', 'completed'].includes(order.status)) return;
+        const unitItems = expandOrderUnits(order.items || []);
         const orderNum = (order.orderNumber || String(order.id)).toLowerCase();
         const address = (order.shippingAddress || '').toLowerCase();
-        const reason = (order.returnReason || '').toLowerCase();
 
         // Khớp mã đơn hàng (ví dụ: 1791707088214 hoặc ORD-1791707088214)
         const matchOrderCode =
@@ -296,17 +252,16 @@ export default function WarrantyScreen() {
         const matchItems = order.items?.some((it) => it.name?.toLowerCase().includes(cleanQuery));
 
         // Khớp mã Serial Number (ví dụ: SN-DPC-7088214-1 hoặc serial nhập riêng)
-        const rawDigits = (order.orderNumber || String(order.id)).replace(/[^0-9]/g, '');
-        const matchSerial = (order.items || []).some((it: any, idx: number) => {
-          const sn = (it.serialNumber || `SN-DPC-${rawDigits.slice(-8) || order.id}-${idx + 1}`).toLowerCase();
-          return sn.includes(cleanQuery) || cleanQuery.includes(sn);
-        });
+        const matchesUnit = (it: typeof unitItems[number]) =>
+          [it.serialNumber, it.manufacturerSerial, it.legacySerialNumber]
+            .some(value => value?.toLowerCase().includes(cleanQuery));
+        const matchSerial = unitItems.some(matchesUnit);
 
         if (matchOrderCode || matchPhone || matchAddressOrName || matchItems || matchSerial) {
           const orderDate = order.createdAt ? new Date(order.createdAt) : new Date();
           const phoneOnOrder = address.match(/0[0-9]{8,10}/)?.[0];
 
-          (order.items || []).forEach((prodItem, idx) => {
+          unitItems.filter(item => !matchSerial || matchesUnit(item)).forEach((prodItem) => {
             const nameLower = (prodItem.name || '').toLowerCase();
             let cat = 'Linh kiện PC';
             let months = prodItem.warrantyMonths || 36;
@@ -342,6 +297,12 @@ export default function WarrantyScreen() {
 
             const itemExpiryDate = new Date(orderDate);
             itemExpiryDate.setMonth(itemExpiryDate.getMonth() + months);
+            if (prodItem.warrantyExpiry) {
+              const parts = prodItem.warrantyExpiry.split('/').map(Number);
+              if (parts.length === 3 && parts.every(Number.isFinite)) {
+                itemExpiryDate.setFullYear(parts[2], parts[1] - 1, parts[0]);
+              }
+            }
 
             const pad = (n: number) => String(n).padStart(2, '0');
             const formatD = (d: Date) => `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
@@ -353,11 +314,10 @@ export default function WarrantyScreen() {
             const diffMs = itemExpiryDate.getTime() - Date.now();
             const remainingDays = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
 
-            const rawDigits = (order.orderNumber || String(order.id)).replace(/[^0-9]/g, '');
-            const serialNumber = `SN-DPC-${rawDigits.slice(-8) || order.id}-${idx + 1}`;
+            const serialNumber = `${prodItem.serialNumber}${prodItem.manufacturerSerial ? ` (S/N: ${prodItem.manufacturerSerial})` : ''}`;
 
             matchedItems.push({
-              id: `RMA-${order.orderNumber || order.id}`,
+              id: `RMA-${order.id}-${prodItem.serialNumber}`,
               name: prodItem.name,
               category: cat,
               serialNumber,
@@ -383,25 +343,6 @@ export default function WarrantyScreen() {
       });
 
       // 3. Nếu không có đơn hàng khớp, kiểm tra mảng mock data cũ dự phòng
-      if (matchedItems.length === 0) {
-        const cleanNoSpace = rawQuery.replace(/\s+/g, '');
-        if (MOCK_WARRANTY_DATA[cleanNoSpace]) {
-          matchedItems = MOCK_WARRANTY_DATA[cleanNoSpace];
-        } else {
-          Object.values(MOCK_WARRANTY_DATA).forEach((items) => {
-            items.forEach((item) => {
-              if (
-                item.serialNumber.toLowerCase().includes(cleanQuery) ||
-                item.id.toLowerCase().includes(cleanQuery) ||
-                item.name.toLowerCase().includes(cleanQuery)
-              ) {
-                matchedItems.push(item);
-              }
-            });
-          });
-        }
-      }
-
       setSearchResult(matchedItems);
     } catch (err) {
       console.error('Error looking up warranty:', err);
@@ -770,7 +711,7 @@ export default function WarrantyScreen() {
                     Không tìm thấy dữ liệu bảo hành
                   </Text>
                   <Text style={styles.noResultSub}>
-                    Không tìm thấy sản phẩm nào khớp với từ khóa "{searchQuery}". Hãy kiểm tra lại SĐT hoặc gọi tổng đài 1800 6868 để được hỗ trợ.
+                    Không tìm thấy sản phẩm nào khớp với từ khóa &quot;{searchQuery}&quot;. Hãy kiểm tra lại SĐT hoặc gọi tổng đài 1800 6868 để được hỗ trợ.
                   </Text>
                 </View>
               )}

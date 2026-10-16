@@ -257,6 +257,16 @@ export default function CheckoutScreen() {
       setCreatedOrderNumber(res.orderNumber);
       if (res.orderId) setCreatedOrderId(res.orderId);
 
+      // Thông báo cho toàn bộ hook useProduct/useProducts tự refetch stock mới
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('dpc_product_updated'));
+        try {
+          const bc = new BroadcastChannel('dpc_product_sync');
+          bc.postMessage({ type: 'stock_updated' });
+          bc.close();
+        } catch {}
+      }
+
       const orderSnapshot = {
         id: res.orderId || Date.now(),
         orderNumber: res.orderNumber,

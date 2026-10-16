@@ -42,6 +42,18 @@ CREATE TABLE IF NOT EXISTS products (
   FOREIGN KEY (category_id) REFERENCES categories(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- One persistent warranty code per physical item. IMEI/SN is entered from the real label.
+CREATE TABLE IF NOT EXISTS product_units (
+  code VARCHAR(40) PRIMARY KEY,
+  productId VARCHAR(50) NOT NULL,
+  manufacturerSerial VARCHAR(100) UNIQUE NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'available',
+  orderId INT NULL,
+  createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX units_product_status (productId, status),
+  INDEX units_order (orderId)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Bảng Users
 CREATE TABLE IF NOT EXISTS users (
   id INT AUTO_INCREMENT PRIMARY KEY,
