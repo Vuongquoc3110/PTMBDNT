@@ -241,7 +241,8 @@ export default function ProductsPage() {
 
   const handleApplyCustomPrice = () => {
     const min = parseInt(customMinPrice.replace(/[^0-9]/g, ''), 10) || 0;
-    const max = parseInt(customMaxPrice.replace(/[^0-9]/g, ''), 10) || Infinity;
+    const maxDigits = customMaxPrice.replace(/[^0-9]/g, '');
+    const max = maxDigits ? Number(maxDigits) : Infinity;
     if (min > max && max !== Infinity) {
       showToast('Giá tối thiểu không được lớn hơn giá tối đa');
       return;
@@ -526,6 +527,8 @@ export default function ProductsPage() {
                     onPress={() => {
                       setSelectedPricePreset('all');
                       setAppliedCustomPrice(null);
+                      setCustomMinPrice('');
+                      setCustomMaxPrice('');
                     }}
                     hitSlop={6}
                   >
@@ -628,6 +631,8 @@ export default function ProductsPage() {
                       onPress={() => {
                         setSelectedPricePreset(preset.id);
                         setAppliedCustomPrice(null);
+                        setCustomMinPrice('');
+                        setCustomMaxPrice('');
                       }}
                     >
                       <View style={[styles.radioCircle, isActive && styles.radioCircleActive]}>
@@ -647,8 +652,11 @@ export default function ProductsPage() {
                   placeholder="Từ đ"
                   placeholderTextColor="#94a3b8"
                   value={customMinPrice}
-                  onChangeText={setCustomMinPrice}
+                  onChangeText={(value) => setCustomMinPrice(value.replace(/[^0-9]/g, ''))}
                   keyboardType="numeric"
+                  accessibilityLabel="Giá từ (đồng)"
+                  returnKeyType="search"
+                  onSubmitEditing={handleApplyCustomPrice}
                 />
                 <Text style={{ color: '#94a3b8', fontWeight: 'bold' }}>-</Text>
                 <TextInput
@@ -656,13 +664,16 @@ export default function ProductsPage() {
                   placeholder="Đến đ"
                   placeholderTextColor="#94a3b8"
                   value={customMaxPrice}
-                  onChangeText={setCustomMaxPrice}
+                  onChangeText={(value) => setCustomMaxPrice(value.replace(/[^0-9]/g, ''))}
                   keyboardType="numeric"
+                  accessibilityLabel="Giá đến (đồng)"
+                  returnKeyType="search"
+                  onSubmitEditing={handleApplyCustomPrice}
                 />
-                <Pressable style={styles.applyPriceBtn} onPress={handleApplyCustomPrice}>
-                  <Ionicons name="arrow-forward" size={14} color="#ffffff" />
-                </Pressable>
               </View>
+              <Pressable style={styles.applyPriceBtn} onPress={handleApplyCustomPrice} accessibilityRole="button">
+                <Text style={styles.applyPriceBtnText}>Áp dụng</Text>
+              </Pressable>
             </View>
 
             {/* THƯƠNG HIỆU */}
@@ -1186,6 +1197,7 @@ const styles = StyleSheet.create({
   },
   priceInput: {
     flex: 1,
+    minWidth: 0,
     height: 32,
     backgroundColor: '#ffffff',
     borderWidth: 1,
@@ -1196,12 +1208,17 @@ const styles = StyleSheet.create({
     color: '#0f172a',
   },
   applyPriceBtn: {
-    width: 32,
-    height: 32,
+    marginTop: 8,
+    height: 40,
     backgroundColor: '#2563eb',
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  applyPriceBtnText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '700',
   },
   brandChipsWrap: {
     flexDirection: 'row',

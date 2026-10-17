@@ -20,6 +20,7 @@ import { VIETNAM_PROVINCES } from '@/data/vietnamLocations';
 import { useAppContext } from '@/context/AppContext';
 import { apiService } from '@/services/api';
 import { playSuccessChime } from '@/utils/sound';
+import { calculateInvoiceTotals } from '@/utils/invoiceTotals';
 
 const PAYMENT_METHODS = [
   {
@@ -186,6 +187,7 @@ export default function CheckoutScreen() {
   const shipping = isFreeShipEligible ? 0 : 30000;
   const voucherDiscount = appliedVoucher && appliedVoucher.code !== 'FREESHIP' ? appliedVoucher.discount : 0;
   const total = Math.max(0, subtotal + shipping - voucherDiscount);
+  const invoiceTotals = calculateInvoiceTotals(subtotal, total, shipping);
 
   if (!user) {
     return (
@@ -284,6 +286,7 @@ export default function CheckoutScreen() {
         shippingMethod: 'standard',
         paymentMethod,
         status: 'pending',
+        invoiceTotals,
         createdAt: new Date().toISOString(),
       };
       setCreatedOrderData(orderSnapshot);
@@ -634,6 +637,14 @@ export default function CheckoutScreen() {
                   <View style={styles.totalRow}>
                     <Text style={styles.totalLabel}>Tổng thanh toán:</Text>
                     <Text style={styles.totalVal}>{formatPrice(total)}</Text>
+                  </View>
+                  <View style={styles.breakdownRow}>
+                    <Text style={styles.breakdownLabel}>Tiền hàng trước thuế (sau giảm giá)</Text>
+                    <Text style={styles.breakdownVal}>{formatPrice(invoiceTotals.netAmount)}</Text>
+                  </View>
+                  <View style={styles.breakdownRow}>
+                    <Text style={styles.breakdownLabel}>VAT 8% (đã gồm trong giá)</Text>
+                    <Text style={styles.breakdownVal}>{formatPrice(invoiceTotals.vatAmount)}</Text>
                   </View>
 
                   <Pressable

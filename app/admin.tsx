@@ -16,12 +16,13 @@ import {
 } from 'react-native';
 
 import { AdminSupportPanel } from '@/components/admin/AdminSupportPanel';
+import { MonthlyReport } from '@/components/admin/MonthlyReport';
 import { InvoiceModal } from '@/components/InvoiceModal';
 import { useAppContext } from '@/context/AppContext';
 import { formatPrice, getProductFallbackImage, isInvalidOrBlockedImageUrl } from '@/data/products';
 import { apiService, type Order, type User, type Voucher } from '@/services/api';
 
-type AdminTab = 'overview' | 'products' | 'orders' | 'vouchers' | 'categories' | 'users' | 'inventory' | 'support';
+type AdminTab = 'overview' | 'products' | 'orders' | 'vouchers' | 'categories' | 'users' | 'inventory' | 'support' | 'reports';
 
 interface ProductItem {
   id: string;
@@ -1906,6 +1907,7 @@ export default function AdminScreen() {
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabButtonsScroll}>
             {[
               { id: 'overview', label: 'Tổng quan', icon: 'speedometer-outline', badge: null },
+              { id: 'reports', label: 'Báo cáo tháng', icon: 'bar-chart-outline', badge: null },
               {
                 id: 'orders',
                 label: 'Đơn hàng',
@@ -1961,7 +1963,7 @@ export default function AdminScreen() {
           </ScrollView>
 
           {/* QUICK SEARCH FOR CURRENT TAB */}
-          {activeTab !== 'overview' && (
+          {activeTab !== 'overview' && activeTab !== 'reports' && (
             <View style={[styles.searchBox, isDark && styles.searchBoxDark]}>
               <Ionicons name="search-outline" size={17} color="#94a3b8" style={{ marginRight: 8 }} />
               <TextInput
@@ -1995,6 +1997,7 @@ export default function AdminScreen() {
         {/* ======================================================== */}
         {/* TAB 1: TỔNG QUAN (OVERVIEW)                              */}
         {/* ======================================================== */}
+        {activeTab === 'reports' && <MonthlyReport />}
         {activeTab === 'overview' && (
           <View style={styles.overviewContainer}>
             {/* HERO WELCOME */}

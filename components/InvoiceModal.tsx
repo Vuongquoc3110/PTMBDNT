@@ -124,7 +124,11 @@ export function InvoiceModal({
 
     const subtotal = items.reduce((sum: number, it: any) => sum + it.total, 0);
     const totalAmount = Number(order.totalAmount) || subtotal;
-    const discount = Math.max(0, subtotal - totalAmount);
+    let tax = order.invoiceTotals;
+    if (typeof tax === 'string') {
+      try { tax = JSON.parse(tax); } catch { tax = null; }
+    }
+    const discount = tax ? Number(tax.discountAmount) : Math.max(0, subtotal - totalAmount);
     const amountInWords = numberToVietnameseWords(totalAmount);
 
     return {
@@ -137,6 +141,7 @@ export function InvoiceModal({
       address: addressOnly || 'Tại hệ thống showroom DANGVINHPC',
       items,
       subtotal,
+      tax,
       discount,
       totalAmount,
       amountInWords,
@@ -328,8 +333,20 @@ export function InvoiceModal({
                 )}
                 <View style={styles.totalRow}>
                   <Text style={styles.totalRowLabel}>Phí vận chuyển:</Text>
-                  <Text style={[styles.totalRowVal, { color: '#16a34a', fontWeight: '700' }]}>MIỄN PHÍ</Text>
+                  <Text style={styles.totalRowVal}>{invoiceData.tax ? formatPrice(invoiceData.tax.shippingAmount) : 'Không có dữ liệu'}</Text>
                 </View>
+                {invoiceData.tax && (
+                  <>
+                    <View style={styles.totalRow}>
+                      <Text style={styles.totalRowLabel}>Tiền hàng trước thuế (sau giảm giá):</Text>
+                      <Text style={styles.totalRowVal}>{formatPrice(invoiceData.tax.netAmount)}</Text>
+                    </View>
+                    <View style={styles.totalRow}>
+                      <Text style={styles.totalRowLabel}>VAT {invoiceData.tax.vatRate}% (đã gồm trong giá):</Text>
+                      <Text style={styles.totalRowVal}>{formatPrice(invoiceData.tax.vatAmount)}</Text>
+                    </View>
+                  </>
+                )}
                 <View style={styles.totalDivider} />
                 <View style={styles.finalTotalRow}>
                   <Text style={styles.finalTotalLabel}>TỔNG CỘNG:</Text>

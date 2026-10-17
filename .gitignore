@@ -44,3 +44,4 @@ app-example
 # Local database migration backups (contain customer order data)
 server/backups/
 .unit-codes-*.log
+server/backend-runtime*.log

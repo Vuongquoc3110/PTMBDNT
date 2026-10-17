@@ -2,6 +2,7 @@ require('dotenv').config({ path: '.env.local' });
 const express = require('express');
 const mysql = require('mysql2/promise');
 const cors = require('cors');
+const { initializeReporting, getMonthlyReport, saveMonthlyOpenings } = require('./monthly-report');
 const { initializeUnits, syncStockUnits, allocateUnits, releaseOrderUnits, hydrateOrders, quantity } = require('./product-units');
 
 const app = express();
@@ -198,6 +199,11 @@ async function initTables() {
       ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
     `);
 
+    try {
+      await connection.query('ALTER TABLE orders ADD COLUMN invoiceTotals JSON NULL');
+    } catch (e) {
+      if (e.code !== 'ER_DUP_FIELDNAME') throw e;
+    }
     // Ensure orders table has returnStatus and isReviewed columns
     try {
       await connection.query(`ALTER TABLE orders ADD COLUMN returnStatus VARCHAR(30) NULL`);
@@ -1172,6 +1178,7 @@ app.get('/orders', async (req, res) => {
     const { userId } = req.query;
 
     let query = 'SELECT * FROM orders WHERE 1=1';
+    if (req.query.excludeDemo === 'true') query += " AND orderNumber NOT LIKE 'DEMO-REPORT-%'";
     const params = [];
 
     if (userId) {
@@ -1313,9 +1320,13 @@ app.post('/orders', async (req, res) => {
     });
 
     const orderNumber = `ORD-${Date.now()}`;
+    const { calculateInvoiceTotals } = require('../utils/invoiceTotals');
+    const invoiceSubtotal = enrichedItems.reduce((sum, item) => sum + Number(item.price) * Number(item.quantity), 0);
+    const invoiceShipping = invoiceSubtotal >= 5000000 || String(voucherCode || '').toUpperCase() === 'FREESHIP' ? 0 : 30000;
+    const invoiceTotals = calculateInvoiceTotals(invoiceSubtotal, Number(totalAmount), invoiceShipping);
     const query = `
-      INSERT INTO orders (userId, orderNumber, items, totalAmount, shippingAddress, shippingMethod, paymentMethod, status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')
+      INSERT INTO orders (userId, orderNumber, items, totalAmount, shippingAddress, shippingMethod, paymentMethod, invoiceTotals, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')
     `;
 
     const [result] = await connection.query(query, [
@@ -1326,6 +1337,7 @@ app.post('/orders', async (req, res) => {
       shippingAddress,
       shippingMethod,
       paymentMethod,
+      JSON.stringify(invoiceTotals),
     ]);
 
     for (const item of enrichedItems) {
@@ -2415,6 +2427,14 @@ app.delete('/support/tickets/:id', requireStaffOrAdmin, async (req, res) => {
 });
 
 // ==================== ADMIN STATS ====================
+app.get('/admin/monthly-report', requireAdmin, async (req, res) => {
+  try { res.json(await getMonthlyReport(pool, String(req.query.month || ''))); }
+  catch (error) { res.status(error.status || 500).json({ error: error.message }); }
+});
+app.put('/admin/monthly-openings', requireAdmin, async (req, res) => {
+  try { res.json(await saveMonthlyOpenings(pool, String(req.body.month || ''), req.body.entries, req.adminUser.id)); }
+  catch (error) { res.status(error.status || 500).json({ error: error.message }); }
+});
 app.get('/admin/stats', requireAdmin, async (req, res) => {
   try {
     const connection = await pool.getConnection();
@@ -2444,7 +2464,7 @@ app.get('/admin/stats', requireAdmin, async (req, res) => {
 
 // Start server
 const PORT = process.env.PORT || 5000;
-databaseReady.then(() => app.listen(PORT, () => {
+databaseReady.then(() => initializeReporting(pool)).then(() => app.listen(PORT, () => {
   console.log(`🚀 API Server running on http://localhost:${PORT}`);
   console.log(`📊 Database: ${process.env.DB_NAME || 'maytinh'}`);
   console.log(`👤 DB User: ${process.env.DB_USER || 'root'}`);

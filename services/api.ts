@@ -50,6 +50,7 @@ export interface Category {
 }
 
 export interface Order {
+  invoiceTotals?: import('@/utils/invoiceTotals').InvoiceTotals | string | null;
   id: number;
   userId: number;
   orderNumber: string;
