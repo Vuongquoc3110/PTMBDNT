@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -192,6 +192,14 @@ export default function WarrantyScreen() {
   // Đơn hàng gần nhất của tài khoản đăng nhập để gợi ý tra cứu
   const [userRecentOrder, setUserRecentOrder] = useState<Order | null>(null);
 
+  const { query: urlQuery } = useLocalSearchParams<{ query?: string }>();
+
+  React.useEffect(() => {
+    if (urlQuery && typeof urlQuery === 'string' && urlQuery.trim()) {
+      handleLookup(urlQuery.trim());
+    }
+  }, [urlQuery]);
+
   React.useEffect(() => {
     if (user?.id) {
       apiService
@@ -234,10 +242,16 @@ export default function WarrantyScreen() {
 
       // 2. Tra cứu trong các đơn hàng thực tế
       orders.forEach((order: Order) => {
-        if (order.status === 'cancelled' || !['delivered', 'completed'].includes(order.status)) return;
+        if (order.status === 'cancelled') return;
         const unitItems = expandOrderUnits(order.items || []);
         const orderNum = (order.orderNumber || String(order.id)).toLowerCase();
         const address = (order.shippingAddress || '').toLowerCase();
+
+        // Khớp mã Serial Number / IMEI hãng (ví dụ: BH-..., PF4A9X21, hoặc serial nhập riêng)
+        const matchesUnit = (it: typeof unitItems[number]) =>
+          [it.serialNumber, it.manufacturerSerial, it.legacySerialNumber]
+            .some(value => value?.toLowerCase().includes(cleanQuery));
+        const matchSerial = unitItems.some(matchesUnit);
 
         // Khớp mã đơn hàng (ví dụ: 1791707088214 hoặc ORD-1791707088214)
         const matchOrderCode =
@@ -251,11 +265,14 @@ export default function WarrantyScreen() {
         const matchAddressOrName = address.includes(cleanQuery);
         const matchItems = order.items?.some((it) => it.name?.toLowerCase().includes(cleanQuery));
 
-        // Khớp mã Serial Number (ví dụ: SN-DPC-7088214-1 hoặc serial nhập riêng)
-        const matchesUnit = (it: typeof unitItems[number]) =>
-          [it.serialNumber, it.manufacturerSerial, it.legacySerialNumber]
-            .some(value => value?.toLowerCase().includes(cleanQuery));
-        const matchSerial = unitItems.some(matchesUnit);
+        // Nếu tra bằng số IMEI/Serial máy hoặc Mã đơn -> hiển thị ngay lập tức (miễn là đơn không bị hủy)
+        // Nếu tra bằng SĐT -> chỉ hiển thị các đơn đã giao hàng / hoàn tất hoặc đang giao
+        const isEligibleStatus =
+          matchSerial ||
+          matchOrderCode ||
+          ['delivered', 'completed', 'shipping'].includes(order.status);
+
+        if (!isEligibleStatus) return;
 
         if (matchOrderCode || matchPhone || matchAddressOrName || matchItems || matchSerial) {
           const orderDate = order.createdAt ? new Date(order.createdAt) : new Date();

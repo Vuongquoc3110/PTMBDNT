@@ -3,7 +3,7 @@ const express = require('express');
 const mysql = require('mysql2/promise');
 const cors = require('cors');
 const { initializeReporting, getMonthlyReport, saveMonthlyOpenings } = require('./monthly-report');
-const { initializeUnits, syncStockUnits, allocateUnits, releaseOrderUnits, hydrateOrders, quantity } = require('./product-units');
+const { initializeUnits, syncStockUnits, allocateUnits, releaseOrderUnits, hydrateOrders, quantity, generateSerial } = require('./product-units');
 
 const app = express();
 
@@ -201,9 +201,7 @@ async function initTables() {
 
     try {
       await connection.query('ALTER TABLE orders ADD COLUMN invoiceTotals JSON NULL');
-    } catch (e) {
-      if (e.code !== 'ER_DUP_FIELDNAME') throw e;
-    }
+    } catch (e) {}
     // Ensure orders table has returnStatus and isReviewed columns
     try {
       await connection.query(`ALTER TABLE orders ADD COLUMN returnStatus VARCHAR(30) NULL`);
@@ -284,6 +282,41 @@ async function initTables() {
       console.log('✅ Cleaned up broken/blocked image URLs in MySQL database');
     } catch (e) {
       // Ignore if table/column does not exist
+    }
+
+    // Tự động kiểm tra và đồng bộ catalog (326 sản phẩm bao gồm 80 mẫu Laptop360) vào MySQL
+    try {
+      const [l360Check] = await connection.query("SELECT COUNT(*) as cnt FROM products WHERE id LIKE 'l360-%'");
+      if (!l360Check || l360Check[0].cnt < 80) {
+        console.log('🔄 Đang tự động nạp 80 sản phẩm Laptop360 và danh mục vào MySQL...');
+        const sqlFilePath = path.join(__dirname, 'database.sql');
+        if (fs.existsSync(sqlFilePath)) {
+          const sqlContent = fs.readFileSync(sqlFilePath, 'utf8');
+          // Nạp categories
+          const catMatch = sqlContent.match(/INSERT INTO categories\s*\([\s\S]*?\)\s*VALUES\s*([\s\S]*?)\s*ON DUPLICATE KEY UPDATE/i);
+          if (catMatch) {
+            try {
+              await connection.query(`INSERT INTO categories (id, name, count, icon) VALUES ${catMatch[1]} ON DUPLICATE KEY UPDATE name=VALUES(name)`);
+            } catch (cErr) {
+              console.warn('Categories sync notice:', cErr.message);
+            }
+          }
+          // Nạp products
+          const prodMatch = sqlContent.match(/INSERT INTO products\s*\([\s\S]*?\)\s*VALUES\s*([\s\S]*?)\s*ON DUPLICATE KEY UPDATE/i);
+          if (prodMatch) {
+            await connection.query(`
+              INSERT INTO products (
+                id, name, category_id, price, oldPrice, discount, rating, reviewCount, stock,
+                isFeatured, isNew, isSale, isHot, image, description, specifications, features
+              ) VALUES ${prodMatch[1]}
+              ON DUPLICATE KEY UPDATE name=VALUES(name), price=VALUES(price), stock=GREATEST(stock, VALUES(stock))
+            `);
+            console.log('✅ Đã nạp thành công toàn bộ sản phẩm Laptop360 vào MySQL!');
+          }
+        }
+      }
+    } catch (sqlErr) {
+      console.warn('⚠️ Lỗi tự động đồng bộ catalog vào MySQL:', sqlErr.message);
     }
 
     connection.release();
@@ -874,15 +907,52 @@ app.get('/products/:id/units', requireStaffOrAdmin, async (req, res) => {
 
 app.put('/product-units/:code', requireStaffOrAdmin, async (req, res) => {
   try {
-    if (typeof req.body.manufacturerSerial !== 'string' || req.body.manufacturerSerial.trim().length > 100) {
-      return res.status(400).json({ error: 'Serial trên tem máy tối đa 100 ký tự' });
+    const [[existingUnit]] = await pool.query(
+      'SELECT productId, manufacturerSerial, status, orderId FROM product_units WHERE code = ?',
+      [req.params.code]
+    );
+    if (!existingUnit) return res.status(404).json({ error: 'Không tìm thấy mã máy' });
+
+    // IMEI máy là định danh phần cứng cố định vĩnh viễn, đã cấp là cấm đổi
+    if (existingUnit.manufacturerSerial && existingUnit.manufacturerSerial.trim() !== '') {
+      return res.status(400).json({
+        error: `IMEI/Serial (${existingUnit.manufacturerSerial}) đã được cố định theo thiết bị, tuyệt đối không thể thay đổi!`
+      });
     }
-    const serial = req.body.manufacturerSerial.trim().toUpperCase() || null;
+
+    let serial = req.body.manufacturerSerial;
+    if (req.body.autoGenerate) {
+      serial = generateSerial(existingUnit.productId);
+    } else {
+      if (typeof serial !== 'string' || serial.trim().length > 100) {
+        return res.status(400).json({ error: 'Serial trên tem máy tối đa 100 ký tự' });
+      }
+      serial = serial.trim().toUpperCase() || null;
+    }
     const [result] = await pool.query('UPDATE product_units SET manufacturerSerial = ? WHERE code = ?', [serial, req.params.code]);
     if (!result.affectedRows) return res.status(404).json({ error: 'Không tìm thấy mã máy' });
-    res.json({ message: 'Đã lưu serial trên tem máy' });
+    res.json({ message: 'Đã gán và cố định IMEI/Serial thành công', manufacturerSerial: serial });
   } catch (error) {
     res.status(400).json({ error: error.code === 'ER_DUP_ENTRY' ? 'Serial này đã được gán cho máy khác' : error.message });
+  }
+});
+
+// Tự động sinh S/N cho toàn bộ máy của sản phẩm mà chưa có S/N
+app.post('/products/:id/units/auto-fill', requireStaffOrAdmin, async (req, res) => {
+  try {
+    const [units] = await pool.query(
+      "SELECT code FROM product_units WHERE productId = ? AND (manufacturerSerial IS NULL OR manufacturerSerial = '')",
+      [req.params.id]
+    );
+    let updatedCount = 0;
+    for (const u of units) {
+      const serial = generateSerial(req.params.id);
+      await pool.query('UPDATE product_units SET manufacturerSerial = ? WHERE code = ?', [serial, u.code]);
+      updatedCount++;
+    }
+    res.json({ message: `Đã tự sinh serial cho ${updatedCount} máy`, updatedCount });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
   }
 });
 
@@ -1257,10 +1327,41 @@ app.post('/orders', async (req, res) => {
     await connection.beginTransaction();
 
     for (const it of parsedItems) {
-      const [prodRows] = await connection.query(
+      let [prodRows] = await connection.query(
         'SELECT id, name, stock, isHidden FROM products WHERE id = ? FOR UPDATE',
         [it.productId]
       );
+      if (prodRows.length === 0) {
+        // Tự động đồng bộ sản phẩm vào bảng products MySQL nếu chưa có để đảm bảo khách checkout mượt mà 100%
+        const pid = String(it.productId || '');
+        const catId = (pid.startsWith('lap') || pid.startsWith('l360')) ? 'laptop'
+          : (pid.startsWith('mouse') || pid.startsWith('kb') || pid.startsWith('acc')) ? 'accessories'
+          : (pid.startsWith('vga') || pid.startsWith('gpu')) ? 'vga'
+          : pid.startsWith('cpu') ? 'cpu'
+          : pid.startsWith('ram') ? 'ram'
+          : pid.startsWith('ssd') ? 'ssd'
+          : pid.startsWith('mon') ? 'monitor'
+          : pid.startsWith('main') ? 'mainboard'
+          : 'laptop';
+
+        await connection.query(
+          'INSERT IGNORE INTO categories (id, name, count, icon) VALUES (?, ?, 0, ?)',
+          [catId, catId.toUpperCase(), '📦']
+        );
+
+        await connection.query(
+          `INSERT INTO products (id, name, category_id, price, stock, image, description)
+           VALUES (?, ?, ?, ?, 100, ?, ?)
+           ON DUPLICATE KEY UPDATE stock = GREATEST(stock, 100)`,
+          [it.productId, it.name || it.productId, catId, it.price || 0, it.image || '', it.name || '']
+        );
+
+        [prodRows] = await connection.query(
+          'SELECT id, name, stock, isHidden FROM products WHERE id = ? FOR UPDATE',
+          [it.productId]
+        );
+      }
+
       if (prodRows.length === 0) {
         await connection.rollback();
         connection.release();

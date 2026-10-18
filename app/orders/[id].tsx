@@ -855,28 +855,78 @@ export default function OrderDetailScreen() {
                             </Text>
                           ) : null}
 
-                          {/* THỜI HẠN BẢO HÀNH DỰ KIẾN TỪNG SẢN PHẨM & MÃ SERIAL NUMBER */}
+                          {/* THỜI HẠN BẢO HÀNH DỰ KIẾN TỪNG SẢN PHẨM & MÃ SERIAL/IMEI */}
                           {(() => {
                             const w = calculateWarrantyInfo(order.createdAt, item);
-                            const serialNum = formatUnitCodes(item);
+                            const hasUnits = item.deviceUnits && item.deviceUnits.length > 0;
                             return (
-                              <View style={{ gap: 4, marginTop: 4, marginBottom: 4 }}>
+                              <View style={{ gap: 5, marginTop: 5, marginBottom: 5 }}>
                                 <View style={styles.itemWarrantyBadge}>
                                   <Ionicons name="shield-checkmark" size={12} color="#16a34a" />
                                   <Text style={styles.itemWarrantyText}>
                                     Thời hạn BH: <Text style={{ fontWeight: '700', color: '#15803d' }}>{w.range}</Text>
                                   </Text>
                                 </View>
-                                <Pressable
-                                  style={{ flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start' }}
-                                  onPress={() => router.push('/warranty' as any)}
-                                >
-                                  <Ionicons name="barcode-outline" size={13} color="#2563eb" />
-                                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#2563eb' }}>
-                                    Mã bảo hành: {serialNum}
-                                  </Text>
-                                  <Ionicons name="open-outline" size={11} color="#2563eb" />
-                                </Pressable>
+
+                                {hasUnits ? (
+                                  item.deviceUnits.map((u: any, uIdx: number) => (
+                                    <View
+                                      key={uIdx}
+                                      style={{
+                                        backgroundColor: '#f8fafc',
+                                        borderWidth: 1,
+                                        borderColor: '#e2e8f0',
+                                        borderRadius: 8,
+                                        padding: 8,
+                                        gap: 4,
+                                        marginTop: 2,
+                                      }}
+                                    >
+                                      {u.manufacturerSerial ? (
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6, flexWrap: 'wrap' }}>
+                                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                                            <Ionicons name="hardware-chip-outline" size={13} color="#059669" />
+                                            <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569' }}>IMEI máy:</Text>
+                                            <Text selectable style={{ fontSize: 12, fontWeight: '800', color: '#059669', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>
+                                              {u.manufacturerSerial}
+                                            </Text>
+                                          </View>
+                                          <View style={{ backgroundColor: '#dcfce7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                            <Text style={{ fontSize: 9, fontWeight: '700', color: '#059669' }}>🔒 Cố định</Text>
+                                          </View>
+                                        </View>
+                                      ) : null}
+
+                                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 4 }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                          <Ionicons name="barcode-outline" size={12} color="#2563eb" />
+                                          <Text style={{ fontSize: 10, color: '#64748b' }}>Mã BH:</Text>
+                                          <Text selectable style={{ fontSize: 11, fontWeight: '700', color: '#2563eb', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>
+                                            {u.code}
+                                          </Text>
+                                        </View>
+                                        <Pressable
+                                          onPress={() => router.push({ pathname: '/warranty', params: { query: u.manufacturerSerial || u.code } } as any)}
+                                          style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#eff6ff', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 5 }}
+                                        >
+                                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#2563eb' }}>Tra cứu bảo hành</Text>
+                                          <Ionicons name="arrow-forward" size={11} color="#2563eb" />
+                                        </Pressable>
+                                      </View>
+                                    </View>
+                                  ))
+                                ) : (
+                                  <Pressable
+                                    style={{ flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start' }}
+                                    onPress={() => router.push('/warranty' as any)}
+                                  >
+                                    <Ionicons name="barcode-outline" size={13} color="#2563eb" />
+                                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#2563eb' }}>
+                                      Mã bảo hành: {formatUnitCodes(item)}
+                                    </Text>
+                                    <Ionicons name="open-outline" size={11} color="#2563eb" />
+                                  </Pressable>
+                                )}
                               </View>
                             );
                           })()}

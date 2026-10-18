@@ -128,6 +128,21 @@ export function InvoiceModal({
     if (typeof tax === 'string') {
       try { tax = JSON.parse(tax); } catch { tax = null; }
     }
+    if (!tax || typeof tax.netAmount !== 'number') {
+      const shippingAmount = totalAmount >= 5000000 ? 0 : 30000;
+      const goodsTotal = Math.max(0, totalAmount - shippingAmount);
+      // Quy chuẩn thuế suất VAT 8% theo Nghị định 44/2023/NĐ-CP & 72/2024/NĐ-CP
+      const netAmount = Math.round(goodsTotal / 1.08);
+      const vatAmount = goodsTotal - netAmount;
+      const discountAmount = Math.max(0, subtotal - goodsTotal);
+      tax = {
+        vatRate: 8,
+        netAmount,
+        vatAmount,
+        shippingAmount,
+        discountAmount,
+      };
+    }
     const discount = tax ? Number(tax.discountAmount) : Math.max(0, subtotal - totalAmount);
     const amountInWords = numberToVietnameseWords(totalAmount);
 
@@ -159,6 +174,290 @@ export function InvoiceModal({
 
   const handlePrint = () => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      try {
+        const printWindow = window.open('', '_blank');
+        if (printWindow) {
+          const itemsRowsHtml = invoiceData.items.map((it: any) => {
+            const imeiList = it.deviceUnits && it.deviceUnits.length > 0
+              ? it.deviceUnits.map((u: any) => u.manufacturerSerial
+                  ? `<div><strong>IMEI:</strong> <span style="color:#059669; font-weight:700;">${u.manufacturerSerial}</span> <span style="font-size:10px; color:#64748b;">(Mã BH: ${u.code})</span></div>`
+                  : `<div>Mã BH: ${u.code}</div>`).join('')
+              : `<div>${it.serial || ''}</div>`;
+
+            return `
+              <tr>
+                <td style="text-align: center;">${it.stt}</td>
+                <td>
+                  <strong>${it.name}</strong>
+                  ${it.selectedConfig ? `<div style="font-size: 11px; color: #64748b; margin-top: 2px;">Cấu hình: ${it.selectedConfig}</div>` : ''}
+                </td>
+                <td style="font-size: 11px; font-family: monospace;">
+                  ${imeiList}
+                </td>
+                <td style="text-align: center; font-weight: 700;">${it.quantity}</td>
+                <td style="text-align: right;">${formatPrice(it.price)}</td>
+                <td style="text-align: right; font-weight: 700;">${formatPrice(it.total)}</td>
+              </tr>
+            `;
+          }).join('');
+
+          const html = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <meta charset="utf-8">
+              <title>Hóa Đơn Điện Tử #${invoiceData.invoiceCode} - DANGVINHPC</title>
+              <style>
+                @page { size: A4; margin: 15mm 15mm 15mm 15mm; }
+                * { box-sizing: border-box; }
+                body {
+                  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+                  color: #0f172a;
+                  line-height: 1.45;
+                  font-size: 12px;
+                  margin: 0;
+                  padding: 20px;
+                  background: #fff;
+                }
+                .header {
+                  display: flex;
+                  justify-content: space-between;
+                  align-items: flex-start;
+                  border-bottom: 2px solid #2563eb;
+                  padding-bottom: 12px;
+                  margin-bottom: 16px;
+                }
+                .brand-title { font-size: 20px; font-weight: 900; color: #2563eb; letter-spacing: 0.5px; }
+                .sub-info { font-size: 11px; color: #475569; line-height: 1.4; }
+                .invoice-meta { text-align: right; font-size: 11px; color: #475569; }
+                .doc-title {
+                  text-align: center;
+                  font-size: 18px;
+                  font-weight: 900;
+                  text-transform: uppercase;
+                  color: #1e293b;
+                  margin: 14px 0 4px;
+                  letter-spacing: 0.5px;
+                }
+                .doc-subtitle { text-align: center; font-size: 11.5px; color: #64748b; margin-bottom: 16px; }
+                .customer-box {
+                  background: #f8fafc;
+                  border: 1px solid #e2e8f0;
+                  border-radius: 8px;
+                  padding: 12px 14px;
+                  margin-bottom: 16px;
+                  display: grid;
+                  grid-template-columns: 1fr 1fr;
+                  gap: 6px 16px;
+                  font-size: 12px;
+                }
+                .table-items {
+                  width: 100%;
+                  border-collapse: collapse;
+                  margin-bottom: 14px;
+                }
+                .table-items th {
+                  background: #f1f5f9;
+                  border: 1px solid #cbd5e1;
+                  padding: 8px 6px;
+                  font-size: 11px;
+                  font-weight: 700;
+                  text-transform: uppercase;
+                  color: #334155;
+                }
+                .table-items td {
+                  border: 1px solid #cbd5e1;
+                  padding: 7px 8px;
+                  vertical-align: middle;
+                }
+                .table-items tr:nth-child(even) { background: #fafafa; }
+                .summary-grid {
+                  display: flex;
+                  justify-content: space-between;
+                  align-items: flex-start;
+                  gap: 20px;
+                  margin-top: 10px;
+                  padding-top: 10px;
+                  border-top: 1px dashed #cbd5e1;
+                }
+                .words-wrap {
+                  flex: 1;
+                  font-size: 12px;
+                  color: #334155;
+                }
+                .totals-wrap {
+                  width: 340px;
+                  font-size: 12px;
+                }
+                .total-row {
+                  display: flex;
+                  justify-content: space-between;
+                  padding: 3px 0;
+                  color: #475569;
+                }
+                .total-row.highlight {
+                  font-weight: 700;
+                  color: #0f172a;
+                }
+                .total-row.vat-row {
+                  color: #2563eb;
+                  font-weight: 800;
+                }
+                .divider { border-bottom: 1.5px solid #0f172a; margin: 6px 0; }
+                .final-row {
+                  display: flex;
+                  justify-content: space-between;
+                  font-size: 14px;
+                  font-weight: 900;
+                  color: #dc2626;
+                }
+                .signatures {
+                  display: flex;
+                  justify-content: space-between;
+                  margin-top: 28px;
+                  text-align: center;
+                }
+                .sig-col { width: 45%; }
+                .sig-title { font-weight: 700; font-size: 12px; text-transform: uppercase; }
+                .sig-hint { font-size: 11px; color: #64748b; font-style: italic; }
+                .stamp-box {
+                  margin: 12px auto 0;
+                  width: 170px;
+                  height: 65px;
+                  border: 2px dashed #16a34a;
+                  border-radius: 8px;
+                  display: flex;
+                  flex-direction: column;
+                  align-items: center;
+                  justify-content: center;
+                  color: #16a34a;
+                  font-weight: 800;
+                  font-size: 11px;
+                }
+                @media print {
+                  body { padding: 0; }
+                }
+              </style>
+            </head>
+            <body>
+              <div class="header">
+                <div>
+                  <div class="brand-title">DANGVINHPC STORE</div>
+                  <div class="sub-info"><strong>CÔNG TY TNHH CÔNG NGHỆ & MÁY TÍNH DANGVINHPC</strong></div>
+                  <div class="sub-info">Địa chỉ: 191 Nguyễn Thị Duệ, Phường Thanh Bình, TP. Hải Dương</div>
+                  <div class="sub-info">Mã số thuế: <strong>0109876543</strong> • Hotline: 1800 6868 • cskh@dangvinhpc.vn</div>
+                </div>
+                <div class="invoice-meta">
+                  <div><strong>Mẫu số - Ký hiệu:</strong> 1/001 - DPC24E</div>
+                  <div><strong>Số hóa đơn:</strong> <span style="color:#2563eb; font-weight:800;">${invoiceData.invoiceCode}</span></div>
+                  <div><strong>Mã đơn hàng:</strong> #${invoiceData.orderNum}</div>
+                  <div><strong>Ngày lập:</strong> ${invoiceData.dateFormatted} ${invoiceData.timeFormatted}</div>
+                </div>
+              </div>
+
+              <div class="doc-title">HÓA ĐƠN ĐIỆN TỬ GIÁ TRỊ GIA TĂNG (VAT INVOICE)</div>
+              <div class="doc-subtitle">Bản thể hiện của hóa đơn điện tử khởi tạo từ hệ thống bán lẻ chính hãng DANGVINHPC</div>
+
+              <div class="customer-box">
+                <div><strong>Người mua hàng:</strong> ${invoiceData.name}</div>
+                <div><strong>Số điện thoại:</strong> ${invoiceData.phone}</div>
+                <div style="grid-column: span 2;"><strong>Địa chỉ giao hàng:</strong> ${invoiceData.address}</div>
+                <div><strong>Hình thức thanh toán:</strong> ${invoiceData.paymentMethod}</div>
+                <div><strong>Trạng thái:</strong> <span style="font-weight:800; color:${invoiceData.isPaid ? '#16a34a' : '#b45309'};">${invoiceData.isPaid ? '✔ Đã thanh toán' : '⏳ Thu tiền khi giao (COD)'}</span></div>
+              </div>
+
+              <table class="table-items">
+                <thead>
+                  <tr>
+                    <th style="width: 35px; text-align: center;">STT</th>
+                    <th>Tên sản phẩm, hàng hóa dịch vụ</th>
+                    <th style="width: 220px;">Mã bảo hành / IMEI máy</th>
+                    <th style="width: 45px; text-align: center;">SL</th>
+                    <th style="width: 100px; text-align: right;">Đơn giá</th>
+                    <th style="width: 110px; text-align: right;">Thành tiền</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${itemsRowsHtml}
+                </tbody>
+              </table>
+
+              <div class="summary-grid">
+                <div class="words-wrap">
+                  <div><strong>Số tiền viết bằng chữ:</strong> <em>${invoiceData.amountInWords}.</em></div>
+                  <div style="margin-top: 8px; font-size: 11px; color: #64748b; line-height: 1.4;">
+                    * Hóa đơn điện tử có giá trị pháp lý theo quy định hiện hành của Bộ Tài chính.<br>
+                    * Toàn bộ sản phẩm được bảo hành chính hãng theo đúng số IMEI và mã bảo hành đã cấp trên hóa đơn.
+                  </div>
+                </div>
+
+                <div class="totals-wrap">
+                  <div class="total-row">
+                    <span>Tổng tiền hàng:</span>
+                    <span>${formatPrice(invoiceData.subtotal)}</span>
+                  </div>
+                  ${invoiceData.discount > 0 ? `
+                    <div class="total-row" style="color:#16a34a;">
+                      <span>Chiết khấu / Voucher:</span>
+                      <span>-${formatPrice(invoiceData.discount)}</span>
+                    </div>
+                  ` : ''}
+                  <div class="total-row">
+                    <span>Phí vận chuyển:</span>
+                    <span>${invoiceData.tax.shippingAmount === 0 ? 'Miễn phí (0₫)' : formatPrice(invoiceData.tax.shippingAmount)}</span>
+                  </div>
+                  <div class="total-row highlight">
+                    <span>Tiền hàng trước thuế:</span>
+                    <span>${formatPrice(invoiceData.tax.netAmount)}</span>
+                  </div>
+                  <div class="total-row vat-row">
+                    <span>Thuế GTGT (VAT ${invoiceData.tax.vatRate}% đã gồm):</span>
+                    <span>${formatPrice(invoiceData.tax.vatAmount)}</span>
+                  </div>
+                  <div class="divider"></div>
+                  <div class="final-row">
+                    <span>TỔNG THANH TOÁN:</span>
+                    <span>${formatPrice(invoiceData.totalAmount)}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="signatures">
+                <div class="sig-col">
+                  <div class="sig-title">NGƯỜI MUA HÀNG</div>
+                  <div class="sig-hint">(Ký, ghi rõ họ tên)</div>
+                  <div style="height: 50px;"></div>
+                  <div><strong>${invoiceData.name}</strong></div>
+                </div>
+                <div class="sig-col">
+                  <div class="sig-title">NGƯỜI BÁN HÀNG / THỦ TRƯỞNG ĐƠN VỊ</div>
+                  <div class="sig-hint">(Chữ ký điện tử, con dấu số)</div>
+                  <div class="stamp-box">
+                    <div>✔ ĐÃ KÝ ĐIỆN TỬ</div>
+                    <div style="font-size: 9px; margin-top: 2px;">DANGVINHPC STORE</div>
+                    <div style="font-size: 9px; color: #64748b;">${invoiceData.dateFormatted}</div>
+                  </div>
+                </div>
+              </div>
+
+              <script>
+                window.onload = function() {
+                  setTimeout(function() {
+                    window.print();
+                  }, 250);
+                };
+              </script>
+            </body>
+            </html>
+          `;
+          printWindow.document.open();
+          printWindow.document.write(html);
+          printWindow.document.close();
+          return;
+        }
+      } catch (e) {
+        console.warn('Popup print blocked or failed, fallback to window.print():', e);
+      }
       window.print();
     } else {
       alert('Chức năng in sẵn sàng trên trình duyệt máy tính / điện thoại');
@@ -298,8 +597,23 @@ export function InvoiceModal({
                     ) : null}
                   </View>
                   <View style={{ flex: 2, paddingRight: 4 }}>
-                    <Text style={styles.serialCodeText}>{it.serial}</Text>
-                    <Text style={styles.warrantyHint}>BH 24-36T chính hãng</Text>
+                    {it.deviceUnits && it.deviceUnits.length > 0 ? (
+                      it.deviceUnits.map((u: any, uIdx: number) => (
+                        <View key={uIdx} style={{ marginBottom: 3 }}>
+                          {u.manufacturerSerial ? (
+                            <Text style={[styles.serialCodeText, { color: '#059669', fontWeight: '800' }]}>
+                              IMEI: {u.manufacturerSerial}
+                            </Text>
+                          ) : null}
+                          <Text style={[styles.serialCodeText, { fontSize: 10, color: '#475569' }]}>
+                            Mã BH: {u.code}
+                          </Text>
+                        </View>
+                      ))
+                    ) : (
+                      <Text style={styles.serialCodeText}>{it.serial}</Text>
+                    )}
+                    <Text style={styles.warrantyHint}>BH chính hãng</Text>
                   </View>
                   <Text style={[styles.tdText, { width: 50, textAlign: 'center', fontWeight: '700' }]}>{it.quantity}</Text>
                   <Text style={[styles.tdText, { flex: 1.8, textAlign: 'right' }]}>{formatPrice(it.price)}</Text>
@@ -333,23 +647,21 @@ export function InvoiceModal({
                 )}
                 <View style={styles.totalRow}>
                   <Text style={styles.totalRowLabel}>Phí vận chuyển:</Text>
-                  <Text style={styles.totalRowVal}>{invoiceData.tax ? formatPrice(invoiceData.tax.shippingAmount) : 'Không có dữ liệu'}</Text>
+                  <Text style={styles.totalRowVal}>
+                    {invoiceData.tax?.shippingAmount === 0 ? 'Miễn phí (0₫)' : formatPrice(invoiceData.tax?.shippingAmount || 0)}
+                  </Text>
                 </View>
-                {invoiceData.tax && (
-                  <>
-                    <View style={styles.totalRow}>
-                      <Text style={styles.totalRowLabel}>Tiền hàng trước thuế (sau giảm giá):</Text>
-                      <Text style={styles.totalRowVal}>{formatPrice(invoiceData.tax.netAmount)}</Text>
-                    </View>
-                    <View style={styles.totalRow}>
-                      <Text style={styles.totalRowLabel}>VAT {invoiceData.tax.vatRate}% (đã gồm trong giá):</Text>
-                      <Text style={styles.totalRowVal}>{formatPrice(invoiceData.tax.vatAmount)}</Text>
-                    </View>
-                  </>
-                )}
+                <View style={styles.totalRow}>
+                  <Text style={styles.totalRowLabel}>Tiền hàng trước thuế:</Text>
+                  <Text style={styles.totalRowVal}>{formatPrice(invoiceData.tax.netAmount)}</Text>
+                </View>
+                <View style={styles.totalRow}>
+                  <Text style={styles.totalRowLabel}>Thuế GTGT (VAT {invoiceData.tax.vatRate}% đã bao gồm):</Text>
+                  <Text style={[styles.totalRowVal, { color: '#2563eb', fontWeight: '800' }]}>{formatPrice(invoiceData.tax.vatAmount)}</Text>
+                </View>
                 <View style={styles.totalDivider} />
                 <View style={styles.finalTotalRow}>
-                  <Text style={styles.finalTotalLabel}>TỔNG CỘNG:</Text>
+                  <Text style={styles.finalTotalLabel}>TỔNG CỘNG THANH TOÁN:</Text>
                   <Text style={styles.finalTotalVal}>{formatPrice(invoiceData.totalAmount)}</Text>
                 </View>
               </View>

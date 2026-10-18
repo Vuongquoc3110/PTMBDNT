@@ -454,6 +454,18 @@ class ApiService {
     });
   }
 
+  async autoGenerateUnitSerial(code: string) {
+    return this.request(`/product-units/${encodeURIComponent(code)}`, {
+      method: 'PUT', body: JSON.stringify({ autoGenerate: true }),
+    });
+  }
+
+  async autoFillProductSerials(productId: string) {
+    return this.request(`/products/${encodeURIComponent(productId)}/units/auto-fill`, {
+      method: 'POST',
+    });
+  }
+
   async deleteProduct(id: string) {
     const res = await this.request(`/products/${id}`, {
       method: 'DELETE',

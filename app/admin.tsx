@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -18,6 +18,8 @@ import {
 import { AdminSupportPanel } from '@/components/admin/AdminSupportPanel';
 import { MonthlyReport } from '@/components/admin/MonthlyReport';
 import { InvoiceModal } from '@/components/InvoiceModal';
+import { ProductUnitsModal } from '@/components/ProductUnitsModal';
+import { formatUnitCodes } from '@/utils/deviceUnits';
 import { useAppContext } from '@/context/AppContext';
 import { formatPrice, getProductFallbackImage, isInvalidOrBlockedImageUrl } from '@/data/products';
 import { apiService, type Order, type User, type Voucher } from '@/services/api';
@@ -168,6 +170,10 @@ export default function AdminScreen() {
   const [invoicePreview, setInvoicePreview] = useState(false);
   const [previewMediaUrl, setPreviewMediaUrl] = useState<string | null>(null);
 
+  // Unit & IMEI Serial Modal
+  const [unitProduct, setUnitProduct] = useState<{ id: string; name: string } | null>(null);
+  const [unitCodes, setUnitCodes] = useState<string[] | undefined>();
+
   // Product Modal
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<ProductItem | null>(null);
@@ -240,6 +246,35 @@ export default function AdminScreen() {
   });
   const [selectedSpecificMonth, setSelectedSpecificMonth] = useState<number>(() => new Date().getMonth() + 1);
   const [selectedSpecificYear, setSelectedSpecificYear] = useState<number>(() => new Date().getFullYear());
+
+  const dateScrollRef = useRef<ScrollView>(null);
+  const monthScrollRef = useRef<ScrollView>(null);
+
+  const scrollDatePills = (delta: number) => {
+    if (dateScrollRef.current) {
+      if (Platform.OS === 'web') {
+        const node = (dateScrollRef.current as any)?.getScrollableNode?.() || (dateScrollRef.current as any);
+        if (node && typeof node.scrollBy === 'function') {
+          node.scrollBy({ left: delta, behavior: 'smooth' });
+          return;
+        }
+      }
+      (dateScrollRef.current as any)?.scrollTo?.({ x: delta > 0 ? 300 : 0, animated: true });
+    }
+  };
+
+  const scrollMonthPills = (delta: number) => {
+    if (monthScrollRef.current) {
+      if (Platform.OS === 'web') {
+        const node = (monthScrollRef.current as any)?.getScrollableNode?.() || (monthScrollRef.current as any);
+        if (node && typeof node.scrollBy === 'function') {
+          node.scrollBy({ left: delta, behavior: 'smooth' });
+          return;
+        }
+      }
+      (monthScrollRef.current as any)?.scrollTo?.({ x: delta > 0 ? 300 : 0, animated: true });
+    }
+  };
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -982,6 +1017,12 @@ export default function AdminScreen() {
             ${itemsHtml}
           </tbody>
         </table>
+
+        <div style="margin-top: 14px; text-align: right; font-size: 13px; line-height: 1.8; color: #475569;">
+          <div>Tiền hàng trước thuế: <strong>${Math.round(Math.max(0, (Number(order.totalAmount) || 0) - ((Number(order.totalAmount) || 0) >= 5000000 ? 0 : 30000)) / 1.08).toLocaleString('vi-VN')} đ</strong></div>
+          <div style="color: #2563eb;">Thuế GTGT (VAT 8% đã bao gồm): <strong>${(Math.max(0, (Number(order.totalAmount) || 0) - ((Number(order.totalAmount) || 0) >= 5000000 ? 0 : 30000)) - Math.round(Math.max(0, (Number(order.totalAmount) || 0) - ((Number(order.totalAmount) || 0) >= 5000000 ? 0 : 30000)) / 1.08)).toLocaleString('vi-VN')} đ</strong></div>
+          <div>Phí vận chuyển: <strong>${(Number(order.totalAmount) || 0) >= 5000000 ? 'Miễn phí (0 đ)' : '30.000 đ'}</strong></div>
+        </div>
 
         <div class="total-box">
           TỔNG THANH TOÁN: ${Number(order.totalAmount).toLocaleString('vi-VN')} đ
@@ -1740,7 +1781,7 @@ export default function AdminScreen() {
 
             {/* PICKER CHỌN NGÀY CỤ THỂ */}
             {revenuePeriod === 'day' && (
-              <View style={styles.inlineDateSelectorRow}>
+              <View style={[styles.inlineDateSelectorRow, { flexWrap: 'wrap', gap: 6 }]}>
                 {Platform.OS === 'web' && typeof document !== 'undefined' ? (
                   <View style={[styles.webDatePickerWrap, isDark && { backgroundColor: '#1e293b', borderColor: '#334155' }]}>
                     <Ionicons name="calendar" size={13} color="#2563eb" style={{ marginRight: 4 }} />
@@ -1762,8 +1803,32 @@ export default function AdminScreen() {
                   </View>
                 ) : null}
 
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }}>
-                  <View style={{ flexDirection: 'row', gap: 4 }}>
+                {/* THANH SCROLL KÈM NÚT CUỘN TRÁI / PHẢI VÀ LĂN CHUỘT */}
+                <View style={{ flex: 1, minWidth: 140, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Pressable
+                    style={({ hovered }: any) => [
+                      styles.dateScrollNavBtn,
+                      isDark && styles.dateScrollNavBtnDark,
+                      hovered && { backgroundColor: isDark ? '#334155' : '#e2e8f0' },
+                    ]}
+                    onPress={() => scrollDatePills(-120)}
+                    accessibilityLabel="Cuộn ngày trước"
+                  >
+                    <Ionicons name="chevron-back" size={12} color={isDark ? '#94a3b8' : '#475569'} />
+                  </Pressable>
+
+                  <ScrollView
+                    ref={dateScrollRef}
+                    horizontal
+                    showsHorizontalScrollIndicator={Platform.OS === 'web'}
+                    onWheel={(e: any) => {
+                      if (Platform.OS === 'web' && e?.deltaY) {
+                        e.currentTarget.scrollLeft += e.deltaY;
+                      }
+                    }}
+                    style={{ flex: 1 }}
+                    contentContainerStyle={{ gap: 4, paddingBottom: 2 }}
+                  >
                     {availableOrderDates.map((od) => {
                       const isSelDate = selectedSpecificDate === od.dateStr;
                       return (
@@ -1778,32 +1843,77 @@ export default function AdminScreen() {
                         </Pressable>
                       );
                     })}
-                  </View>
-                </ScrollView>
+                  </ScrollView>
+
+                  <Pressable
+                    style={({ hovered }: any) => [
+                      styles.dateScrollNavBtn,
+                      isDark && styles.dateScrollNavBtnDark,
+                      hovered && { backgroundColor: isDark ? '#334155' : '#e2e8f0' },
+                    ]}
+                    onPress={() => scrollDatePills(120)}
+                    accessibilityLabel="Cuộn ngày sau"
+                  >
+                    <Ionicons name="chevron-forward" size={12} color={isDark ? '#94a3b8' : '#475569'} />
+                  </Pressable>
+                </View>
               </View>
             )}
 
             {/* PICKER CHỌN THÁNG CỤ THỂ */}
             {revenuePeriod === 'month' && (
-              <View style={styles.inlineDateSelectorRow}>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }}>
-                  <View style={{ flexDirection: 'row', gap: 4 }}>
-                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((m) => {
-                      const isSelM = selectedSpecificMonth === m;
-                      return (
-                        <Pressable
-                          key={m}
-                          style={[styles.quickDatePill, isDark && styles.quickDatePillDark, isSelM && styles.quickDatePillActive]}
-                          onPress={() => setSelectedSpecificMonth(m)}
-                        >
-                          <Text style={[styles.quickDatePillText, isDark && styles.textMutedDark, isSelM && styles.quickDatePillTextActive]}>
-                            Tháng {m}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
+              <View style={[styles.inlineDateSelectorRow, { gap: 4 }]}>
+                <Pressable
+                  style={({ hovered }: any) => [
+                    styles.dateScrollNavBtn,
+                    isDark && styles.dateScrollNavBtnDark,
+                    hovered && { backgroundColor: isDark ? '#334155' : '#e2e8f0' },
+                  ]}
+                  onPress={() => scrollMonthPills(-120)}
+                  accessibilityLabel="Cuộn tháng trước"
+                >
+                  <Ionicons name="chevron-back" size={12} color={isDark ? '#94a3b8' : '#475569'} />
+                </Pressable>
+
+                <ScrollView
+                  ref={monthScrollRef}
+                  horizontal
+                  showsHorizontalScrollIndicator={Platform.OS === 'web'}
+                  onWheel={(e: any) => {
+                    if (Platform.OS === 'web' && e?.deltaY) {
+                      e.currentTarget.scrollLeft += e.deltaY;
+                    }
+                  }}
+                  style={{ flex: 1 }}
+                  contentContainerStyle={{ gap: 4, paddingBottom: 2 }}
+                >
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((m) => {
+                    const isSelM = selectedSpecificMonth === m;
+                    return (
+                      <Pressable
+                        key={m}
+                        style={[styles.quickDatePill, isDark && styles.quickDatePillDark, isSelM && styles.quickDatePillActive]}
+                        onPress={() => setSelectedSpecificMonth(m)}
+                      >
+                        <Text style={[styles.quickDatePillText, isDark && styles.textMutedDark, isSelM && styles.quickDatePillTextActive]}>
+                          Tháng {m}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
                 </ScrollView>
+
+                <Pressable
+                  style={({ hovered }: any) => [
+                    styles.dateScrollNavBtn,
+                    isDark && styles.dateScrollNavBtnDark,
+                    hovered && { backgroundColor: isDark ? '#334155' : '#e2e8f0' },
+                  ]}
+                  onPress={() => scrollMonthPills(120)}
+                  accessibilityLabel="Cuộn tháng sau"
+                >
+                  <Ionicons name="chevron-forward" size={12} color={isDark ? '#94a3b8' : '#475569'} />
+                </Pressable>
               </View>
             )}
 
@@ -2027,6 +2137,436 @@ export default function AdminScreen() {
                 </Pressable>
               </View>
             </View>
+
+            {/* ======================================================== */}
+            {/* CARD THEO DÕI ĐƠN HÀNG THEO NGÀY (HÔM NAY / HÔM QUA...)    */}
+            {/* ======================================================== */}
+            {(() => {
+              const pad = (n: number) => String(n).padStart(2, '0');
+              const now = new Date();
+              const todayStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+              const yesterday = new Date(now);
+              yesterday.setDate(yesterday.getDate() - 1);
+              const yesterdayStr = `${yesterday.getFullYear()}-${pad(yesterday.getMonth() + 1)}-${pad(yesterday.getDate())}`;
+
+              // Mặc định chọn ngày đang chọn ở bộ lọc (selectedSpecificDate), nếu không có thì lấy hôm nay
+              const targetDateStr = selectedSpecificDate || todayStr;
+              const isToday = targetDateStr === todayStr;
+              const isYesterday = targetDateStr === yesterdayStr;
+              const [tY, tM, tD] = (targetDateStr || '').split('-');
+              const displayDateLabel = isToday
+                ? `Hôm nay (${tD}/${tM})`
+                : isYesterday
+                ? `Hôm qua (${tD}/${tM})`
+                : `Ngày ${tD}/${tM}/${tY}`;
+
+              // Lọc các đơn của ngày được chọn
+              const dayOrders = orderList.filter((o) => {
+                const d = o.createdAt ? new Date(o.createdAt) : new Date();
+                const dStr = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+                return dStr === targetDateStr;
+              });
+
+              // Đếm số đơn hôm nay và hôm qua để hiển thị badge trên nút
+              const todayCount = orderList.filter((o) => {
+                const d = o.createdAt ? new Date(o.createdAt) : new Date();
+                return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` === todayStr;
+              }).length;
+
+              const yesterdayCount = orderList.filter((o) => {
+                const d = o.createdAt ? new Date(o.createdAt) : new Date();
+                return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` === yesterdayStr;
+              }).length;
+
+              const statusGroups = [
+                { key: 'pending',    label: 'Chờ duyệt',   color: '#f59e0b', bg: '#fffbeb', icon: 'time-outline' as const },
+                { key: 'confirmed',  label: 'Đã xác nhận', color: '#3b82f6', bg: '#eff6ff', icon: 'checkmark-circle-outline' as const },
+                { key: 'shipping',   label: 'Đang giao',   color: '#8b5cf6', bg: '#f5f3ff', icon: 'bicycle-outline' as const },
+                { key: 'completed',  label: 'Hoàn tất',    color: '#10b981', bg: '#ecfdf5', icon: 'shield-checkmark-outline' as const },
+                { key: 'cancelled',  label: 'Đã huỷ',      color: '#ef4444', bg: '#fef2f2', icon: 'close-circle-outline' as const },
+                { key: 'returns',    label: 'Đổi/Trả',     color: '#f97316', bg: '#fff7ed', icon: 'return-down-back-outline' as const },
+              ];
+
+              const completedRevenue = dayOrders
+                .filter((o) => o.status === 'completed')
+                .reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0);
+
+              const totalGross = dayOrders
+                .filter((o) => o.status !== 'cancelled')
+                .reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0);
+
+              return (
+                <View style={[styles.dashCard, isDark && styles.cardDark, { marginBottom: 16 }]}>
+                  {/* HEADER & CHỌN NGÀY */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 14 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                      <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: '#ecfdf5', alignItems: 'center', justifyContent: 'center' }}>
+                        <Ionicons name="calendar-outline" size={19} color="#10b981" />
+                      </View>
+                      <View>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <Text style={[styles.dashCardTitle, isDark && styles.textDark]}>
+                            Đơn hàng: {displayDateLabel}
+                          </Text>
+                          {isToday && (
+                            <View style={{ backgroundColor: '#10b98120', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                              <Text style={{ fontSize: 10, fontWeight: '700', color: '#10b981' }}>HÔM NAY</Text>
+                            </View>
+                          )}
+                          {isYesterday && (
+                            <View style={{ backgroundColor: '#2563eb20', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                              <Text style={{ fontSize: 10, fontWeight: '700', color: '#2563eb' }}>HÔM QUA</Text>
+                            </View>
+                          )}
+                        </View>
+                        <Text style={[styles.dashCardSubtitle, isDark && styles.textMutedDark]}>
+                          Chi tiết các đơn hàng phát sinh ngày {`${tD}/${tM}/${tY}`}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* TỔNG ĐƠN GÓC PHẢI */}
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={{ fontSize: 24, fontWeight: '800', color: dayOrders.length > 0 ? '#10b981' : '#94a3b8' }}>
+                        {dayOrders.length}
+                      </Text>
+                      <Text style={{ fontSize: 11, color: isDark ? '#94a3b8' : '#64748b' }}>đơn hàng phát sinh</Text>
+                    </View>
+                  </View>
+
+                  {/* THANH CHỌN NGÀY NHANH (HÔM NAY, HÔM QUA, CÁC NGÀY CÓ ĐƠN, DATE PICKER) */}
+                  <View style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: 6,
+                    padding: 8,
+                    borderRadius: 10,
+                    backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#f8fafc',
+                    borderWidth: 1,
+                    borderColor: isDark ? 'rgba(255,255,255,0.06)' : '#e2e8f0',
+                    marginBottom: 14,
+                  }}>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: isDark ? '#94a3b8' : '#64748b', marginRight: 4 }}>
+                      Chọn mốc ngày:
+                    </Text>
+
+                    {/* NÚT HÔM NAY */}
+                    <Pressable
+                      style={[
+                        styles.quickDatePill,
+                        isDark && styles.quickDatePillDark,
+                        isToday && styles.quickDatePillActive,
+                        { flexDirection: 'row', alignItems: 'center', gap: 4 }
+                      ]}
+                      onPress={() => setSelectedSpecificDate(todayStr)}
+                    >
+                      <Ionicons name="sunny-outline" size={12} color={isToday ? '#ffffff' : '#10b981'} />
+                      <Text style={[styles.quickDatePillText, isToday && styles.quickDatePillTextActive]}>
+                        Hôm nay ({todayCount}đ)
+                      </Text>
+                    </Pressable>
+
+                    {/* NÚT HÔM QUA */}
+                    <Pressable
+                      style={[
+                        styles.quickDatePill,
+                        isDark && styles.quickDatePillDark,
+                        isYesterday && styles.quickDatePillActive,
+                        { flexDirection: 'row', alignItems: 'center', gap: 4 }
+                      ]}
+                      onPress={() => setSelectedSpecificDate(yesterdayStr)}
+                    >
+                      <Ionicons name="time-outline" size={12} color={isYesterday ? '#ffffff' : '#2563eb'} />
+                      <Text style={[styles.quickDatePillText, isYesterday && styles.quickDatePillTextActive]}>
+                        Hôm qua ({yesterdayCount}đ)
+                      </Text>
+                    </Pressable>
+
+                    {/* CÁC NGÀY CÓ ĐƠN KHÁC */}
+                    {availableOrderDates
+                      .filter((od) => od.dateStr !== todayStr && od.dateStr !== yesterdayStr)
+                      .slice(0, 4)
+                      .map((od) => {
+                        const isCur = targetDateStr === od.dateStr;
+                        return (
+                          <Pressable
+                            key={od.dateStr}
+                            style={[
+                              styles.quickDatePill,
+                              isDark && styles.quickDatePillDark,
+                              isCur && styles.quickDatePillActive,
+                            ]}
+                            onPress={() => setSelectedSpecificDate(od.dateStr)}
+                          >
+                            <Text style={[styles.quickDatePillText, isCur && styles.quickDatePillTextActive]}>
+                              {od.label} ({od.count}đ)
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+
+                    {/* NATIVE / WEB DATE PICKER CHO PHÉP CHỌN BẤT KỲ NGÀY NÀO */}
+                    {Platform.OS === 'web' && typeof document !== 'undefined' ? (
+                      <View style={[styles.webDatePickerWrap, isDark && { backgroundColor: '#1e293b', borderColor: '#334155' }, { marginLeft: 'auto' }]}>
+                        <Ionicons name="calendar" size={13} color="#2563eb" style={{ marginRight: 4 }} />
+                        <input
+                          type="date"
+                          value={targetDateStr}
+                          onChange={(e: any) => e?.target?.value && setSelectedSpecificDate(e.target.value)}
+                          style={{
+                            border: 'none',
+                            background: 'transparent',
+                            outline: 'none',
+                            color: isDark ? '#f1f5f9' : '#0f172a',
+                            fontSize: 12,
+                            fontWeight: '600',
+                            fontFamily: 'inherit',
+                            cursor: 'pointer',
+                          }}
+                        />
+                      </View>
+                    ) : null}
+                  </View>
+
+                  {/* GRID 6 TRẠNG THÁI CỦA NGÀY ĐƯỢC CHỌN */}
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
+                    {statusGroups.map((sg) => {
+                      const cnt = sg.key === 'returns'
+                        ? dayOrders.filter((o) => Boolean(o.returnStatus)).length
+                        : dayOrders.filter((o) => o.status === sg.key).length;
+                      return (
+                        <Pressable
+                          key={sg.key}
+                          style={[{
+                            flex: 1, minWidth: 105,
+                            flexDirection: 'row', alignItems: 'center', gap: 8,
+                            backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : sg.bg,
+                            borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8,
+                            borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.08)' : `${sg.color}35`,
+                          }]}
+                          onPress={() => {
+                            if (sg.key === 'returns') {
+                              setOrderStatusFilter('returns');
+                            } else {
+                              setOrderStatusFilter(sg.key);
+                            }
+                            setActiveTab('orders');
+                          }}
+                        >
+                          <Ionicons name={sg.icon} size={15} color={sg.color} />
+                          <View>
+                            <Text style={{ fontSize: 16, fontWeight: '800', color: sg.color }}>{cnt}</Text>
+                            <Text style={{ fontSize: 11, color: isDark ? '#94a3b8' : '#64748b' }}>{sg.label}</Text>
+                          </View>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+
+                  {/* DÒNG TỔNG DOANH THU & GIÁ TRỊ CỦA NGÀY NÀY */}
+                  <View style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                    gap: 10,
+                    backgroundColor: isDark ? 'rgba(16,185,129,0.08)' : '#ecfdf5',
+                    borderRadius: 10,
+                    padding: 12,
+                    borderWidth: 1,
+                    borderColor: isDark ? 'rgba(16,185,129,0.2)' : '#a7f3d0',
+                    marginBottom: 14,
+                  }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Ionicons name="cash-outline" size={18} color="#10b981" />
+                      <View>
+                        <Text style={{ fontSize: 13, color: isDark ? '#6ee7b7' : '#065f46', fontWeight: '700' }}>
+                          Thực thu ngày {`${tD}/${tM}`}: {formatPrice(completedRevenue)}
+                        </Text>
+                        <Text style={{ fontSize: 11, color: isDark ? '#94a3b8' : '#059669' }}>
+                          Tổng giá trị đơn phát sinh: {formatPrice(totalGross)}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <Pressable
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 4,
+                        backgroundColor: '#10b981',
+                        paddingHorizontal: 10,
+                        paddingVertical: 6,
+                        borderRadius: 6,
+                      }}
+                      onPress={() => {
+                        setOrderStatusFilter('all');
+                        setActiveTab('orders');
+                      }}
+                    >
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: '#ffffff' }}>Mở quản lý đơn</Text>
+                      <Ionicons name="arrow-forward" size={12} color="#ffffff" />
+                    </Pressable>
+                  </View>
+
+                  {/* DANH SÁCH ĐƠN HÀNG CỦA NGÀY NÀY */}
+                  {dayOrders.length > 0 ? (
+                    <View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: isDark ? '#94a3b8' : '#64748b', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                          Danh sách đơn ngày {`${tD}/${tM}/${tY}`} ({dayOrders.length} đơn)
+                        </Text>
+                        <Text style={{ fontSize: 11, color: isDark ? '#64748b' : '#94a3b8' }}>
+                          Bấm vào đơn để xem & xử lý trong tab Đơn hàng
+                        </Text>
+                      </View>
+
+                      <View style={{ gap: 8 }}>
+                        {dayOrders.map((o) => {
+                          const badge = getStatusBadgeStyle(o.status);
+                          const customer = userList.find((u) => u.id === o.userId);
+                          const customerTitle = customer?.name || (o as any).customerName || (o.shippingAddress ? o.shippingAddress.split(',')[0] : 'Khách vãng lai');
+                          const orderTime = o.createdAt
+                            ? new Date(o.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+                            : '--:--';
+
+                          return (
+                            <Pressable
+                              key={o.id}
+                              style={({ hovered }: any) => [
+                                {
+                                  flexDirection: 'row',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  flexWrap: 'wrap',
+                                  gap: 10,
+                                  padding: 10,
+                                  borderRadius: 8,
+                                  backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#f8fafc',
+                                  borderWidth: 1,
+                                  borderColor: isDark ? 'rgba(255,255,255,0.06)' : '#e2e8f0',
+                                },
+                                hovered && { borderColor: '#3b82f6', backgroundColor: isDark ? 'rgba(59,130,246,0.1)' : '#eff6ff' },
+                              ]}
+                              onPress={() => {
+                                setSearchTerm(o.orderNumber || String(o.id));
+                                setActiveTab('orders');
+                              }}
+                            >
+                              {/* CỘT TRÁI: MÃ ĐƠN, GIỜ, KHÁCH, HÀNG HÓA */}
+                              <View style={{ flex: 1, minWidth: 240 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                                  <Text style={{ fontSize: 13, fontWeight: '800', color: '#2563eb' }}>
+                                    {o.orderNumber || `#ORD-${o.id}`}
+                                  </Text>
+                                  <Text style={{ fontSize: 11, color: isDark ? '#64748b' : '#94a3b8' }}>
+                                    • {orderTime}
+                                  </Text>
+                                  <Text style={{ fontSize: 12, fontWeight: '700', color: isDark ? '#f1f5f9' : '#0f172a' }}>
+                                    • {customerTitle}
+                                  </Text>
+                                </View>
+
+                                {o.items?.length ? (
+                                  <Text style={{ fontSize: 11, color: isDark ? '#94a3b8' : '#64748b' }} numberOfLines={1}>
+                                    🛒 {o.items.map((it) => `${it.name} (x${it.quantity})`).join(' • ')}
+                                  </Text>
+                                ) : (
+                                  <Text style={{ fontSize: 11, color: isDark ? '#64748b' : '#94a3b8' }} numberOfLines={1}>
+                                    📍 {o.shippingAddress || 'Không có địa chỉ chi tiết'}
+                                  </Text>
+                                )}
+                              </View>
+
+                              {/* CỘT PHẢI: TIỀN, TRẠNG THÁI, NÚT XEM */}
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                <View style={{ alignItems: 'flex-end' }}>
+                                  <Text style={{ fontSize: 14, fontWeight: '800', color: o.status === 'cancelled' ? '#dc2626' : '#0f172a', ...(isDark && o.status !== 'cancelled' ? { color: '#f1f5f9' } : {}) }}>
+                                    {formatPrice(Number(o.totalAmount) || 0)}
+                                  </Text>
+                                  <Text style={{ fontSize: 10, color: isDark ? '#64748b' : '#94a3b8' }}>
+                                    {o.paymentMethod === 'cod' ? 'COD' : o.paymentMethod?.toUpperCase()}
+                                  </Text>
+                                </View>
+
+                                <View style={[styles.statusTag, { backgroundColor: badge.bg, borderColor: badge.border, paddingVertical: 2, paddingHorizontal: 6 }]}>
+                                  <Text style={[styles.statusTagText, { color: badge.color, fontSize: 10 }]}>
+                                    {getStatusLabel(o.status)}
+                                  </Text>
+                                </View>
+
+                                <View style={{ width: 28, height: 28, borderRadius: 6, backgroundColor: isDark ? '#1e293b' : '#f1f5f9', alignItems: 'center', justifyContent: 'center' }}>
+                                  <Ionicons name="chevron-forward" size={14} color="#64748b" />
+                                </View>
+                              </View>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  ) : (
+                    /* EMPTY STATE KHI NGÀY ĐÓ CHƯA CÓ ĐƠN */
+                    <View style={{ alignItems: 'center', paddingVertical: 24, paddingHorizontal: 16 }}>
+                      <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: isDark ? '#1e293b' : '#f1f5f9', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
+                        <Ionicons name="receipt-outline" size={24} color={isDark ? '#64748b' : '#94a3b8'} />
+                      </View>
+                      <Text style={{ fontSize: 14, fontWeight: '700', color: isDark ? '#f1f5f9' : '#0f172a', marginBottom: 4 }}>
+                        Không có đơn hàng nào vào {displayDateLabel}
+                      </Text>
+                      <Text style={{ fontSize: 12, color: isDark ? '#94a3b8' : '#64748b', textAlign: 'center', maxWidth: 420, marginBottom: 12 }}>
+                        Không có giao dịch phát sinh vào ngày {`${tD}/${tM}/${tY}`}. Bạn có thể bấm chọn ngày hôm qua hoặc mốc ngày có phát sinh đơn hàng bên dưới để kiểm tra.
+                      </Text>
+
+                      {/* GỢI Ý CHUYỂN NHANH SANG NGÀY CÓ ĐƠN */}
+                      <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+                        {yesterdayCount > 0 && !isYesterday && (
+                          <Pressable
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              gap: 6,
+                              backgroundColor: '#2563eb',
+                              paddingHorizontal: 12,
+                              paddingVertical: 7,
+                              borderRadius: 8,
+                            }}
+                            onPress={() => setSelectedSpecificDate(yesterdayStr)}
+                          >
+                            <Ionicons name="time-outline" size={14} color="#ffffff" />
+                            <Text style={{ fontSize: 12, fontWeight: '700', color: '#ffffff' }}>
+                              Xem đơn Hôm qua ({yesterdayCount} đơn)
+                            </Text>
+                          </Pressable>
+                        )}
+
+                        {availableOrderDates.length > 0 && availableOrderDates[0].dateStr !== targetDateStr && (
+                          <Pressable
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              gap: 6,
+                              backgroundColor: isDark ? '#1e293b' : '#f1f5f9',
+                              borderWidth: 1,
+                              borderColor: isDark ? '#334155' : '#cbd5e1',
+                              paddingHorizontal: 12,
+                              paddingVertical: 7,
+                              borderRadius: 8,
+                            }}
+                            onPress={() => setSelectedSpecificDate(availableOrderDates[0].dateStr)}
+                          >
+                            <Ionicons name="calendar" size={14} color="#2563eb" />
+                            <Text style={{ fontSize: 12, fontWeight: '700', color: isDark ? '#f1f5f9' : '#0f172a' }}>
+                              Xem ngày gần nhất ({availableOrderDates[0].label} - {availableOrderDates[0].count} đơn)
+                            </Text>
+                          </Pressable>
+                        )}
+                      </View>
+                    </View>
+                  )}
+                </View>
+              );
+            })()}
 
             {/* ======================================================== */}
             {/* BÁO CÁO DOANH THU BÁN HÀNG THEO NGÀY / THÁNG / NĂM       */}
@@ -2909,6 +3449,18 @@ export default function AdminScreen() {
                           <Ionicons name="copy-outline" size={16} color="#7c3aed" />
                         </Pressable>
 
+                        {/* Quản lý IMEI / S/N máy trong kho */}
+                        <Pressable
+                          style={[styles.actionSquareBtn, { backgroundColor: '#f0fdf4' }]}
+                          onPress={() => {
+                            setUnitCodes(undefined);
+                            setUnitProduct({ id: p.id, name: p.name });
+                          }}
+                          accessibilityLabel="Quản lý IMEI và mã bảo hành"
+                        >
+                          <Ionicons name="barcode-outline" size={16} color="#059669" />
+                        </Pressable>
+
                         {/* Chỉnh sửa */}
                         <Pressable
                           style={[styles.actionSquareBtn, { backgroundColor: '#eff6ff' }]}
@@ -3074,6 +3626,16 @@ export default function AdminScreen() {
                             <Pressable style={styles.btnStockOut} onPress={() => handleInventoryAdjustment(p, 'out')}>
                               <Ionicons name="remove" size={15} color="#dc2626" />
                               <Text style={styles.btnStockOutText}>Xuất</Text>
+                            </Pressable>
+                            <Pressable
+                              style={[styles.btnManageUnits, isDark && styles.btnManageUnitsDark]}
+                              onPress={() => {
+                                setUnitCodes(undefined);
+                                setUnitProduct({ id: p.id, name: p.name });
+                              }}
+                            >
+                              <Ionicons name="barcode-outline" size={13} color="#2563eb" />
+                              <Text style={styles.btnManageUnitsText}>Mã máy / IMEI</Text>
                             </Pressable>
                           </View>
                         </View>
@@ -3563,6 +4125,73 @@ export default function AdminScreen() {
                       <Text style={[styles.itemTableSub, isDark && styles.textMutedDark, isMobile && { fontSize: 11 }]}>
                         Đơn giá: {formatPrice(item.price)}
                       </Text>
+
+                      {/* Mã BH / IMEI máy đã cấp cho đơn hàng */}
+                      <View style={styles.orderItemUnitsBox}>
+                        {item.deviceUnits && item.deviceUnits.length > 0 ? (
+                          item.deviceUnits.map((u: any, uIdx: number) => (
+                            <View key={uIdx} style={{ gap: 2, paddingBottom: uIdx < (item.deviceUnits?.length || 0) - 1 ? 4 : 0, borderBottomWidth: uIdx < (item.deviceUnits?.length || 0) - 1 ? 1 : 0, borderBottomColor: isDark ? '#334155' : '#e2e8f0' }}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                <Text style={{ fontSize: 10, color: isDark ? '#94a3b8' : '#64748b', fontWeight: '600' }}>Mã BH nội bộ:</Text>
+                                <Text selectable style={[styles.orderItemUnitsCode, isDark && { color: '#93c5fd' }]}>{u.code}</Text>
+                              </View>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                <Text style={{ fontSize: 10, color: isDark ? '#94a3b8' : '#64748b', fontWeight: '600' }}>IMEI / Serial hãng:</Text>
+                                {u.manufacturerSerial ? (
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                    <Ionicons name="lock-closed" size={11} color="#059669" />
+                                    <Text selectable style={{ fontSize: 11, fontWeight: '800', color: '#059669', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>
+                                      {u.manufacturerSerial}
+                                    </Text>
+                                    <View style={{ backgroundColor: '#dcfce7', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
+                                      <Text style={{ fontSize: 9, fontWeight: '700', color: '#059669' }}>Cố định</Text>
+                                    </View>
+                                  </View>
+                                ) : (
+                                  <Text style={{ fontSize: 11, fontStyle: 'italic', color: '#d97706' }}>
+                                    Chưa nhập tem máy
+                                  </Text>
+                                )}
+                              </View>
+                            </View>
+                          ))
+                        ) : (
+                          <View style={{ gap: 2 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                              <Text style={{ fontSize: 10, color: isDark ? '#94a3b8' : '#64748b', fontWeight: '600' }}>Mã BH nội bộ:</Text>
+                              <Text selectable style={[styles.orderItemUnitsCode, isDark && { color: '#93c5fd' }]}>{formatUnitCodes(item)}</Text>
+                            </View>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                              <Text style={{ fontSize: 10, color: isDark ? '#94a3b8' : '#64748b', fontWeight: '600' }}>IMEI / Serial hãng:</Text>
+                              <Text style={{ fontSize: 11, fontStyle: 'italic', color: '#d97706' }}>
+                                Chưa nhập tem máy
+                              </Text>
+                            </View>
+                          </View>
+                        )}
+
+                        {item.deviceUnits && item.deviceUnits.length > 0 && item.deviceUnits.every((u: any) => !!u.manufacturerSerial) ? (
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 4, backgroundColor: '#f0fdf4', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, alignSelf: 'flex-start' }}>
+                            <Ionicons name="lock-closed" size={12} color="#059669" />
+                            <Text style={{ fontSize: 11, fontWeight: '700', color: '#059669' }}>
+                              IMEI máy đã cố định & niêm phong theo đơn
+                            </Text>
+                          </View>
+                        ) : (
+                          <Pressable
+                            style={styles.btnInputOrderSerial}
+                            onPress={() => {
+                              setUnitCodes(item.serialNumbers);
+                              setUnitProduct({ id: item.productId, name: item.name });
+                            }}
+                          >
+                            <Ionicons name="barcode-outline" size={13} color="#2563eb" />
+                            <Text style={styles.btnInputOrderSerialText}>
+                              Gán IMEI/Serial từ tem máy (còn thiếu)
+                            </Text>
+                          </Pressable>
+                        )}
+                      </View>
                     </View>
                     <View style={{ alignItems: 'flex-end', flexShrink: 0 }}>
                       <Text style={[styles.itemTableQty, isDark && styles.textDark, isMobile && { fontSize: 11 }]}>x{item.quantity}</Text>
@@ -4505,6 +5134,22 @@ export default function AdminScreen() {
         onClose={() => setInvoiceModalVisible(false)}
         order={invoiceOrder}
       />
+
+      {/* ======================================================== */}
+      {/* MODAL 11: QUẢN LÝ MÃ MÁY & IMEI / SERIAL BẢO HÀNH        */}
+      {/* ======================================================== */}
+      <ProductUnitsModal
+        product={unitProduct}
+        codes={unitCodes}
+        isDark={isDark}
+        onClose={() => setUnitProduct(null)}
+        onSaved={() => {
+          loadData();
+          if (viewingOrder) {
+            apiService.getOrderById(viewingOrder.id).then(setViewingOrder).catch(() => {});
+          }
+        }}
+      />
     </View>
   );
 }
@@ -4594,6 +5239,20 @@ const styles = StyleSheet.create({
   },
   quickDatePillTextActive: {
     color: '#ffffff',
+  },
+  dateScrollNavBtn: {
+    width: 20,
+    height: 22,
+    borderRadius: 5,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  dateScrollNavBtnDark: {
+    backgroundColor: '#1e293b',
+    borderColor: '#334155',
   },
 
   revenueAnalyticsCard: {
@@ -6390,6 +7049,63 @@ const styles = StyleSheet.create({
     color: '#b91c1c',
     fontSize: 11,
     fontWeight: '800',
+  },
+  btnManageUnits: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    borderRadius: 8,
+    paddingHorizontal: 9,
+    paddingVertical: 8,
+  },
+  btnManageUnitsDark: {
+    backgroundColor: '#1e293b',
+    borderColor: '#334155',
+  },
+  btnManageUnitsText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#2563eb',
+  },
+  orderItemUnitsBox: {
+    marginTop: 6,
+    padding: 8,
+    backgroundColor: '#f8fafc',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    gap: 3,
+  },
+  orderItemUnitsTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  orderItemUnitsCode: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#1d4ed8',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    lineHeight: 16,
+  },
+  btnInputOrderSerial: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    alignSelf: 'flex-start',
+    marginTop: 3,
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  btnInputOrderSerialText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#2563eb',
   },
 
   /* CATEGORIES STYLES */

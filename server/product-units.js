@@ -21,12 +21,48 @@ function parseItems(items) {
   return typeof items === 'string' ? JSON.parse(items) : (items || []);
 }
 
+function generateSerial(productId) {
+  const p = String(productId || 'DPC').toLowerCase();
+  let prefix = 'SN-';
+  if (p.includes('lap') || p.includes('mac') || p.includes('rog') || p.includes('tuf') || p.includes('legion') || p.includes('nitro')) {
+    prefix = 'SN-LP-';
+  } else if (p.includes('vga') || p.includes('rtx') || p.includes('gtx') || p.includes('rx')) {
+    prefix = 'SN-VGA-';
+  } else if (p.includes('cpu') || p.includes('intel') || p.includes('ryzen') || p.includes('core')) {
+    prefix = 'SN-CPU-';
+  } else if (p.includes('ram') || p.includes('ddr')) {
+    prefix = 'SN-RAM-';
+  } else if (p.includes('ssd') || p.includes('hdd') || p.includes('nvme')) {
+    prefix = 'SN-SSD-';
+  } else if (p.includes('main') || p.includes('b760') || p.includes('z790') || p.includes('b650')) {
+    prefix = 'SN-MB-';
+  } else if (p.includes('mon') || p.includes('screen') || p.includes('display')) {
+    prefix = 'SN-MON-';
+  } else if (p.includes('mouse') || p.includes('chuot') || p.includes('dareu') || p.includes('logitech')) {
+    prefix = 'SN-MS-';
+  } else if (p.includes('key') || p.includes('phim')) {
+    prefix = 'SN-KB-';
+  } else {
+    const clean = p.replace(/[^a-z0-9]/g, '').slice(0, 3).toUpperCase() || 'DPC';
+    prefix = `SN-${clean}-`;
+  }
+  const rand = randomUUID().replace(/-/g, '').toUpperCase().slice(0, 8);
+  return `${prefix}${rand}`;
+}
+
 async function createUnits(connection, productId, count, status = 'available', orderId = null) {
-  const codes = Array.from({ length: count }, () => `BH-${randomUUID().replace(/-/g, '').toUpperCase()}`);
+  const unitsData = Array.from({ length: count }, () => ({
+    code: `BH-${randomUUID().replace(/-/g, '').toUpperCase()}`,
+    serial: generateSerial(productId),
+  }));
+  const codes = unitsData.map(u => u.code);
+
   // Bound query size for large inventories.
-  for (let start = 0; start < codes.length; start += 500) {
-    await connection.query('INSERT INTO product_units (code, productId, status, orderId) VALUES ?',
-      [codes.slice(start, start + 500).map(code => [code, productId, status, orderId])]);
+  for (let start = 0; start < unitsData.length; start += 500) {
+    await connection.query(
+      'INSERT INTO product_units (code, productId, manufacturerSerial, status, orderId) VALUES ?',
+      [unitsData.slice(start, start + 500).map(u => [u.code, productId, u.serial, status, orderId])]
+    );
   }
   return codes;
 }
@@ -106,6 +142,19 @@ async function initializeUnits(pool) {
     }
     const [products] = await connection.query('SELECT id FROM products ORDER BY id FOR UPDATE');
     for (const product of products) await syncStockUnits(connection, product.id);
+
+    // Tự động cấp IMEI / S/N cho các thiết bị còn thiếu serial trong kho & đơn hàng
+    const [emptySerials] = await connection.query(
+      "SELECT code, productId FROM product_units WHERE manufacturerSerial IS NULL OR manufacturerSerial = '' FOR UPDATE"
+    );
+    for (const row of emptySerials) {
+      const serial = generateSerial(row.productId);
+      await connection.query(
+        'UPDATE product_units SET manufacturerSerial = ? WHERE code = ?',
+        [serial, row.code]
+      );
+    }
+
     await connection.commit();
   } catch (error) {
     await connection.rollback();
@@ -116,4 +165,4 @@ async function initializeUnits(pool) {
   }
 }
 
-module.exports = { unitSchema, quantity, createUnits, syncStockUnits, allocateUnits, releaseOrderUnits, hydrateOrders, initializeUnits };
+module.exports = { unitSchema, quantity, generateSerial, createUnits, syncStockUnits, allocateUnits, releaseOrderUnits, hydrateOrders, initializeUnits };
