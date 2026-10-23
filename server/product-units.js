@@ -21,10 +21,24 @@ function parseItems(items) {
   return typeof items === 'string' ? JSON.parse(items) : (items || []);
 }
 
-function generateSerial(productId) {
-  const p = String(productId || 'DPC').toLowerCase();
+function generateSerial(productId, productName = '') {
+  const p = `${productId || ''} ${productName || ''}`.toLowerCase();
   let prefix = 'SN-';
-  if (p.includes('lap') || p.includes('mac') || p.includes('rog') || p.includes('tuf') || p.includes('legion') || p.includes('nitro')) {
+  if (p.includes('dell')) {
+    prefix = 'SN-DELL-';
+  } else if (p.includes('hp')) {
+    prefix = 'SN-HP-';
+  } else if (p.includes('thinkpad') || p.includes('lenovo')) {
+    prefix = 'SN-LNV-';
+  } else if (p.includes('asus') || p.includes('rog') || p.includes('tuf')) {
+    prefix = 'SN-ASUS-';
+  } else if (p.includes('acer') || p.includes('nitro') || p.includes('predator')) {
+    prefix = 'SN-ACER-';
+  } else if (p.includes('macbook') || p.includes('apple')) {
+    prefix = 'SN-APL-';
+  } else if (p.includes('msi')) {
+    prefix = 'SN-MSI-';
+  } else if (p.includes('lap') || p.includes('l360') || p.includes('latitude') || p.includes('inspiron')) {
     prefix = 'SN-LP-';
   } else if (p.includes('vga') || p.includes('rtx') || p.includes('gtx') || p.includes('rx')) {
     prefix = 'SN-VGA-';
@@ -69,7 +83,7 @@ async function createUnits(connection, productId, count, status = 'available', o
 
 // Caller must hold the product row lock inside a transaction.
 async function syncStockUnits(connection, productId) {
-  const [[product]] = await connection.query('SELECT stock FROM products WHERE id = ? FOR UPDATE', [productId]);
+  const [[product]] = await connection.query('SELECT stock, name FROM products WHERE id = ? FOR UPDATE', [productId]);
   if (!product) throw new Error('Không tìm thấy sản phẩm');
   const target = Number(product.stock);
   if (!Number.isSafeInteger(target) || target < 0) throw new Error('Tồn kho phải là số nguyên không âm');
@@ -100,13 +114,54 @@ async function releaseOrderUnits(connection, orderId) {
 
 async function hydrateOrders(connection, orders) {
   const parsed = orders.map(order => ({ ...order, items: parseItems(order.items) }));
-  const codes = [...new Set(parsed.flatMap(order => order.items.flatMap(item => item.serialNumbers || [])))];
-  if (!codes.length) return parsed;
-  const [units] = await connection.query('SELECT code, manufacturerSerial FROM product_units WHERE code IN (?)', [codes]);
-  const byCode = new Map(units.map(unit => [unit.code, unit]));
-  return parsed.map(order => ({ ...order, items: order.items.map(item => ({ ...item,
-    deviceUnits: (item.serialNumbers || []).map(code => ({ code, manufacturerSerial: byCode.get(code)?.manufacturerSerial || null })),
-  })) }));
+  const codes = [...new Set(parsed.flatMap(order => order.items.flatMap(item => item.serialNumbers || (item.serialNumber ? [item.serialNumber] : []))))];
+
+  let byCode = new Map();
+  if (codes.length) {
+    try {
+      const [units] = await connection.query('SELECT code, manufacturerSerial, productId FROM product_units WHERE code IN (?)', [codes]);
+      byCode = new Map(units.map(unit => [unit.code, unit]));
+    } catch {}
+  }
+
+  return parsed.map(order => ({
+    ...order,
+    items: order.items.map(item => {
+      const serialList = item.serialNumbers?.length
+        ? item.serialNumbers
+        : item.serialNumber
+        ? [item.serialNumber]
+        : [`SN-DPC-${order.id || Date.now().toString().slice(-6)}-1`];
+
+      const deviceUnits = serialList.map((code) => {
+        let mSerial = byCode.get(code)?.manufacturerSerial;
+        if (!mSerial) {
+          // Tự động sinh IMEI / Serial hãng cố định nếu chưa có
+          mSerial = generateSerial(item.productId, item.name);
+          // Ghi nhận vào MySQL product_units để lưu vĩnh viễn
+          if (byCode.has(code)) {
+            connection.query('UPDATE product_units SET manufacturerSerial = ? WHERE code = ?', [mSerial, code]).catch(() => {});
+          } else {
+            connection.query(
+              'INSERT INTO product_units (code, productId, manufacturerSerial, status, orderId) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE manufacturerSerial = VALUES(manufacturerSerial), orderId = VALUES(orderId)',
+              [code, item.productId || 'prod-001', mSerial, 'allocated', order.id]
+            ).catch(() => {});
+          }
+        }
+        return {
+          code,
+          manufacturerSerial: mSerial,
+        };
+      });
+
+      return {
+        ...item,
+        serialNumbers: serialList,
+        serialNumber: serialList[0],
+        deviceUnits,
+      };
+    })
+  }));
 }
 
 async function initializeUnits(pool) {

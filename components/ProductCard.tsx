@@ -67,9 +67,15 @@ export function ProductCard({ product }: { product: any }) {
           {product.name}
         </Text>
         <View style={styles.ratingRow}>
-          <Text style={styles.stars}>★★★★★</Text>
-          <Text style={styles.ratingNum}>{product.rating}</Text>
-          <Text style={styles.reviewCount}>({product.reviewCount})</Text>
+          {product.reviewCount && product.reviewCount > 0 ? (
+            <>
+              <Text style={styles.stars}>★★★★★</Text>
+              <Text style={styles.ratingNum}>{product.rating}</Text>
+              <Text style={styles.reviewCount}>({product.reviewCount})</Text>
+            </>
+          ) : (
+            <Text style={[styles.reviewCount, { color: '#16a34a', fontWeight: '700' }]}>✨ Mới lên kệ</Text>
+          )}
         </View>
         <View style={styles.priceBlock}>
           {product.oldPrice ? (

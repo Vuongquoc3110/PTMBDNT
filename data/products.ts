@@ -1332,6 +1332,14 @@ export function normalizeProductImages<T extends { id: string; name: string; cat
 
 export const formatPrice = (value: number) => `${value.toLocaleString('vi-VN')} ₫`;
 
+export const formatNumberWithDots = (value: string | number) => {
+  const str = String(value ?? '');
+  const digits = str.replace(/[^0-9]/g, '');
+  if (!digits) return '';
+  const cleanDigits = digits.length > 1 ? digits.replace(/^0+/, '') || '0' : digits;
+  return cleanDigits.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+};
+
 export const categories = [
   {
     "id": "accessories",

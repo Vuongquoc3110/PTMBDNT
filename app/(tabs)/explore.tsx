@@ -248,10 +248,11 @@ export default function OrdersTabScreen() {
       loadOrders(true);
     }, 4000);
 
-    // Đồng bộ tức thì giữa các tab (Cross-tab broadcast khi nhân viên/admin đổi trạng thái)
+    // Đồng bộ tức thì giữa các tab (Cross-tab broadcast khi khách đặt đơn mới hoặc nhân viên/admin đổi trạng thái)
     if (typeof window !== 'undefined') {
       const handleSync = () => loadOrders(true);
       window.addEventListener('focus', handleSync);
+      window.addEventListener('dpc_order_created', handleSync);
       window.addEventListener('dpc_order_updated', handleSync);
       let bc: BroadcastChannel | null = null;
       try {
@@ -261,6 +262,7 @@ export default function OrdersTabScreen() {
       return () => {
         clearInterval(interval);
         window.removeEventListener('focus', handleSync);
+        window.removeEventListener('dpc_order_created', handleSync);
         window.removeEventListener('dpc_order_updated', handleSync);
         if (bc) bc.close();
       };

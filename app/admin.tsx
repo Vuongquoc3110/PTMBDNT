@@ -19,10 +19,33 @@ import { AdminSupportPanel } from '@/components/admin/AdminSupportPanel';
 import { MonthlyReport } from '@/components/admin/MonthlyReport';
 import { InvoiceModal } from '@/components/InvoiceModal';
 import { ProductUnitsModal } from '@/components/ProductUnitsModal';
-import { formatUnitCodes } from '@/utils/deviceUnits';
+import { formatUnitCodes, ensureDeviceUnits } from '@/utils/deviceUnits';
+import { playNotificationSound } from '@/utils/sound';
 import { useAppContext } from '@/context/AppContext';
 import { formatPrice, getProductFallbackImage, isInvalidOrBlockedImageUrl } from '@/data/products';
 import { apiService, type Order, type User, type Voucher } from '@/services/api';
+
+function getOrderDateKey(dateVal: any): string {
+  if (!dateVal) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  if (dateVal instanceof Date && !isNaN(dateVal.getTime())) {
+    return `${dateVal.getFullYear()}-${pad(dateVal.getMonth() + 1)}-${pad(dateVal.getDate())}`;
+  }
+  const s = String(dateVal).trim();
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) {
+    const candidate = new Date(s.includes(' ') && !s.includes('T') ? s.replace(' ', 'T') : s);
+    if (!isNaN(candidate.getTime())) {
+      return `${candidate.getFullYear()}-${pad(candidate.getMonth() + 1)}-${pad(candidate.getDate())}`;
+    }
+    return `${m[1]}-${m[2]}-${m[3]}`;
+  }
+  const d = new Date(s);
+  if (!isNaN(d.getTime())) {
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  }
+  return '';
+}
 
 type AdminTab = 'overview' | 'products' | 'orders' | 'vouchers' | 'categories' | 'users' | 'inventory' | 'support' | 'reports';
 
@@ -116,6 +139,139 @@ const PRESET_PHOTOS = [
   { label: 'Tai nghe chụp tai', icon: '🎧', url: 'https://images.unsplash.com/photo-1546435770-a3e426bf472b?auto=format&fit=crop&w=800&q=80' },
 ];
 
+export interface SpecFieldDefinition {
+  key: string;
+  label: string;
+  placeholder: string;
+  example: string;
+}
+
+export const CATEGORY_SPECS_CONFIG: Record<string, { title: string; icon: string; fields: SpecFieldDefinition[] }> = {
+  laptop: {
+    title: 'Thông số kỹ thuật – Laptop',
+    icon: '💻',
+    fields: [
+      { key: 'CPU', label: 'CPU (Vi xử lý)', placeholder: 'VD: Intel Core i7-14700HX', example: 'Intel Core i7-14700HX' },
+      { key: 'RAM', label: 'RAM', placeholder: 'VD: 16GB DDR5 5600MHz', example: '16GB DDR5 5600MHz' },
+      { key: 'Ổ cứng', label: 'Ổ cứng', placeholder: 'VD: 1TB SSD NVMe PCIe 4.0', example: '1TB SSD NVMe PCIe 4.0' },
+      { key: 'Card đồ họa', label: 'Card đồ họa (GPU)', placeholder: 'VD: NVIDIA RTX 4060 8GB', example: 'NVIDIA GeForce RTX 4060 8GB' },
+      { key: 'Màn hình', label: 'Màn hình', placeholder: 'VD: 16 inch, 2.5K, 240Hz, 100% sRGB', example: '16 inch, 2.5K, 240Hz' },
+      { key: 'Hệ điều hành', label: 'Hệ điều hành', placeholder: 'VD: Windows 11 Home bản quyền', example: 'Windows 11 Home bản quyền' },
+      { key: 'Pin', label: 'Pin & Sạc', placeholder: 'VD: 90Wh, sạc nhanh 240W', example: '90Wh, sạc nhanh 240W' },
+      { key: 'Trọng lượng', label: 'Trọng lượng', placeholder: 'VD: 2.2 kg', example: '2.2 kg' },
+    ],
+  },
+  pc: {
+    title: 'Thông số kỹ thuật – PC / Máy để bàn',
+    icon: '🖥️',
+    fields: [
+      { key: 'CPU', label: 'CPU (Vi xử lý)', placeholder: 'VD: Intel Core i5-13400F', example: 'Intel Core i5-13400F (10 Nhân 16 Luồng)' },
+      { key: 'Mainboard', label: 'Bo mạch chủ (Mainboard)', placeholder: 'VD: B760M Gaming Plus WiFi', example: 'MSI B760M Gaming Plus WiFi' },
+      { key: 'RAM', label: 'RAM', placeholder: 'VD: 32GB (2x16GB) DDR5 6000MHz RGB', example: '32GB (2x16GB) DDR5 6000MHz' },
+      { key: 'Ổ cứng', label: 'Ổ cứng SSD', placeholder: 'VD: 1TB SSD NVMe M.2 Gen4', example: '1TB SSD NVMe PCIe Gen4' },
+      { key: 'Card đồ họa', label: 'Card đồ họa (VGA)', placeholder: 'VD: NVIDIA GeForce RTX 4070 12GB', example: 'NVIDIA GeForce RTX 4070 12GB' },
+      { key: 'Nguồn', label: 'Nguồn máy tính (PSU)', placeholder: 'VD: 750W 80 Plus Gold', example: '750W 80 Plus Gold' },
+      { key: 'Tản nhiệt', label: 'Tản nhiệt', placeholder: 'VD: Tản nước AIO 240mm ARGB', example: 'Tản nhiệt nước AIO 240mm ARGB' },
+      { key: 'Vỏ case', label: 'Vỏ case', placeholder: 'VD: Bể cá kính cường lực Panoramic', example: 'Bể cá kính cường lực Panoramic' },
+    ],
+  },
+  cpu: {
+    title: 'Thông số kỹ thuật – CPU (Vi xử lý)',
+    icon: '⚡',
+    fields: [
+      { key: 'Socket', label: 'Socket', placeholder: 'VD: LGA 1700 / AM5', example: 'LGA 1700' },
+      { key: 'Số nhân & Luồng', label: 'Số nhân / Số luồng', placeholder: 'VD: 16 nhân (8P + 8E), 24 luồng', example: '16 nhân, 24 luồng' },
+      { key: 'Xung nhịp', label: 'Xung nhịp cơ bản / Boost', placeholder: 'VD: 3.4 GHz - 5.4 GHz', example: '3.4 GHz Turbo 5.4 GHz' },
+      { key: 'Bộ nhớ đệm', label: 'Bộ nhớ đệm (Cache)', placeholder: 'VD: 33MB Intel Smart Cache', example: '33MB Cache' },
+      { key: 'Điện năng (TDP)', label: 'Công suất tiêu thụ (TDP)', placeholder: 'VD: 125W (Max 253W)', example: '125W (Max 253W)' },
+      { key: 'Đồ họa tích hợp', label: 'Đồ họa tích hợp (iGPU)', placeholder: 'VD: Intel UHD Graphics 770 / Không có', example: 'Intel UHD Graphics 770' },
+    ],
+  },
+  vga: {
+    title: 'Thông số kỹ thuật – Card màn hình (VGA)',
+    icon: '🎮',
+    fields: [
+      { key: 'Chipset', label: 'Chipset đồ họa', placeholder: 'VD: NVIDIA GeForce RTX 4070 Super', example: 'NVIDIA GeForce RTX 4070 Super' },
+      { key: 'Dung lượng VRAM', label: 'Dung lượng VRAM', placeholder: 'VD: 12GB GDDR6X 192-bit', example: '12GB GDDR6X 192-bit' },
+      { key: 'Xung nhịp Boost', label: 'Xung nhịp Boost', placeholder: 'VD: 2505 MHz (OC Mode: 2535 MHz)', example: '2505 MHz' },
+      { key: 'Cổng xuất hình', label: 'Cổng xuất hình', placeholder: 'VD: 3x DisplayPort 1.4a, 1x HDMI 2.1a', example: '3x DisplayPort 1.4a, 1x HDMI 2.1a' },
+      { key: 'Nguồn đề xuất', label: 'Nguồn đề xuất & Chân nguồn', placeholder: 'VD: 700W trở lên (1x 16-pin 12VHPWR)', example: '700W (1x 16-pin)' },
+      { key: 'Kích thước', label: 'Kích thước & Số khe cắm', placeholder: 'VD: 269 x 120 x 42 mm (2.5 slot)', example: '269 x 120 x 42 mm (2.5 slot)' },
+    ],
+  },
+  ram: {
+    title: 'Thông số kỹ thuật – Bộ nhớ RAM',
+    icon: '🧠',
+    fields: [
+      { key: 'Dung lượng', label: 'Dung lượng', placeholder: 'VD: 16GB (1x16GB) / 32GB (2x16GB)', example: '32GB (2x16GB)' },
+      { key: 'Chuẩn RAM', label: 'Chuẩn RAM', placeholder: 'VD: DDR5 / DDR4', example: 'DDR5' },
+      { key: 'Tốc độ Bus', label: 'Tốc độ Bus (MHz)', placeholder: 'VD: 5600MHz / 6000MHz', example: '6000MHz' },
+      { key: 'Độ trễ (Timing)', label: 'Độ trễ (Timing / CL)', placeholder: 'VD: CL30 / CL36', example: 'CL30-36-36-76' },
+      { key: 'Điện áp', label: 'Điện áp', placeholder: 'VD: 1.35V', example: '1.35V' },
+      { key: 'Tản nhiệt & LED', label: 'Tản nhiệt & LED', placeholder: 'VD: Nhôm nguyên khối, LED RGB đa vùng', example: 'Nhôm tản nhiệt, LED RGB' },
+    ],
+  },
+  ssd: {
+    title: 'Thông số kỹ thuật – Ổ cứng SSD',
+    icon: '💾',
+    fields: [
+      { key: 'Dung lượng', label: 'Dung lượng', placeholder: 'VD: 1TB / 2TB', example: '1TB' },
+      { key: 'Chuẩn kết nối', label: 'Chuẩn giao tiếp', placeholder: 'VD: M.2 NVMe PCIe Gen 4.0 x4', example: 'M.2 NVMe PCIe 4.0 x4' },
+      { key: 'Tốc độ đọc', label: 'Tốc độ đọc (Read)', placeholder: 'VD: Up to 7450 MB/s', example: '7450 MB/s' },
+      { key: 'Tốc độ ghi', label: 'Tốc độ ghi (Write)', placeholder: 'VD: Up to 6900 MB/s', example: '6900 MB/s' },
+      { key: 'Độ bền (TBW)', label: 'Độ bền (TBW)', placeholder: 'VD: 600 TBW', example: '600 TBW' },
+      { key: 'Kích thước', label: 'Form Factor', placeholder: 'VD: M.2 2280', example: 'M.2 2280' },
+    ],
+  },
+  monitor: {
+    title: 'Thông số kỹ thuật – Màn hình',
+    icon: '📺',
+    fields: [
+      { key: 'Kích thước', label: 'Kích thước màn hình', placeholder: 'VD: 27 inch / 32 inch', example: '27 inch' },
+      { key: 'Độ phân giải', label: 'Độ phân giải', placeholder: 'VD: 2K QHD (2560 x 1440)', example: '2K QHD (2560 x 1440)' },
+      { key: 'Tấm nền', label: 'Tấm nền (Panel)', placeholder: 'VD: Fast IPS / Nano IPS / OLED', example: 'Fast IPS' },
+      { key: 'Tần số quét', label: 'Tần số quét', placeholder: 'VD: 180Hz / 240Hz', example: '180Hz' },
+      { key: 'Thời gian đáp ứng', label: 'Thời gian phản hồi', placeholder: 'VD: 1ms (GTG)', example: '1ms (GTG)' },
+      { key: 'Độ phủ màu', label: 'Độ phủ màu & Độ sáng', placeholder: 'VD: 99% sRGB, 95% DCI-P3, 400 nits', example: '99% sRGB, 400 nits HDR400' },
+      { key: 'Cổng kết nối', label: 'Cổng xuất hình', placeholder: 'VD: 2x HDMI 2.0, 1x DP 1.4, Audio Out', example: '2x HDMI 2.0, 1x DP 1.4' },
+    ],
+  },
+  gear: {
+    title: 'Thông số kỹ thuật – Phụ kiện & Gaming Gear',
+    icon: '⌨️',
+    fields: [
+      { key: 'Kết nối', label: 'Phương thức kết nối', placeholder: 'VD: Không dây 2.4GHz + Bluetooth + Cáp Type-C', example: 'Wireless 2.4GHz / Bluetooth / Type-C' },
+      { key: 'Cảm biến / Switch', label: 'Cảm biến / Loại Switch', placeholder: 'VD: Cảm biến quang Focus Pro 30K / Switch cơ', example: 'Cảm biến quang 30K DPI' },
+      { key: 'Thời lượng pin', label: 'Thời lượng pin', placeholder: 'VD: Lên đến 80 giờ liên tục', example: '80 giờ liên tục' },
+      { key: 'Trọng lượng', label: 'Trọng lượng', placeholder: 'VD: 63g siêu nhẹ', example: '63g siêu nhẹ' },
+      { key: 'Đèn LED', label: 'Đèn LED', placeholder: 'VD: RGB 16.8 triệu màu Chroma', example: 'RGB 16.8 triệu màu' },
+      { key: 'Tương thích', label: 'Hệ thống tương thích', placeholder: 'VD: Windows, macOS, Android', example: 'Windows, macOS' },
+    ],
+  },
+};
+
+function getCategorySpecsTemplate(catId: string) {
+  const c = (catId || '').toLowerCase();
+  if (c.includes('lap') || c.includes('l360')) return CATEGORY_SPECS_CONFIG.laptop;
+  if (c.includes('pc')) return CATEGORY_SPECS_CONFIG.pc;
+  if (c.includes('cpu')) return CATEGORY_SPECS_CONFIG.cpu;
+  if (c.includes('vga') || c.includes('gpu')) return CATEGORY_SPECS_CONFIG.vga;
+  if (c.includes('ram')) return CATEGORY_SPECS_CONFIG.ram;
+  if (c.includes('ssd') || c.includes('hdd') || c.includes('storage')) return CATEGORY_SPECS_CONFIG.ssd;
+  if (c.includes('mon') || c.includes('screen') || c.includes('display')) return CATEGORY_SPECS_CONFIG.monitor;
+  return CATEGORY_SPECS_CONFIG.gear;
+}
+
+type ProductModalTab = 'basic' | 'specs' | 'pricing' | 'media' | 'display';
+
+const PRODUCT_MODAL_TABS: { id: ProductModalTab; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+  { id: 'basic', label: '1. Cơ bản', icon: 'information-circle-outline' },
+  { id: 'specs', label: '2. Cấu hình', icon: 'hardware-chip-outline' },
+  { id: 'pricing', label: '3. Giá & Kho', icon: 'pricetag-outline' },
+  { id: 'media', label: '4. Hình ảnh', icon: 'image-outline' },
+  { id: 'display', label: '5. Hiển thị', icon: 'eye-outline' },
+];
+
 export default function AdminScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
@@ -177,6 +333,15 @@ export default function AdminScreen() {
   // Product Modal
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<ProductItem | null>(null);
+  const [productModalTab, setProductModalTab] = useState<ProductModalTab>('basic');
+  const [productSpecsForm, setProductSpecsForm] = useState<Record<string, string>>({});
+  const [customSpecsList, setCustomSpecsList] = useState<Array<{ id: string; key: string; value: string }>>([]);
+  const [productFlags, setProductFlags] = useState({
+    isNew: true,
+    isHot: true,
+    isFeatured: false,
+    isHidden: false,
+  });
   const [productForm, setProductForm] = useState({
     id: '',
     name: '',
@@ -237,7 +402,29 @@ export default function AdminScreen() {
 
   // Bộ lọc phân tích doanh thu theo Ngày, Tháng, Năm
   const [revenuePeriod, setRevenuePeriod] = useState<'day' | 'month' | 'year' | 'all'>('all');
-  const [revenueChartMode, setRevenueChartMode] = useState<'day' | 'month' | 'year'>('day');
+  const [revenueChartMode, setRevenueChartMode] = useState<'day' | 'day_7' | 'day_30' | 'month' | 'year' | 'range'>('month');
+  const [chartSingleDate, setChartSingleDate] = useState<string>(() => {
+    const d = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  });
+  const [chartViewType, setChartViewType] = useState<'bar' | 'line'>('bar');
+  const [showYearDropdown, setShowYearDropdown] = useState<boolean>(false);
+  const [showDetailNotice, setShowDetailNotice] = useState<boolean>(true);
+  const [chartCustomMonth, setChartCustomMonth] = useState<number>(() => new Date().getMonth() + 1);
+  const [chartCustomYear, setChartCustomYear] = useState<number>(() => new Date().getFullYear());
+  const [chartRangeStart, setChartRangeStart] = useState<string>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 14);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  });
+  const [chartRangeEnd, setChartRangeEnd] = useState<string>(() => {
+    const d = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  });
+  const [chartTableOnlyActive, setChartTableOnlyActive] = useState<boolean>(false);
   const [revenueStatusMode, setRevenueStatusMode] = useState<'completed' | 'all_active'>('completed');
   const [selectedSpecificDate, setSelectedSpecificDate] = useState<string>(() => {
     const d = new Date();
@@ -351,9 +538,31 @@ export default function AdminScreen() {
         ? productsData
         : (await apiService.getProducts({ limit: 500 }).catch(() => [])) as ProductItem[];
 
-      const validOrders: Order[] = Array.isArray(ordersData)
-        ? ordersData
-        : await apiService.getOrders().catch(() => []);
+      // Hợp nhất đơn hàng từ MySQL và dpc_local_orders (đặt hàng khi offline/fallback) để không bao giờ bị sót đơn
+      let serverOrders: Order[] = Array.isArray(ordersData) ? ordersData : [];
+      let localSavedOrders: Order[] = [];
+      if (typeof window !== 'undefined' && window.localStorage) {
+        try {
+          const raw = window.localStorage.getItem('dpc_local_orders');
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) localSavedOrders = parsed;
+          }
+        } catch {}
+      }
+
+      const orderMap = new Map<string, Order>();
+      localSavedOrders.forEach((o) => {
+        const k = o.orderNumber || String(o.id);
+        orderMap.set(k, o);
+      });
+      serverOrders.forEach((o) => {
+        const k = o.orderNumber || String(o.id);
+        orderMap.set(k, o);
+      });
+      const validOrders: Order[] = Array.from(orderMap.values()).sort(
+        (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+      );
 
       const validCategories: CategoryItem[] = Array.isArray(categoriesData)
         ? categoriesData
@@ -371,7 +580,7 @@ export default function AdminScreen() {
 
       setStats({
         totalProducts: statsData?.totalProducts ?? validProducts.length,
-        totalOrders: statsData?.totalOrders ?? validOrders.length,
+        totalOrders: Math.max(statsData?.totalOrders ?? 0, validOrders.length),
         totalUsers: statsData?.totalUsers ?? validUsers.length,
         totalRevenue: String(totalRev),
       });
@@ -397,6 +606,83 @@ export default function AdminScreen() {
     }
   }, [isAdmin, loadData]);
 
+  // Đồng bộ đơn hàng thời gian thực: Polling ngầm mỗi 5 giây, BroadcastChannel & CustomEvent
+  useEffect(() => {
+    if (!isAdmin) return;
+
+    const syncOrdersSilently = async () => {
+      try {
+        const freshOrders = await apiService.request<Order[]>('/orders').catch(() => null);
+        let localSavedOrders: Order[] = [];
+        if (typeof window !== 'undefined' && window.localStorage) {
+          try {
+            const raw = window.localStorage.getItem('dpc_local_orders');
+            if (raw) {
+              const parsed = JSON.parse(raw);
+              if (Array.isArray(parsed)) localSavedOrders = parsed;
+            }
+          } catch {}
+        }
+        const serverList = Array.isArray(freshOrders) ? freshOrders : [];
+        const orderMap = new Map<string, Order>();
+        localSavedOrders.forEach((o) => {
+          const k = o.orderNumber || String(o.id);
+          orderMap.set(k, o);
+        });
+        serverList.forEach((o) => {
+          const k = o.orderNumber || String(o.id);
+          orderMap.set(k, o);
+        });
+        const merged = Array.from(orderMap.values()).sort(
+          (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+        );
+
+        setOrderList((prev) => {
+          if (prev.length !== merged.length || prev[0]?.orderNumber !== merged[0]?.orderNumber) {
+            if (prev.length > 0 && merged.length > prev.length) {
+              playNotificationSound();
+              showToast(`🔔 Vừa nhận thêm ${merged.length - prev.length} đơn hàng mới!`);
+            }
+            return merged;
+          }
+          return prev;
+        });
+      } catch {}
+    };
+
+    const interval = setInterval(syncOrdersSilently, 5000);
+
+    const handleOrderEvent = () => {
+      loadData();
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('dpc_order_created', handleOrderEvent);
+      window.addEventListener('dpc_order_updated', handleOrderEvent);
+      window.addEventListener('focus', handleOrderEvent);
+
+      let bc: BroadcastChannel | null = null;
+      try {
+        bc = new BroadcastChannel('dpc_order_sync');
+        bc.onmessage = (ev) => {
+          if (ev.data?.type === 'order_created' || ev.data?.type === 'order_updated') {
+            loadData();
+          }
+        };
+      } catch {}
+
+      return () => {
+        clearInterval(interval);
+        window.removeEventListener('dpc_order_created', handleOrderEvent);
+        window.removeEventListener('dpc_order_updated', handleOrderEvent);
+        window.removeEventListener('focus', handleOrderEvent);
+        if (bc) bc.close();
+      };
+    }
+
+    return () => clearInterval(interval);
+  }, [isAdmin, loadData]);
+
   // Số tin nhắn hỗ trợ đang chờ xử lý (hiển thị badge trên tab)
   const [supportPendingCount, setSupportPendingCount] = useState(0);
   useEffect(() => {
@@ -415,6 +701,15 @@ export default function AdminScreen() {
   const handleOpenAddProduct = () => {
     const autoId = `prod-${Date.now().toString().slice(-6)}`;
     setEditingProduct(null);
+    setProductModalTab('basic');
+    setProductSpecsForm({});
+    setCustomSpecsList([]);
+    setProductFlags({
+      isNew: true,
+      isHot: true,
+      isFeatured: false,
+      isHidden: false,
+    });
     setProductForm({
       id: autoId,
       name: '',
@@ -430,6 +725,7 @@ export default function AdminScreen() {
 
   const handleOpenEditProduct = (prod: ProductItem) => {
     setEditingProduct(prod);
+    setProductModalTab('basic');
     setProductForm({
       id: prod.id,
       name: prod.name,
@@ -440,12 +736,47 @@ export default function AdminScreen() {
       image: prod.image || '',
       description: prod.description || '',
     });
+    setProductFlags({
+      isNew: prod.isNew ?? true,
+      isHot: prod.isHot ?? true,
+      isFeatured: prod.isFeatured ?? false,
+      isHidden: prod.isHidden ?? false,
+    });
+
+    // Phân tích và tải cấu hình kỹ thuật vào form
+    let specs = prod.specifications || {};
+    if (typeof specs === 'string') {
+      try {
+        specs = JSON.parse(specs);
+      } catch {
+        specs = {};
+      }
+    }
+    const template = getCategorySpecsTemplate(prod.category_id || prod.category || 'laptop');
+    const templateKeys = new Set(template.fields.map((f) => f.key.toLowerCase()));
+    const standardSpecs: Record<string, string> = {};
+    const customList: Array<{ id: string; key: string; value: string }> = [];
+
+    Object.entries(specs).forEach(([k, v]) => {
+      const matchedField = template.fields.find(
+        (f) => f.key.toLowerCase() === k.toLowerCase() || f.label.toLowerCase() === k.toLowerCase()
+      );
+      if (matchedField) {
+        standardSpecs[matchedField.key] = String(v);
+      } else {
+        customList.push({ id: `c-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, key: k, value: String(v) });
+      }
+    });
+
+    setProductSpecsForm(standardSpecs);
+    setCustomSpecsList(customList);
     setIsProductModalOpen(true);
   };
 
   const handleDuplicateProduct = (prod: ProductItem) => {
     const newId = `prod-${Date.now().toString().slice(-6)}`;
     setEditingProduct(null);
+    setProductModalTab('basic');
     setProductForm({
       id: newId,
       name: `${prod.name} (Bản sao)`,
@@ -456,8 +787,96 @@ export default function AdminScreen() {
       image: prod.image || '',
       description: prod.description || '',
     });
+    setProductFlags({
+      isNew: true,
+      isHot: true,
+      isFeatured: false,
+      isHidden: false,
+    });
+    let dupSpecs = prod.specifications ? { ...prod.specifications } : {};
+    if (typeof prod.specifications === 'string') {
+      try {
+        dupSpecs = JSON.parse(prod.specifications);
+      } catch {
+        dupSpecs = {};
+      }
+    }
+    setProductSpecsForm(dupSpecs);
+    setCustomSpecsList([]);
     setIsProductModalOpen(true);
     showToast('Đã sao chép cấu hình sản phẩm');
+  };
+
+  // Helper thao tác cấu hình máy tính
+  const handleDemoFillSpecs = () => {
+    const template = getCategorySpecsTemplate(productForm.category_id);
+    const demoSpecs: Record<string, string> = { ...productSpecsForm };
+    template.fields.forEach((f) => {
+      demoSpecs[f.key] = f.example;
+    });
+    setProductSpecsForm(demoSpecs);
+    showToast(`Đã điền cấu hình mẫu cho "${template.title}"`);
+  };
+
+  const handleClearSpecs = () => {
+    setProductSpecsForm({});
+    setCustomSpecsList([]);
+    showToast('Đã làm trống thông số kỹ thuật');
+  };
+
+  const handleQuickFillSingleSpec = (key: string, exampleVal: string) => {
+    setProductSpecsForm((prev) => ({ ...prev, [key]: exampleVal }));
+  };
+
+  const handleAddCustomSpec = () => {
+    setCustomSpecsList((prev) => [
+      ...prev,
+      { id: `c-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, key: '', value: '' },
+    ]);
+  };
+
+  const handleRemoveCustomSpec = (id: string) => {
+    setCustomSpecsList((prev) => prev.filter((item) => item.id !== id));
+  };
+
+  const handleUpdateCustomSpec = (id: string, field: 'key' | 'value', text: string) => {
+    setCustomSpecsList((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, [field]: text } : item))
+    );
+  };
+
+  const handleGenerateDescriptionFromSpecs = () => {
+    const parts: string[] = [];
+    const template = getCategorySpecsTemplate(productForm.category_id);
+    template.fields.forEach((f) => {
+      const val = productSpecsForm[f.key];
+      if (val && val.trim()) {
+        parts.push(`${f.key}: ${val.trim()}`);
+      }
+    });
+    customSpecsList.forEach((c) => {
+      if (c.key && c.key.trim() && c.value && c.value.trim()) {
+        parts.push(`${c.key.trim()}: ${c.value.trim()}`);
+      }
+    });
+
+    if (parts.length === 0) {
+      showToast('Chưa có thông số nào được nhập để tạo mô tả');
+      return;
+    }
+    const generated = parts.join(' | ');
+    setProductForm((prev) => ({ ...prev, description: generated }));
+    showToast('✨ Đã tự động tạo mô tả từ cấu hình!');
+  };
+
+  const handleNavigateModalTab = (direction: 'next' | 'prev') => {
+    const tabKeys: ProductModalTab[] = ['basic', 'specs', 'pricing', 'media', 'display'];
+    const currentIndex = tabKeys.indexOf(productModalTab);
+    if (direction === 'next' && currentIndex < tabKeys.length - 1) {
+      setProductModalTab(tabKeys[currentIndex + 1]);
+    } else if (direction === 'prev' && currentIndex > 0) {
+      setProductModalTab(tabKeys[currentIndex - 1]);
+    }
   };
 
   const toggleProductVisibility = async (prod: ProductItem) => {
@@ -483,28 +902,47 @@ export default function AdminScreen() {
 
     if (!productForm.name.trim() || !productForm.price.trim()) {
       showToast('Vui lòng nhập tên và giá sản phẩm');
+      setProductModalTab('basic');
       return;
     }
     if (!editingProduct && !productForm.id.trim()) {
       showToast('Vui lòng nhập mã sản phẩm');
+      setProductModalTab('basic');
       return;
     }
     if (!editingProduct && productList.some((product) => product.id === productForm.id.trim())) {
       showToast('Mã sản phẩm đã tồn tại. Vui lòng tạo mã khác.');
+      setProductModalTab('basic');
       return;
     }
     if (!Number.isSafeInteger(priceNum) || priceNum <= 0) {
       showToast('Giá bán phải lớn hơn 0');
+      setProductModalTab('pricing');
       return;
     }
     if (productForm.oldPrice && (!Number.isSafeInteger(oldPriceNum) || oldPriceNum <= priceNum)) {
       showToast('Giá gốc phải lớn hơn giá bán để tạo khuyến mãi');
+      setProductModalTab('pricing');
       return;
     }
     if (!Number.isSafeInteger(stockNum) || stockNum < 0) {
       showToast('Số lượng tồn kho không được âm');
+      setProductModalTab('pricing');
       return;
     }
+
+    // Tổng hợp thông số kỹ thuật (chuẩn hóa các trường rỗng)
+    const finalSpecs: Record<string, string> = {};
+    Object.entries(productSpecsForm).forEach(([k, v]) => {
+      if (v && v.trim()) {
+        finalSpecs[k.trim()] = v.trim();
+      }
+    });
+    customSpecsList.forEach((item) => {
+      if (item.key && item.key.trim() && item.value && item.value.trim()) {
+        finalSpecs[item.key.trim()] = item.value.trim();
+      }
+    });
 
     const payload = {
       name: productForm.name.trim(),
@@ -513,11 +951,14 @@ export default function AdminScreen() {
       oldPrice: oldPriceNum || null,
       discount: oldPriceNum > priceNum ? Math.round((1 - priceNum / oldPriceNum) * 100) : 0,
       isSale: oldPriceNum > priceNum,
-      isNew: true,
-      isHot: true,
+      isNew: productFlags.isNew,
+      isHot: productFlags.isHot,
+      isFeatured: productFlags.isFeatured,
+      isHidden: productFlags.isHidden,
       stock: stockNum,
       image: productForm.image.trim() || DEFAULT_IMAGE,
       description: productForm.description.trim(),
+      specifications: finalSpecs,
     };
 
     try {
@@ -535,9 +976,8 @@ export default function AdminScreen() {
         const newProduct = {
           id: productForm.id.trim(),
           ...payload,
-          isNew: true,
           rating: 5,
-          reviewCount: 1,
+          reviewCount: 0,
           createdAt: new Date().toISOString(),
         };
         await apiService.createProduct(newProduct);
@@ -1438,10 +1878,9 @@ export default function AdminScreen() {
     completedOrders.forEach((o) => {
       const amt = Number(o.totalAmount) || 0;
       totalAll += amt;
-      const oDate = o.createdAt ? new Date(o.createdAt) : new Date();
-      const dStr = `${oDate.getFullYear()}-${pad(oDate.getMonth() + 1)}-${pad(oDate.getDate())}`;
-      const mStr = `${oDate.getFullYear()}-${pad(oDate.getMonth() + 1)}`;
-      const yStr = String(oDate.getFullYear());
+      const dStr = getOrderDateKey(o.createdAt);
+      const mStr = dStr ? dStr.slice(0, 7) : `${now.getFullYear()}-${pad(now.getMonth() + 1)}`;
+      const yStr = dStr ? dStr.slice(0, 4) : String(now.getFullYear());
 
       // Ngày
       if (dStr === todayStr) {
@@ -1464,7 +1903,7 @@ export default function AdminScreen() {
       }
 
       // Năm
-      if (oDate.getFullYear() === thisYear) {
+      if (yStr === String(thisYear)) {
         yearRevenue += amt;
         yearCount += 1;
       }
@@ -1497,13 +1936,13 @@ export default function AdminScreen() {
 
   // Danh sách các ngày thực tế có phát sinh đơn hàng để chọn nhanh
   const availableOrderDates = useMemo(() => {
-    const pad = (n: number) => String(n).padStart(2, '0');
     const map = new Map<string, { dateStr: string; label: string; fullDate: string; count: number }>();
     orderList.forEach((o) => {
-      const d = o.createdAt ? new Date(o.createdAt) : new Date();
-      const dStr = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-      const label = `${pad(d.getDate())}/${pad(d.getMonth() + 1)}`;
-      const fullDate = `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+      const dStr = getOrderDateKey(o.createdAt);
+      if (!dStr) return;
+      const [y, m, d] = dStr.split('-');
+      const label = `${d}/${m}`;
+      const fullDate = `${d}/${m}/${y}`;
       const existing = map.get(dStr);
       if (existing) {
         existing.count += 1;
@@ -1514,8 +1953,287 @@ export default function AdminScreen() {
     return Array.from(map.values()).sort((a, b) => b.dateStr.localeCompare(a.dateStr));
   }, [orderList]);
 
-  const currentPeriodRevenue = useMemo(() => {
+  // Danh sách các năm để chọn nhanh trên biểu đồ (luôn có sẵn dải năm từ quá khứ đến tương lai)
+  const availableChartYears = useMemo(() => {
+    const years = new Set<number>();
+    const currentYear = new Date().getFullYear();
+    // Tạo sẵn dải năm từ currentYear - 4 đến currentYear + 2 (ví dụ: 2022 -> 2028)
+    for (let y = Math.min(2022, currentYear - 4); y <= currentYear + 2; y++) {
+      years.add(y);
+    }
+    orderList.forEach((o) => {
+      const dStr = getOrderDateKey(o.createdAt);
+      if (dStr) {
+        const yr = parseInt(dStr.slice(0, 4), 10);
+        if (!isNaN(yr)) years.add(yr);
+      }
+    });
+    return Array.from(years).sort((a, b) => b - a);
+  }, [orderList]);
+
+  // Dữ liệu biểu đồ doanh thu theo tùy chọn động (theo ngày, 7 ngày, 30 ngày, theo tháng, theo năm, khoảng ngày)
+  const revenueChartData = useMemo(() => {
     const pad = (n: number) => String(n).padStart(2, '0');
+    const now = new Date();
+    const completedOrders = orderList.filter((o) => o.status === 'completed');
+
+    // Gom đơn completed theo ngày: map "YYYY-MM-DD" -> { revenue, count }
+    const ordersByDate = new Map<string, { revenue: number; count: number }>();
+    completedOrders.forEach((o) => {
+      const dStr = getOrderDateKey(o.createdAt);
+      if (!dStr) return;
+      const amt = Number(o.totalAmount) || 0;
+      const cur = ordersByDate.get(dStr) || { revenue: 0, count: 0 };
+      cur.revenue += amt;
+      cur.count += 1;
+      ordersByDate.set(dStr, cur);
+    });
+
+    let chartList: {
+      label: string;
+      dateKey: string;
+      fullDate: string;
+      fullMonth?: string;
+      fullYear?: string;
+      revenue: number;
+      count: number;
+    }[] = [];
+
+    let periodTitle = '';
+    let periodSubtitle = '';
+
+    if (revenueChartMode === 'day') {
+      // 12 khung giờ trong ngày, mỗi khung 2 tiếng
+      const hoursSlots = [
+        { label: '00:00 - 02:00', shortLabel: '0h-2h', startH: 0, endH: 2 },
+        { label: '02:00 - 04:00', shortLabel: '2h-4h', startH: 2, endH: 4 },
+        { label: '04:00 - 06:00', shortLabel: '4h-6h', startH: 4, endH: 6 },
+        { label: '06:00 - 08:00', shortLabel: '6h-8h', startH: 6, endH: 8 },
+        { label: '08:00 - 10:00', shortLabel: '8h-10h', startH: 8, endH: 10 },
+        { label: '10:00 - 12:00', shortLabel: '10h-12h', startH: 10, endH: 12 },
+        { label: '12:00 - 14:00', shortLabel: '12h-14h', startH: 12, endH: 14 },
+        { label: '14:00 - 16:00', shortLabel: '14h-16h', startH: 14, endH: 16 },
+        { label: '16:00 - 18:00', shortLabel: '16h-18h', startH: 16, endH: 18 },
+        { label: '18:00 - 20:00', shortLabel: '18h-20h', startH: 18, endH: 20 },
+        { label: '20:00 - 22:00', shortLabel: '20h-22h', startH: 20, endH: 22 },
+        { label: '22:00 - 24:00', shortLabel: '22h-24h', startH: 22, endH: 24 },
+      ];
+
+      const dayOrders = completedOrders.filter((o) => {
+        return getOrderDateKey(o.createdAt) === chartSingleDate;
+      });
+
+      hoursSlots.forEach((slot) => {
+        let slotRev = 0;
+        let slotCnt = 0;
+        dayOrders.forEach((o) => {
+          const d = new Date(o.createdAt);
+          const h = !isNaN(d.getTime()) ? d.getHours() : 12;
+          if (h >= slot.startH && h < slot.endH) {
+            slotRev += Number(o.totalAmount) || 0;
+            slotCnt += 1;
+          }
+        });
+        chartList.push({
+          label: slot.shortLabel,
+          dateKey: `${chartSingleDate}_${slot.startH}`,
+          fullDate: `${slot.label}`,
+          revenue: slotRev,
+          count: slotCnt,
+        });
+      });
+
+      const [sy, sm, sd] = (chartSingleDate || '').split('-');
+      periodTitle = `Ngày ${sd || '??'}/${sm || '??'}/${sy || '????'}`;
+      periodSubtitle = `Thống kê 24 giờ ngày ${sd || '??'}/${sm || '??'}/${sy || '????'} (${dayOrders.length} đơn hoàn tất)`;
+    } else if (revenueChartMode === 'day_7') {
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(now);
+        d.setDate(d.getDate() - i);
+        const dStr = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+        const stat = ordersByDate.get(dStr) || { revenue: 0, count: 0 };
+        chartList.push({
+          label: `${pad(d.getDate())}/${pad(d.getMonth() + 1)}`,
+          dateKey: dStr,
+          fullDate: `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`,
+          revenue: stat.revenue,
+          count: stat.count,
+        });
+      }
+      periodTitle = '7 Ngày gần nhất';
+      periodSubtitle = `Thống kê 7 ngày từ ${chartList[0]?.label} đến ${chartList[chartList.length - 1]?.label}`;
+    } else if (revenueChartMode === 'day_30') {
+      for (let i = 29; i >= 0; i--) {
+        const d = new Date(now);
+        d.setDate(d.getDate() - i);
+        const dStr = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+        const stat = ordersByDate.get(dStr) || { revenue: 0, count: 0 };
+        chartList.push({
+          label: `${pad(d.getDate())}/${pad(d.getMonth() + 1)}`,
+          dateKey: dStr,
+          fullDate: `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`,
+          revenue: stat.revenue,
+          count: stat.count,
+        });
+      }
+      periodTitle = '30 Ngày qua';
+      periodSubtitle = `Thống kê 30 ngày từ ${chartList[0]?.label} đến ${chartList[chartList.length - 1]?.label}`;
+    } else if (revenueChartMode === 'month') {
+      const daysInMonth = new Date(chartCustomYear, chartCustomMonth, 0).getDate();
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dStr = `${chartCustomYear}-${pad(chartCustomMonth)}-${pad(day)}`;
+        const stat = ordersByDate.get(dStr) || { revenue: 0, count: 0 };
+        chartList.push({
+          label: `${pad(day)}/${pad(chartCustomMonth)}`,
+          dateKey: dStr,
+          fullDate: `${pad(day)}/${pad(chartCustomMonth)}/${chartCustomYear}`,
+          revenue: stat.revenue,
+          count: stat.count,
+        });
+      }
+      periodTitle = `Tháng ${chartCustomMonth}/${chartCustomYear}`;
+      periodSubtitle = `Thống kê doanh thu ${daysInMonth} ngày của Tháng ${chartCustomMonth}/${chartCustomYear}`;
+    } else if (revenueChartMode === 'year') {
+      for (let m = 1; m <= 12; m++) {
+        const mStr = `${chartCustomYear}-${pad(m)}`;
+        let monthRev = 0;
+        let monthCnt = 0;
+        completedOrders.forEach((o) => {
+          const dStr = getOrderDateKey(o.createdAt);
+          if (dStr && dStr.startsWith(mStr)) {
+            monthRev += Number(o.totalAmount) || 0;
+            monthCnt += 1;
+          }
+        });
+        chartList.push({
+          label: `Tháng ${m}`,
+          dateKey: mStr,
+          fullDate: `Tháng ${m}/${chartCustomYear}`,
+          fullMonth: `Tháng ${m}/${chartCustomYear}`,
+          revenue: monthRev,
+          count: monthCnt,
+        });
+      }
+      periodTitle = `Năm ${chartCustomYear}`;
+      periodSubtitle = `Biểu đồ 12 tháng của Năm ${chartCustomYear}`;
+    } else if (revenueChartMode === 'range') {
+      let start = chartRangeStart;
+      let end = chartRangeEnd;
+      if (start > end) {
+        const tmp = start;
+        start = end;
+        end = tmp;
+      }
+      const [sy, sm, sd] = start.split('-').map(Number);
+      const [ey, em, ed] = end.split('-').map(Number);
+      const cur = new Date(sy, sm - 1, sd);
+      const last = new Date(ey, em - 1, ed);
+
+      let guard = 0;
+      while (cur <= last && guard < 180) {
+        guard++;
+        const dStr = `${cur.getFullYear()}-${pad(cur.getMonth() + 1)}-${pad(cur.getDate())}`;
+        const stat = ordersByDate.get(dStr) || { revenue: 0, count: 0 };
+        chartList.push({
+          label: `${pad(cur.getDate())}/${pad(cur.getMonth() + 1)}`,
+          dateKey: dStr,
+          fullDate: `${pad(cur.getDate())}/${pad(cur.getMonth() + 1)}/${cur.getFullYear()}`,
+          revenue: stat.revenue,
+          count: stat.count,
+        });
+        cur.setDate(cur.getDate() + 1);
+      }
+      periodTitle = 'Khoảng ngày tùy chọn';
+      periodSubtitle = `Từ ${chartList[0]?.fullDate || start} đến ${chartList[chartList.length - 1]?.fullDate || end} (${chartList.length} ngày)`;
+    }
+
+    const maxRevenue = Math.max(...chartList.map((c) => c.revenue), 0);
+    const totalPeriodRev = chartList.reduce((sum, c) => sum + c.revenue, 0);
+    const totalPeriodOrders = chartList.reduce((sum, c) => sum + c.count, 0);
+    const aovPeriod = totalPeriodOrders > 0 ? Math.round(totalPeriodRev / totalPeriodOrders) : 0;
+    const activeCount = chartList.filter((c) => c.revenue > 0 || c.count > 0).length;
+
+    let peakItem = chartList[0];
+    for (const item of chartList) {
+      if (item.revenue > (peakItem?.revenue || 0)) {
+        peakItem = item;
+      }
+    }
+    const peakRevenue = peakItem?.revenue || 0;
+    const peakDate = peakRevenue > 0 ? (peakItem?.fullDate || peakItem?.label) : '--';
+
+    // Tính kỳ trước để so sánh tăng trưởng %
+    let prevRev = 0;
+    let prevOrders = 0;
+    if (revenueChartMode === 'day') {
+      const [sy, sm, sd] = (chartSingleDate || '').split('-').map(Number);
+      const prevD = new Date(sy, sm - 1, sd);
+      prevD.setDate(prevD.getDate() - 1);
+      const prevDStr = `${prevD.getFullYear()}-${pad(prevD.getMonth() + 1)}-${pad(prevD.getDate())}`;
+      completedOrders.forEach((o) => {
+        if (getOrderDateKey(o.createdAt) === prevDStr) {
+          prevRev += Number(o.totalAmount) || 0;
+          prevOrders += 1;
+        }
+      });
+    } else if (revenueChartMode === 'month') {
+      const prevM = chartCustomMonth === 1 ? 12 : chartCustomMonth - 1;
+      const prevY = chartCustomMonth === 1 ? chartCustomYear - 1 : chartCustomYear;
+      const prevMStr = `${prevY}-${pad(prevM)}`;
+      completedOrders.forEach((o) => {
+        const dStr = getOrderDateKey(o.createdAt);
+        if (dStr && dStr.startsWith(prevMStr)) {
+          prevRev += Number(o.totalAmount) || 0;
+          prevOrders += 1;
+        }
+      });
+    } else if (revenueChartMode === 'year') {
+      const prevYStr = `${chartCustomYear - 1}`;
+      completedOrders.forEach((o) => {
+        const dStr = getOrderDateKey(o.createdAt);
+        if (dStr && dStr.startsWith(prevYStr)) {
+          prevRev += Number(o.totalAmount) || 0;
+          prevOrders += 1;
+        }
+      });
+    } else if (revenueChartMode === 'day_7' || revenueChartMode === 'day_30') {
+      const days = revenueChartMode === 'day_7' ? 7 : 30;
+      for (let i = days * 2 - 1; i >= days; i--) {
+        const d = new Date(now);
+        d.setDate(d.getDate() - i);
+        const dStr = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+        const stat = ordersByDate.get(dStr);
+        if (stat) {
+          prevRev += stat.revenue;
+          prevOrders += stat.count;
+        }
+      }
+    }
+
+    const revGrowthPct = prevRev > 0
+      ? Math.round(((totalPeriodRev - prevRev) / prevRev) * 100)
+      : (totalPeriodRev > 0 ? 100 : 0);
+    const ordersGrowthPct = prevOrders > 0
+      ? Math.round(((totalPeriodOrders - prevOrders) / prevOrders) * 100)
+      : (totalPeriodOrders > 0 ? 100 : 0);
+
+    return {
+      chartList,
+      periodTitle,
+      periodSubtitle,
+      maxRevenue,
+      totalPeriodRev,
+      totalPeriodOrders,
+      aovPeriod,
+      activeCount,
+      peakRevenue,
+      peakDate,
+      revGrowthPct,
+      ordersGrowthPct,
+    };
+  }, [revenueChartMode, chartSingleDate, chartCustomMonth, chartCustomYear, chartRangeStart, chartRangeEnd, orderList]);
+
+  const currentPeriodRevenue = useMemo(() => {
     const targetOrders = orderList.filter((o) => {
       if (revenueStatusMode === 'completed') {
         return o.status === 'completed';
@@ -1525,9 +2243,7 @@ export default function AdminScreen() {
 
     if (revenuePeriod === 'day') {
       const dayOrders = targetOrders.filter((o) => {
-        const d = o.createdAt ? new Date(o.createdAt) : new Date();
-        const dStr = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-        return dStr === selectedSpecificDate;
+        return getOrderDateKey(o.createdAt) === selectedSpecificDate;
       });
       const amount = dayOrders.reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0);
       const [y, m, d] = (selectedSpecificDate || '').split('-');
@@ -1541,8 +2257,10 @@ export default function AdminScreen() {
 
     if (revenuePeriod === 'month') {
       const monthOrders = targetOrders.filter((o) => {
-        const d = o.createdAt ? new Date(o.createdAt) : new Date();
-        return (d.getMonth() + 1) === selectedSpecificMonth && d.getFullYear() === selectedSpecificYear;
+        const dStr = getOrderDateKey(o.createdAt);
+        if (!dStr) return false;
+        const [y, m] = dStr.split('-');
+        return Number(m) === selectedSpecificMonth && Number(y) === selectedSpecificYear;
       });
       const amount = monthOrders.reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0);
       return {
@@ -1555,8 +2273,10 @@ export default function AdminScreen() {
 
     if (revenuePeriod === 'year') {
       const yearOrders = targetOrders.filter((o) => {
-        const d = o.createdAt ? new Date(o.createdAt) : new Date();
-        return d.getFullYear() === selectedSpecificYear;
+        const dStr = getOrderDateKey(o.createdAt);
+        if (!dStr) return false;
+        const [y] = dStr.split('-');
+        return Number(y) === selectedSpecificYear;
       });
       const amount = yearOrders.reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0);
       return {
@@ -1679,58 +2399,70 @@ export default function AdminScreen() {
       ) : null}
 
       {/* ADMIN HEADER CAO CẤP */}
-      <View style={[styles.header, isDark && styles.headerDark]}>
-        <View style={styles.headerLeft}>
+      <View style={[styles.header, isMobile && styles.headerMobile, isDark && styles.headerDark]}>
+        <View style={[styles.headerLeft, isMobile && styles.headerLeftMobile]}>
           <Pressable style={[styles.backBtn, isDark && styles.backBtnDark]} onPress={() => router.push('/(tabs)' as any)}>
             <Ionicons name="storefront-outline" size={19} color={isDark ? '#38bdf8' : '#2563eb'} />
             {isDesktop && <Text style={[styles.backBtnText, isDark && { color: '#38bdf8' }]}>Cửa hàng</Text>}
           </Pressable>
 
-          <View style={styles.brandGroup}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <View style={[styles.brandGroup, isMobile && { flex: 1, minWidth: 0 }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <Text style={[styles.headerBrand, isDark && styles.textDark]}>DANGVINHPC</Text>
               <View style={styles.adminBadge}>
                 <View style={styles.badgePulseDot} />
                 <Text style={styles.adminBadgeText}>ADMIN PORTAL</Text>
               </View>
             </View>
-            <Text style={[styles.headerSubtitle, isDark && styles.textMutedDark]}>
+            <Text style={[styles.headerSubtitle, isDark && styles.textMutedDark]} numberOfLines={1}>
               Hệ thống quản trị kinh doanh linh kiện máy tính cao cấp
             </Text>
           </View>
+
+          {isMobile && (
+            <Pressable
+              style={[styles.logoutBtn, isDark && styles.logoutBtnDark, { paddingHorizontal: 10, paddingVertical: 8 }]}
+              onPress={() => setLogoutModalVisible(true)}
+              accessibilityLabel="Đăng xuất tài khoản Admin"
+            >
+              <Ionicons name="log-out-outline" size={17} color="#dc2626" />
+            </Pressable>
+          )}
         </View>
 
-        <View style={styles.headerActions}>
+        <View style={[styles.headerActions, isMobile && styles.headerActionsMobile]}>
           <Pressable
-            style={[styles.refreshBtn, { backgroundColor: '#f0fdf4', borderColor: '#bbf7d0' }]}
+            style={[styles.refreshBtn, { backgroundColor: '#f0fdf4', borderColor: '#bbf7d0' }, isMobile && styles.headerActionBtnMobile]}
             onPress={() => router.push('/staff' as any)}
           >
-            <Ionicons name="id-card-outline" size={17} color="#16a34a" />
-            <Text style={[styles.refreshBtnText, { color: '#16a34a' }]}>Cổng Nhân viên</Text>
+            <Ionicons name="id-card-outline" size={16} color="#16a34a" />
+            <Text style={[styles.refreshBtnText, { color: '#16a34a' }, isMobile && { fontSize: 11 }]}>{isMobile ? 'Nhân viên' : 'Cổng Nhân viên'}</Text>
           </Pressable>
 
-          <Pressable style={[styles.refreshBtn, isDark && styles.refreshBtnDark]} onPress={loadData} disabled={loading}>
-            <Ionicons name="sync-outline" size={17} color={isDark ? '#38bdf8' : '#2563eb'} />
-            <Text style={[styles.refreshBtnText, isDark && { color: '#38bdf8' }]}>Làm mới</Text>
+          <Pressable style={[styles.refreshBtn, isDark && styles.refreshBtnDark, isMobile && styles.headerActionBtnMobile]} onPress={loadData} disabled={loading}>
+            <Ionicons name="sync-outline" size={16} color={isDark ? '#38bdf8' : '#2563eb'} />
+            <Text style={[styles.refreshBtnText, isDark && { color: '#38bdf8' }, isMobile && { fontSize: 11 }]}>Làm mới</Text>
           </Pressable>
 
-          <Pressable style={styles.addPrimaryBtn} onPress={handleOpenAddProduct}>
-            <Ionicons name="add-circle" size={19} color="#ffffff" />
-            <Text style={styles.addPrimaryBtnText}>Thêm sản phẩm</Text>
+          <Pressable style={[styles.addPrimaryBtn, isMobile && styles.headerActionBtnMobile, isMobile && { flex: 1.2 }]} onPress={handleOpenAddProduct}>
+            <Ionicons name="add-circle" size={18} color="#ffffff" />
+            <Text style={[styles.addPrimaryBtnText, isMobile && { fontSize: 12 }]}>{isMobile ? 'Thêm SP' : 'Thêm sản phẩm'}</Text>
           </Pressable>
 
-          <Pressable
-            style={[styles.logoutBtn, isDark && styles.logoutBtnDark]}
-            onPress={() => setLogoutModalVisible(true)}
-            accessibilityLabel="Đăng xuất tài khoản Admin"
-          >
-            <Ionicons name="log-out-outline" size={17} color="#dc2626" />
-            {isDesktop && <Text style={styles.logoutBtnText}>Đăng xuất</Text>}
-          </Pressable>
+          {!isMobile && (
+            <Pressable
+              style={[styles.logoutBtn, isDark && styles.logoutBtnDark]}
+              onPress={() => setLogoutModalVisible(true)}
+              accessibilityLabel="Đăng xuất tài khoản Admin"
+            >
+              <Ionicons name="log-out-outline" size={17} color="#dc2626" />
+              {isDesktop && <Text style={styles.logoutBtnText}>Đăng xuất</Text>}
+            </Pressable>
+          )}
         </View>
       </View>
 
-      <ScrollView style={styles.contentScroll} contentContainerStyle={styles.contentContainer} showsVerticalScrollIndicator={false}>
+      <ScrollView style={styles.contentScroll} contentContainerStyle={[styles.contentContainer, isMobile && styles.contentContainerMobile]} showsVerticalScrollIndicator={false}>
         {/* BANNER BÁO LỖI NẾU CÓ */}
         {loadError ? (
           <View style={[styles.loadErrorBanner, isDark && styles.loadErrorBannerDark]}>
@@ -1746,12 +2478,12 @@ export default function AdminScreen() {
         ) : null}
 
         {/* STATS OVERVIEW CARDS (KPIs) */}
-        <View style={styles.statsGrid}>
+        <View style={[styles.statsGrid, isMobile && styles.statsGridMobile]}>
           {/* Doanh thu */}
-          <View style={[styles.statCard, isDark && styles.cardDark, { borderLeftColor: '#2563eb' }]}>
-            <View style={styles.statHeaderRow}>
-              <View style={[styles.statIconWrap, { backgroundColor: '#eff6ff' }]}>
-                <Ionicons name="wallet-outline" size={22} color="#2563eb" />
+          <View style={[styles.statCard, isMobile && styles.statCardMobile, isDark && styles.cardDark, { borderLeftColor: '#2563eb' }]}>
+            <View style={[styles.statHeaderRow, isMobile && styles.statHeaderRowMobile]}>
+              <View style={[styles.statIconWrap, isMobile && { width: 38, height: 38, borderRadius: 10 }, { backgroundColor: '#eff6ff' }]}>
+                <Ionicons name="wallet-outline" size={isMobile ? 19 : 22} color="#2563eb" />
               </View>
               <View style={{ flexDirection: 'row', gap: 4, flexWrap: 'wrap' }}>
                 {[
@@ -1775,7 +2507,7 @@ export default function AdminScreen() {
                 })}
               </View>
             </View>
-            <Text style={[styles.statValue, isDark && styles.textDark]}>
+            <Text style={[styles.statValue, isMobile && styles.statValueMobile, isDark && styles.textDark]}>
               {currentPeriodRevenue.amount.toLocaleString('vi-VN')} ₫
             </Text>
 
@@ -1804,7 +2536,7 @@ export default function AdminScreen() {
                 ) : null}
 
                 {/* THANH SCROLL KÈM NÚT CUỘN TRÁI / PHẢI VÀ LĂN CHUỘT */}
-                <View style={{ flex: 1, minWidth: 140, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <View style={{ flex: 1, minWidth: isMobile ? 0 : 140, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                   <Pressable
                     style={({ hovered }: any) => [
                       styles.dateScrollNavBtn,
@@ -1960,54 +2692,54 @@ export default function AdminScreen() {
           </View>
 
           {/* Đơn hàng */}
-          <View style={[styles.statCard, isDark && styles.cardDark, { borderLeftColor: '#059669' }]}>
-            <View style={styles.statHeaderRow}>
-              <View style={[styles.statIconWrap, { backgroundColor: '#f0fdf4' }]}>
-                <Ionicons name="receipt-outline" size={22} color="#059669" />
+          <View style={[styles.statCard, isMobile && styles.statCardMobile, isDark && styles.cardDark, { borderLeftColor: '#059669' }]}>
+            <View style={[styles.statHeaderRow, isMobile && styles.statHeaderRowMobile]}>
+              <View style={[styles.statIconWrap, isMobile && { width: 38, height: 38, borderRadius: 10 }, { backgroundColor: '#f0fdf4' }]}>
+                <Ionicons name="receipt-outline" size={isMobile ? 19 : 22} color="#059669" />
               </View>
               {pendingOrdersCount > 0 ? (
                 <View style={[styles.statTrendBadge, { backgroundColor: '#fee2e2' }]}>
-                  <Text style={[styles.statTrendText, { color: '#b91c1c' }]}>{pendingOrdersCount} chờ duyệt</Text>
+                  <Text style={[styles.statTrendText, { color: '#b91c1c' }]} numberOfLines={1}>{pendingOrdersCount} chờ duyệt</Text>
                 </View>
               ) : (
                 <View style={[styles.statTrendBadge, { backgroundColor: '#f0fdf4' }]}>
-                  <Text style={[styles.statTrendText, { color: '#15803d' }]}>Đã xử lý tốt</Text>
+                  <Text style={[styles.statTrendText, { color: '#15803d' }]} numberOfLines={1}>Đã xử lý tốt</Text>
                 </View>
               )}
             </View>
-            <Text style={[styles.statValue, isDark && styles.textDark]}>{orderList.filter(o => o.status !== 'cancelled').length} đơn hàng</Text>
+            <Text style={[styles.statValue, isMobile && styles.statValueMobile, isDark && styles.textDark]}>{orderList.filter(o => o.status !== 'cancelled').length} đơn hàng</Text>
             <Text style={[styles.statLabel, isDark && styles.textMutedDark]}>Tổng giao dịch phát sinh</Text>
           </View>
 
           {/* Sản phẩm trong kho */}
-          <View style={[styles.statCard, isDark && styles.cardDark, { borderLeftColor: '#d97706' }]}>
-            <View style={styles.statHeaderRow}>
-              <View style={[styles.statIconWrap, { backgroundColor: '#fffbeb' }]}>
-                <Ionicons name="cube-outline" size={22} color="#d97706" />
+          <View style={[styles.statCard, isMobile && styles.statCardMobile, isDark && styles.cardDark, { borderLeftColor: '#d97706' }]}>
+            <View style={[styles.statHeaderRow, isMobile && styles.statHeaderRowMobile]}>
+              <View style={[styles.statIconWrap, isMobile && { width: 38, height: 38, borderRadius: 10 }, { backgroundColor: '#fffbeb' }]}>
+                <Ionicons name="cube-outline" size={isMobile ? 19 : 22} color="#d97706" />
               </View>
               <View style={[styles.statTrendBadge, { backgroundColor: '#fef3c7' }]}>
-                <Text style={[styles.statTrendText, { color: '#b45309' }]}>Tồn: {totalStockCount} sp</Text>
+                <Text style={[styles.statTrendText, { color: '#b45309' }]} numberOfLines={1}>Tồn: {totalStockCount} sp</Text>
               </View>
             </View>
-            <Text style={[styles.statValue, isDark && styles.textDark]}>{productList.length} mặt hàng</Text>
+            <Text style={[styles.statValue, isMobile && styles.statValueMobile, isDark && styles.textDark]}>{productList.length} mặt hàng</Text>
             <Text style={[styles.statLabel, isDark && styles.textMutedDark]}>
               Giá trị kho: {(totalInventoryValue / 1000000).toFixed(1)} tr ₫
             </Text>
           </View>
 
           {/* Khách hàng & Phân quyền */}
-          <View style={[styles.statCard, isDark && styles.cardDark, { borderLeftColor: '#7c3aed' }]}>
-            <View style={styles.statHeaderRow}>
-              <View style={[styles.statIconWrap, { backgroundColor: '#faf5ff' }]}>
-                <Ionicons name="people-outline" size={22} color="#7c3aed" />
+          <View style={[styles.statCard, isMobile && styles.statCardMobile, isDark && styles.cardDark, { borderLeftColor: '#7c3aed' }]}>
+            <View style={[styles.statHeaderRow, isMobile && styles.statHeaderRowMobile]}>
+              <View style={[styles.statIconWrap, isMobile && { width: 38, height: 38, borderRadius: 10 }, { backgroundColor: '#faf5ff' }]}>
+                <Ionicons name="people-outline" size={isMobile ? 19 : 22} color="#7c3aed" />
               </View>
-              <View style={[styles.statTrendBadge, { backgroundColor: '#f3e8ff' }]}>
-                <Text style={[styles.statTrendText, { color: '#6b21a8' }]}>
+              <View style={[styles.statTrendBadge, { backgroundColor: '#f3e8ff', maxWidth: '78%' }]}>
+                <Text style={[styles.statTrendText, { color: '#6b21a8' }]} numberOfLines={1}>
                   {adminCount} Quản trị • {staffCount} Nhân viên
                 </Text>
               </View>
             </View>
-            <Text style={[styles.statValue, isDark && styles.textDark]}>{userList.length} tài khoản</Text>
+            <Text style={[styles.statValue, isMobile && styles.statValueMobile, isDark && styles.textDark]}>{userList.length} tài khoản</Text>
             <Text style={[styles.statLabel, isDark && styles.textMutedDark]}>Admin, Nhân viên & Khách</Text>
           </View>
         </View>
@@ -2074,7 +2806,7 @@ export default function AdminScreen() {
 
           {/* QUICK SEARCH FOR CURRENT TAB */}
           {activeTab !== 'overview' && activeTab !== 'reports' && (
-            <View style={[styles.searchBox, isDark && styles.searchBoxDark]}>
+            <View style={[styles.searchBox, isMobile && { minWidth: '100%', maxWidth: '100%' }, isDark && styles.searchBoxDark]}>
               <Ionicons name="search-outline" size={17} color="#94a3b8" style={{ marginRight: 8 }} />
               <TextInput
                 value={searchTerm}
@@ -2111,29 +2843,29 @@ export default function AdminScreen() {
         {activeTab === 'overview' && (
           <View style={styles.overviewContainer}>
             {/* HERO WELCOME */}
-            <View style={styles.welcomeCard}>
-              <View style={styles.welcomeLeft}>
-                <View style={styles.welcomeAvatar}>
-                  <Ionicons name="shield-checkmark" size={28} color="#ffffff" />
+            <View style={[styles.welcomeCard, isMobile && styles.welcomeCardMobile]}>
+              <View style={[styles.welcomeLeft, isMobile && styles.welcomeLeftMobile]}>
+                <View style={[styles.welcomeAvatar, isMobile && { width: 44, height: 44, borderRadius: 12 }]}>
+                  <Ionicons name="shield-checkmark" size={isMobile ? 22 : 28} color="#ffffff" />
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.welcomeGreeting}>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={[styles.welcomeGreeting, isMobile && { fontSize: 16 }]}>
                     Xin chào, {user?.name || 'Quản trị viên DANGVINHPC'} 👋
                   </Text>
-                  <Text style={styles.welcomeDesc}>
+                  <Text style={[styles.welcomeDesc, isMobile && { fontSize: 12, lineHeight: 17 }]}>
                     Cửa hàng đang hoạt động bình thường. Hôm nay bạn có {pendingOrdersCount} đơn hàng mới cần duyệt
                     {returnOrdersCount > 0 ? ` và ${returnOrdersCount} yêu cầu đổi trả / bảo hành chờ xử lý.` : '.'}
                   </Text>
                 </View>
               </View>
-              <View style={styles.welcomeRightActions}>
-                <Pressable style={styles.welcomeBtn} onPress={() => setActiveTab('orders')}>
+              <View style={[styles.welcomeRightActions, isMobile && styles.welcomeRightActionsMobile]}>
+                <Pressable style={[styles.welcomeBtn, isMobile && { flex: 1, justifyContent: 'center' }]} onPress={() => setActiveTab('orders')}>
                   <Ionicons name="receipt" size={16} color="#2563eb" />
-                  <Text style={styles.welcomeBtnText}>Xử lý đơn hàng</Text>
+                  <Text style={styles.welcomeBtnText}>{isMobile ? 'Xử lý đơn' : 'Xử lý đơn hàng'}</Text>
                 </Pressable>
-                <Pressable style={[styles.welcomeBtn, { backgroundColor: '#10b981' }]} onPress={handleOpenAddProduct}>
+                <Pressable style={[styles.welcomeBtn, { backgroundColor: '#10b981' }, isMobile && { flex: 1, justifyContent: 'center' }]} onPress={handleOpenAddProduct}>
                   <Ionicons name="add-circle" size={16} color="#ffffff" />
-                  <Text style={[styles.welcomeBtnText, { color: '#ffffff' }]}>Đăng sản phẩm</Text>
+                  <Text style={[styles.welcomeBtnText, { color: '#ffffff' }]}>{isMobile ? 'Đăng SP' : 'Đăng sản phẩm'}</Text>
                 </Pressable>
               </View>
             </View>
@@ -2162,20 +2894,16 @@ export default function AdminScreen() {
 
               // Lọc các đơn của ngày được chọn
               const dayOrders = orderList.filter((o) => {
-                const d = o.createdAt ? new Date(o.createdAt) : new Date();
-                const dStr = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-                return dStr === targetDateStr;
+                return getOrderDateKey(o.createdAt) === targetDateStr;
               });
 
               // Đếm số đơn hôm nay và hôm qua để hiển thị badge trên nút
               const todayCount = orderList.filter((o) => {
-                const d = o.createdAt ? new Date(o.createdAt) : new Date();
-                return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` === todayStr;
+                return getOrderDateKey(o.createdAt) === todayStr;
               }).length;
 
               const yesterdayCount = orderList.filter((o) => {
-                const d = o.createdAt ? new Date(o.createdAt) : new Date();
-                return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` === yesterdayStr;
+                return getOrderDateKey(o.createdAt) === yesterdayStr;
               }).length;
 
               const statusGroups = [
@@ -2196,7 +2924,7 @@ export default function AdminScreen() {
                 .reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0);
 
               return (
-                <View style={[styles.dashCard, isDark && styles.cardDark, { marginBottom: 16 }]}>
+                <View style={[styles.dashCard, isMobile && styles.dashCardMobile, isDark && styles.cardDark, { marginBottom: 16 }]}>
                   {/* HEADER & CHỌN NGÀY */}
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 14 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
@@ -2455,7 +3183,7 @@ export default function AdminScreen() {
                               }}
                             >
                               {/* CỘT TRÁI: MÃ ĐƠN, GIỜ, KHÁCH, HÀNG HÓA */}
-                              <View style={{ flex: 1, minWidth: 240 }}>
+                              <View style={{ flex: 1, minWidth: isMobile ? 0 : 240 }}>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
                                   <Text style={{ fontSize: 13, fontWeight: '800', color: '#2563eb' }}>
                                     {o.orderNumber || `#ORD-${o.id}`}
@@ -2572,181 +3300,1118 @@ export default function AdminScreen() {
             {/* BÁO CÁO DOANH THU BÁN HÀNG THEO NGÀY / THÁNG / NĂM       */}
             {/* ======================================================== */}
             {(() => {
-              const chartList =
-                revenueChartMode === 'day'
-                  ? revenueAnalytics.dailyList
-                  : revenueChartMode === 'month'
-                  ? revenueAnalytics.monthlyList
-                  : revenueAnalytics.yearlyList;
+              const {
+                chartList,
+                periodTitle,
+                periodSubtitle,
+                maxRevenue,
+                totalPeriodRev,
+                totalPeriodOrders,
+                aovPeriod,
+                activeCount,
+                peakRevenue,
+                peakDate,
+                revGrowthPct,
+                ordersGrowthPct,
+              } = revenueChartData;
 
-              const maxRevenue = Math.max(...chartList.map((c) => c.revenue), 1);
-              const totalPeriodRev = chartList.reduce((sum, c) => sum + c.revenue, 0);
-              const totalPeriodOrders = chartList.reduce((sum, c) => sum + c.count, 0);
-              const aovPeriod = totalPeriodOrders > 0 ? Math.round(totalPeriodRev / totalPeriodOrders) : 0;
+              const displayedTableList = chartTableOnlyActive
+                ? chartList.filter((item) => item.revenue > 0 || item.count > 0)
+                : chartList;
+
+              const formatCompact = (val: number) => {
+                if (val <= 0) return '0 ₫';
+                if (val >= 1_000_000) return `${(val / 1_000_000).toFixed(1)} tr`;
+                if (val >= 1_000) return `${Math.round(val / 1_000)}k`;
+                return `${val} ₫`;
+              };
+
+              const yTicks = [
+                { pct: 100, label: maxRevenue > 0 ? formatCompact(maxRevenue) : '1 tr' },
+                { pct: 75, label: maxRevenue > 0 ? formatCompact(maxRevenue * 0.75) : '750k' },
+                { pct: 50, label: maxRevenue > 0 ? formatCompact(maxRevenue * 0.5) : '500k' },
+                { pct: 25, label: maxRevenue > 0 ? formatCompact(maxRevenue * 0.25) : '250k' },
+                { pct: 0, label: '0 ₫' },
+              ];
 
               return (
-                <View style={[styles.dashCard, isDark && styles.cardDark, { marginBottom: 16 }]}>
-                  {/* HEADER BÁO CÁO */}
-                  <View style={[styles.dashCardHeader, { flexWrap: 'wrap', gap: 12 }]}>
-                    <View style={{ flex: 1, minWidth: 220 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 2 }}>
-                        <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: '#eff6ff', alignItems: 'center', justifyContent: 'center' }}>
-                          <Ionicons name="bar-chart" size={17} color="#2563eb" />
+                <View style={{ gap: 16, marginBottom: 16 }}>
+                  {/* ======================================================== */}
+                  {/* CARD 1: TOP DASHBOARD & BỘ LỌC DOANH THU + 4 PASTEL KPIS  */}
+                  {/* ======================================================== */}
+                  <View style={[styles.revenueDashCard, isDark && styles.cardDark]}>
+                    {/* HEADER BÁO CÁO */}
+                    <View style={[styles.dashCardHeader, { flexWrap: 'wrap', gap: 12, alignItems: 'flex-start' }]}>
+                      <View style={{ flex: 1, minWidth: 240 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+                          <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: '#eff6ff', alignItems: 'center', justifyContent: 'center' }}>
+                            <Ionicons name="bar-chart" size={18} color="#2563eb" />
+                          </View>
+                          <Text style={[styles.dashCardTitle, isDark && styles.textDark, { fontSize: 17, fontWeight: '800' }]}>
+                            Báo cáo doanh thu bán hàng
+                          </Text>
                         </View>
-                        <Text style={[styles.dashCardTitle, isDark && styles.textDark]}>
-                          Báo cáo doanh thu bán hàng
+                        <Text style={[styles.dashCardSubtitle, isDark && styles.textMutedDark, { fontSize: 12, lineHeight: 18 }]}>
+                          Thống kê chi tiết doanh thu bán hàng theo mốc thời gian. Theo dõi xu hướng và hiệu quả kinh doanh.
                         </Text>
                       </View>
-                      <Text style={[styles.dashCardSubtitle, isDark && styles.textMutedDark]}>
-                        Thống kê chi tiết & biểu đồ tăng trưởng doanh số thực thu theo Ngày, Tháng và Năm
-                      </Text>
-                    </View>
 
-                    {/* SELECTOR CHẾ ĐỘ BIỂU ĐỒ: NGÀY / THÁNG / NĂM */}
-                    <View style={styles.revenueModePillsRow}>
-                      {[
-                        { id: 'day', label: '7 Ngày gần nhất', icon: 'calendar-outline' },
-                        { id: 'month', label: `12 Tháng (${new Date().getFullYear()})`, icon: 'calendar' },
-                        { id: 'year', label: 'Theo Năm', icon: 'time-outline' },
-                      ].map((m) => {
-                        const isSel = revenueChartMode === m.id;
-                        return (
-                          <Pressable
-                            key={m.id}
-                            style={[
-                              styles.revenueModePillBtn,
-                              isDark && styles.revenueModePillBtnDark,
-                              isSel && styles.revenueModePillBtnActive,
-                            ]}
-                            onPress={() => setRevenueChartMode(m.id as any)}
-                          >
-                            <Ionicons
-                              name={m.icon as any}
-                              size={14}
-                              color={isSel ? '#ffffff' : isDark ? '#94a3b8' : '#64748b'}
-                              style={{ marginRight: 4 }}
-                            />
-                            <Text
+                      {/* 6 MODE PILLS */}
+                      <View style={styles.revenueModePillsRow}>
+                        {[
+                          { id: 'day', label: 'Theo Ngày', icon: 'today-outline' },
+                          { id: 'day_7', label: '7 Ngày gần nhất', icon: 'calendar-outline' },
+                          { id: 'day_30', label: '30 Ngày qua', icon: 'calendar-number-outline' },
+                          { id: 'month', label: `Tháng này (T${chartCustomMonth}/${chartCustomYear})`, icon: 'calendar' },
+                          { id: 'year', label: `Theo Năm (${chartCustomYear})`, icon: 'time-outline' },
+                          { id: 'range', label: 'Khoảng ngày', icon: 'options-outline' },
+                        ].map((m) => {
+                          const isSel = revenueChartMode === m.id;
+                          return (
+                            <Pressable
+                              key={m.id}
                               style={[
-                                styles.revenueModePillText,
-                                isDark && styles.textMutedDark,
-                                isSel && styles.revenueModePillTextActive,
+                                styles.revenueModePillBtn,
+                                isDark && styles.revenueModePillBtnDark,
+                                isSel && styles.revenueModePillBtnActive,
                               ]}
+                              onPress={() => setRevenueChartMode(m.id as any)}
                             >
-                              {m.label}
-                            </Text>
-                          </Pressable>
-                        );
-                      })}
-                    </View>
-                  </View>
-
-                  {/* 4 TILE CHỈ SỐ NHANH */}
-                  <View style={styles.revenueKpiGrid}>
-                    <View style={[styles.revenueKpiTile, isDark && styles.revenueKpiTileDark]}>
-                      <Text style={[styles.revenueKpiLabel, isDark && styles.textMutedDark]}>Tổng thực thu trong kỳ</Text>
-                      <Text style={[styles.revenueKpiValue, { color: '#2563eb' }]} numberOfLines={1}>
-                        {formatPrice(totalPeriodRev)}
-                      </Text>
-                    </View>
-
-                    <View style={[styles.revenueKpiTile, isDark && styles.revenueKpiTileDark]}>
-                      <Text style={[styles.revenueKpiLabel, isDark && styles.textMutedDark]}>Đơn hàng hoàn tất</Text>
-                      <Text style={[styles.revenueKpiValue, { color: '#16a34a' }]}>
-                        {totalPeriodOrders} đơn
-                      </Text>
-                    </View>
-
-                    <View style={[styles.revenueKpiTile, isDark && styles.revenueKpiTileDark]}>
-                      <Text style={[styles.revenueKpiLabel, isDark && styles.textMutedDark]}>Giá trị TB / đơn (AOV)</Text>
-                      <Text style={[styles.revenueKpiValue, { color: '#0f172a' }, isDark && styles.textDark]} numberOfLines={1}>
-                        {formatPrice(aovPeriod)}
-                      </Text>
-                    </View>
-
-                    <View style={[styles.revenueKpiTile, isDark && styles.revenueKpiTileDark]}>
-                      <Text style={[styles.revenueKpiLabel, isDark && styles.textMutedDark]}>Doanh thu cao nhất kỳ</Text>
-                      <Text style={[styles.revenueKpiValue, { color: '#d97706' }]} numberOfLines={1}>
-                        {formatPrice(maxRevenue === 1 ? 0 : maxRevenue)}
-                      </Text>
-                    </View>
-                  </View>
-
-                  {/* KHUNG BIỂU ĐỒ CỘT THANH LỊCH (BAR CHART) */}
-                  <View style={[styles.barChartContainer, isDark && styles.barChartContainerDark]}>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.barChartScrollContent}>
-                      {chartList.map((item, idx) => {
-                        const pct = Math.round((item.revenue / maxRevenue) * 100);
-                        const isPeak = item.revenue === maxRevenue && maxRevenue > 1;
-                        return (
-                          <View key={idx} style={styles.barColumnWrap}>
-                            {/* Số tiền vắn tắt trên đỉnh cột */}
-                            <Text style={[styles.barAmountText, isPeak && { color: '#2563eb', fontWeight: '800' }]} numberOfLines={1}>
-                              {item.revenue >= 1000000
-                                ? `${(item.revenue / 1000000).toFixed(1)} tr`
-                                : item.revenue > 0
-                                ? `${Math.round(item.revenue / 1000)}k`
-                                : '0 ₫'}
-                            </Text>
-
-                            {/* Cột biểu đồ */}
-                            <View style={styles.barTrack}>
-                              <View
-                                style={[
-                                  styles.barFill,
-                                  { height: `${Math.max(item.revenue > 0 ? 12 : 3, pct)}%` },
-                                  item.revenue > 0 ? (isPeak ? styles.barFillPeak : styles.barFillActive) : styles.barFillZero,
-                                ]}
+                              <Ionicons
+                                name={m.icon as any}
+                                size={13}
+                                color={isSel ? '#ffffff' : isDark ? '#94a3b8' : '#64748b'}
+                                style={{ marginRight: 4 }}
                               />
-                            </View>
+                              <Text
+                                style={[
+                                  styles.revenueModePillText,
+                                  isDark && styles.textMutedDark,
+                                  isSel && styles.revenueModePillTextActive,
+                                ]}
+                              >
+                                {m.label}
+                              </Text>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+                    </View>
 
-                            {/* Nhãn ngày/tháng bên dưới */}
-                            <Text style={[styles.barLabelText, isDark && styles.textMutedDark, isPeak && { fontWeight: '800', color: '#2563eb' }]}>
-                              {item.label}
-                            </Text>
-                            <Text style={styles.barSubCountText}>
-                              {item.count > 0 ? `${item.count} đơn` : '-'}
+                    {/* SUB-TOOLBAR (when in Day mode - Chọn ngày cụ thể) */}
+                    {revenueChartMode === 'day' && (
+                      <View style={[styles.chartSubFilterRow, isDark && styles.chartSubFilterRowDark]}>
+                        <Pressable
+                          style={[styles.chartSubNavBtn, isDark && styles.chartSubNavBtnDark]}
+                          onPress={() => {
+                            const [y, m, d] = (chartSingleDate || '').split('-').map(Number);
+                            const dt = new Date(y, m - 1, d);
+                            dt.setDate(dt.getDate() - 1);
+                            const pad = (n: number) => String(n).padStart(2, '0');
+                            setChartSingleDate(`${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`);
+                          }}
+                        >
+                          <Ionicons name="chevron-back" size={13} color={isDark ? '#cbd5e1' : '#475569'} />
+                          <Text style={[styles.chartSubNavBtnText, isDark && styles.chartSubNavBtnTextDark]}>Ngày trước</Text>
+                        </Pressable>
+
+                        {/* Ô CHỌN NGÀY (DATE PICKER NỔI BẬT) */}
+                        {Platform.OS === 'web' && typeof document !== 'undefined' ? (
+                          <div
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              backgroundColor: isDark ? '#1e293b' : '#eff6ff',
+                              border: '1.5px solid #2563eb',
+                              borderRadius: '10px',
+                              padding: '6px 12px',
+                              gap: '8px',
+                            }}
+                          >
+                            <Ionicons name="calendar" size={14} color="#2563eb" />
+                            <span style={{ fontSize: '11px', fontWeight: '700', color: isDark ? '#94a3b8' : '#475569' }}>
+                              Chọn ngày:
+                            </span>
+                            <input
+                              type="date"
+                              value={chartSingleDate}
+                              onChange={(e: any) => e?.target?.value && setChartSingleDate(e.target.value)}
+                              style={{
+                                border: 'none',
+                                background: 'transparent',
+                                outline: 'none',
+                                color: '#2563eb',
+                                fontSize: '13px',
+                                fontWeight: '800',
+                                fontFamily: 'inherit',
+                                cursor: 'pointer',
+                              }}
+                            />
+                          </div>
+                        ) : null}
+
+                        <Pressable
+                          style={[styles.chartSubNavBtn, isDark && styles.chartSubNavBtnDark]}
+                          onPress={() => {
+                            const [y, m, d] = (chartSingleDate || '').split('-').map(Number);
+                            const dt = new Date(y, m - 1, d);
+                            dt.setDate(dt.getDate() + 1);
+                            const pad = (n: number) => String(n).padStart(2, '0');
+                            setChartSingleDate(`${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`);
+                          }}
+                        >
+                          <Text style={[styles.chartSubNavBtnText, isDark && styles.chartSubNavBtnTextDark]}>Ngày sau</Text>
+                          <Ionicons name="chevron-forward" size={13} color={isDark ? '#cbd5e1' : '#475569'} />
+                        </Pressable>
+
+                        {/* Nút Hôm nay */}
+                        <Pressable
+                          style={[
+                            styles.chartSubNavBtn,
+                            isDark && styles.chartSubNavBtnDark,
+                            (() => {
+                              const pad = (n: number) => String(n).padStart(2, '0');
+                              const d = new Date();
+                              return chartSingleDate === `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+                            })() && { borderColor: '#2563eb', backgroundColor: isDark ? '#1e293b' : '#eff6ff' },
+                          ]}
+                          onPress={() => {
+                            const pad = (n: number) => String(n).padStart(2, '0');
+                            const d = new Date();
+                            setChartSingleDate(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`);
+                          }}
+                        >
+                          <Ionicons name="today-outline" size={13} color="#2563eb" />
+                          <Text style={[styles.chartSubNavBtnText, { color: '#2563eb', fontWeight: '700' }]}>Hôm nay</Text>
+                        </Pressable>
+
+                        {/* Nút Hôm qua */}
+                        <Pressable
+                          style={[styles.chartSubNavBtn, isDark && styles.chartSubNavBtnDark]}
+                          onPress={() => {
+                            const pad = (n: number) => String(n).padStart(2, '0');
+                            const d = new Date();
+                            d.setDate(d.getDate() - 1);
+                            setChartSingleDate(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`);
+                          }}
+                        >
+                          <Text style={[styles.chartSubNavBtnText, isDark && styles.chartSubNavBtnTextDark]}>Hôm qua</Text>
+                        </Pressable>
+
+                        {/* Quick pills các ngày có đơn hàng gần đây */}
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={{ gap: 4 }}>
+                          {availableOrderDates.slice(0, 5).map((od) => {
+                            const isCur = chartSingleDate === od.dateStr;
+                            return (
+                              <Pressable
+                                key={od.dateStr}
+                                style={[
+                                  styles.chartMonthPill,
+                                  isDark && styles.chartMonthPillDark,
+                                  isCur && styles.chartMonthPillActive,
+                                ]}
+                                onPress={() => setChartSingleDate(od.dateStr)}
+                              >
+                                <Text style={[styles.chartMonthPillText, isCur && styles.chartMonthPillTextActive]}>
+                                  {od.label} ({od.count}đ)
+                                </Text>
+                              </Pressable>
+                            );
+                          })}
+                        </ScrollView>
+
+                        <View style={{ marginLeft: 'auto' }}>
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: isDark ? '#94a3b8' : '#64748b' }}>
+                            ⏰ {periodSubtitle}
+                          </Text>
+                        </View>
+                      </View>
+                    )}
+
+                    {/* SUB-TOOLBAR (when in Month mode) */}
+                    {revenueChartMode === 'month' && (
+                      <View style={[styles.chartSubFilterRow, isDark && styles.chartSubFilterRowDark]}>
+                        {/* Nút lùi tháng */}
+                        <Pressable
+                          style={[styles.chartSubNavBtn, isDark && styles.chartSubNavBtnDark]}
+                          onPress={() => {
+                            if (chartCustomMonth === 1) {
+                              setChartCustomMonth(12);
+                              setChartCustomYear((y) => y - 1);
+                            } else {
+                              setChartCustomMonth((m) => m - 1);
+                            }
+                          }}
+                        >
+                          <Ionicons name="chevron-back" size={13} color={isDark ? '#cbd5e1' : '#475569'} />
+                          <Text style={[styles.chartSubNavBtnText, isDark && styles.chartSubNavBtnTextDark]}>Tháng trước</Text>
+                        </Pressable>
+
+                        {/* Month Pills T1 - T12 */}
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={{ gap: 4 }}>
+                          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((m) => {
+                            const isCurM = chartCustomMonth === m;
+                            return (
+                              <Pressable
+                                key={m}
+                                style={[
+                                  styles.chartMonthPill,
+                                  isDark && styles.chartMonthPillDark,
+                                  isCurM && styles.chartMonthPillActive,
+                                ]}
+                                onPress={() => setChartCustomMonth(m)}
+                              >
+                                <Text style={[styles.chartMonthPillText, isCurM && styles.chartMonthPillTextActive]}>
+                                  T{m}
+                                </Text>
+                              </Pressable>
+                            );
+                          })}
+                        </ScrollView>
+
+                        {/* Ô CHỌN NĂM (SELECT DROPDOWN CHO THÁNG) */}
+                        {Platform.OS === 'web' && typeof document !== 'undefined' ? (
+                          <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+                            <select
+                              value={chartCustomYear}
+                              onChange={(e: any) => setChartCustomYear(Number(e.target.value))}
+                              style={{
+                                appearance: 'none',
+                                WebkitAppearance: 'none',
+                                backgroundColor: isDark ? '#1e293b' : '#eff6ff',
+                                color: '#2563eb',
+                                fontWeight: '800',
+                                fontSize: '13px',
+                                border: '1.5px solid #2563eb',
+                                borderRadius: '10px',
+                                padding: '6px 28px 6px 10px',
+                                cursor: 'pointer',
+                                outline: 'none',
+                                fontFamily: 'inherit',
+                              }}
+                            >
+                              {availableChartYears.map((yr) => (
+                                <option key={yr} value={yr} style={{ color: '#0f172a', fontWeight: '600' }}>
+                                  Năm {yr} {yr === new Date().getFullYear() ? '(Năm nay)' : ''}
+                                </option>
+                              ))}
+                            </select>
+                            <span style={{ position: 'absolute', right: 8, pointerEvents: 'none', color: '#2563eb', fontSize: '9px' }}>
+                              ▼
+                            </span>
+                          </div>
+                        ) : (
+                          <View style={{ position: 'relative', zIndex: 60 }}>
+                            <Pressable
+                              style={[
+                                styles.chartSubNavBtn,
+                                isDark && styles.chartSubNavBtnDark,
+                                showYearDropdown && { borderColor: '#2563eb' },
+                              ]}
+                              onPress={() => setShowYearDropdown((v) => !v)}
+                            >
+                              <Ionicons name="calendar-outline" size={13} color="#2563eb" />
+                              <Text style={[styles.chartSubNavBtnText, { fontWeight: '700', color: isDark ? '#f8fafc' : '#0f172a' }]}>
+                                Năm {chartCustomYear}
+                              </Text>
+                              <Ionicons name={showYearDropdown ? "chevron-up" : "chevron-down"} size={12} color="#64748b" />
+                            </Pressable>
+
+                            {showYearDropdown && (
+                              <View style={[styles.yearDropdownMenu, isDark && styles.yearDropdownMenuDark]}>
+                                {availableChartYears.map((yr) => (
+                                  <Pressable
+                                    key={yr}
+                                    style={[
+                                      styles.yearDropdownItem,
+                                      yr === chartCustomYear && (isDark ? styles.yearDropdownItemActiveDark : styles.yearDropdownItemActive),
+                                    ]}
+                                    onPress={() => {
+                                      setChartCustomYear(yr);
+                                      setShowYearDropdown(false);
+                                    }}
+                                  >
+                                    <Text
+                                      style={[
+                                        styles.yearDropdownItemText,
+                                        isDark && styles.textDark,
+                                        yr === chartCustomYear && { color: '#2563eb', fontWeight: '800' },
+                                      ]}
+                                    >
+                                      Năm {yr}
+                                    </Text>
+                                    {yr === chartCustomYear && <Ionicons name="checkmark" size={14} color="#2563eb" />}
+                                  </Pressable>
+                                ))}
+                              </View>
+                            )}
+                          </View>
+                        )}
+
+                        {/* Nút Tháng này */}
+                        <Pressable
+                          style={[
+                            styles.chartSubNavBtn,
+                            isDark && styles.chartSubNavBtnDark,
+                            chartCustomMonth === new Date().getMonth() + 1 && chartCustomYear === new Date().getFullYear() && { borderColor: '#2563eb' },
+                          ]}
+                          onPress={() => {
+                            setChartCustomMonth(new Date().getMonth() + 1);
+                            setChartCustomYear(new Date().getFullYear());
+                          }}
+                        >
+                          <Ionicons name="today-outline" size={13} color="#2563eb" />
+                          <Text style={[styles.chartSubNavBtnText, { color: '#2563eb' }]}>Tháng này</Text>
+                        </Pressable>
+
+                        {/* Nút tiến tháng */}
+                        <Pressable
+                          style={[styles.chartSubNavBtn, isDark && styles.chartSubNavBtnDark]}
+                          onPress={() => {
+                            if (chartCustomMonth === 12) {
+                              setChartCustomMonth(1);
+                              setChartCustomYear((y) => y + 1);
+                            } else {
+                              setChartCustomMonth((m) => m + 1);
+                            }
+                          }}
+                        >
+                          <Text style={[styles.chartSubNavBtnText, isDark && styles.chartSubNavBtnTextDark]}>Tháng sau</Text>
+                          <Ionicons name="chevron-forward" size={13} color={isDark ? '#cbd5e1' : '#475569'} />
+                        </Pressable>
+
+                        {/* Checkbox badge: Hiển thị chi tiết ngày */}
+                        <Pressable
+                          style={[styles.checkboxNoticeWrap, isDark && styles.checkboxNoticeWrapDark]}
+                          onPress={() => setShowDetailNotice((prev) => !prev)}
+                        >
+                          <View style={[styles.checkboxBox, showDetailNotice && styles.checkboxBoxChecked]}>
+                            {showDetailNotice && <Ionicons name="checkmark" size={11} color="#ffffff" />}
+                          </View>
+                          <Text style={[styles.checkboxNoticeText, isDark && styles.textDark]}>
+                            Hiển thị chi tiết {chartList.length} ngày của {periodTitle}
+                          </Text>
+                        </Pressable>
+                      </View>
+                    )}
+
+                    {/* SUB-TOOLBAR (when in Year mode) */}
+                    {revenueChartMode === 'year' && (
+                      <View style={[styles.chartSubFilterRow, isDark && styles.chartSubFilterRowDark]}>
+                        <Pressable
+                          style={[styles.chartSubNavBtn, isDark && styles.chartSubNavBtnDark]}
+                          onPress={() => setChartCustomYear((y) => y - 1)}
+                        >
+                          <Ionicons name="chevron-back" size={13} color={isDark ? '#cbd5e1' : '#475569'} />
+                          <Text style={[styles.chartSubNavBtnText, isDark && styles.chartSubNavBtnTextDark]}>Năm trước</Text>
+                        </Pressable>
+
+                        {/* Ô CHỌN NĂM (SELECT / DROPDOWN NỔI BẬT DỄ CHỌN BẬC NHẤT) */}
+                        {Platform.OS === 'web' && typeof document !== 'undefined' ? (
+                          <div
+                            style={{
+                              position: 'relative',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              backgroundColor: isDark ? '#1e293b' : '#eff6ff',
+                              border: '1.5px solid #2563eb',
+                              borderRadius: '10px',
+                              padding: '2px 8px',
+                              gap: '6px',
+                            }}
+                          >
+                            <Ionicons name="calendar-outline" size={14} color="#2563eb" />
+                            <span style={{ fontSize: '11px', fontWeight: '700', color: isDark ? '#94a3b8' : '#475569' }}>
+                              Chọn năm:
+                            </span>
+                            <select
+                              value={chartCustomYear}
+                              onChange={(e: any) => setChartCustomYear(Number(e.target.value))}
+                              style={{
+                                appearance: 'none',
+                                WebkitAppearance: 'none',
+                                backgroundColor: 'transparent',
+                                color: '#2563eb',
+                                fontWeight: '800',
+                                fontSize: '13px',
+                                border: 'none',
+                                padding: '4px 22px 4px 4px',
+                                cursor: 'pointer',
+                                outline: 'none',
+                                fontFamily: 'inherit',
+                              }}
+                            >
+                              {availableChartYears.map((yr) => (
+                                <option key={yr} value={yr} style={{ color: '#0f172a', fontWeight: '600' }}>
+                                  Năm {yr} {yr === new Date().getFullYear() ? '★ (Năm nay)' : ''}
+                                </option>
+                              ))}
+                            </select>
+                            <span style={{ position: 'absolute', right: 8, pointerEvents: 'none', color: '#2563eb', fontSize: '9px' }}>
+                              ▼
+                            </span>
+                          </div>
+                        ) : (
+                          <Pressable
+                            style={[
+                              styles.chartSubNavBtn,
+                              isDark && styles.chartSubNavBtnDark,
+                              { borderColor: '#2563eb', backgroundColor: isDark ? '#1e293b' : '#eff6ff' },
+                            ]}
+                            onPress={() => setShowYearDropdown((v) => !v)}
+                          >
+                            <Ionicons name="calendar-outline" size={13} color="#2563eb" />
+                            <Text style={{ fontWeight: '800', color: '#2563eb', fontSize: 13 }}>Năm {chartCustomYear}</Text>
+                            <Ionicons name={showYearDropdown ? 'chevron-up' : 'chevron-down'} size={12} color="#2563eb" />
+                          </Pressable>
+                        )}
+
+                        {/* Quick pills cho các năm gần nhất */}
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                          {availableChartYears.slice(0, 4).map((yr) => {
+                            const isCurY = chartCustomYear === yr;
+                            return (
+                              <Pressable
+                                key={yr}
+                                style={[
+                                  styles.chartMonthPill,
+                                  isDark && styles.chartMonthPillDark,
+                                  isCurY && styles.chartMonthPillActive,
+                                  { paddingHorizontal: 12 },
+                                ]}
+                                onPress={() => setChartCustomYear(yr)}
+                              >
+                                <Text style={[styles.chartMonthPillText, isCurY && styles.chartMonthPillTextActive]}>
+                                  Năm {yr}
+                                </Text>
+                              </Pressable>
+                            );
+                          })}
+                        </View>
+
+                        <Pressable
+                          style={[styles.chartSubNavBtn, isDark && styles.chartSubNavBtnDark]}
+                          onPress={() => setChartCustomYear((y) => y + 1)}
+                        >
+                          <Text style={[styles.chartSubNavBtnText, isDark && styles.chartSubNavBtnTextDark]}>Năm sau</Text>
+                          <Ionicons name="chevron-forward" size={13} color={isDark ? '#cbd5e1' : '#475569'} />
+                        </Pressable>
+
+                        <Pressable
+                          style={[
+                            styles.chartSubNavBtn,
+                            isDark && styles.chartSubNavBtnDark,
+                            chartCustomYear === new Date().getFullYear() && { borderColor: '#2563eb', backgroundColor: isDark ? '#1e293b' : '#eff6ff' },
+                          ]}
+                          onPress={() => setChartCustomYear(new Date().getFullYear())}
+                        >
+                          <Ionicons name="today-outline" size={13} color="#2563eb" />
+                          <Text style={[styles.chartSubNavBtnText, { color: '#2563eb', fontWeight: '700' }]}>Năm nay</Text>
+                        </Pressable>
+
+                        <View style={{ marginLeft: 'auto' }}>
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: isDark ? '#94a3b8' : '#64748b' }}>
+                            📆 {periodSubtitle}
+                          </Text>
+                        </View>
+                      </View>
+                    )}
+
+                    {/* SUB-TOOLBAR (when in Range mode) */}
+                    {revenueChartMode === 'range' && (
+                      <View style={[styles.chartSubFilterRow, isDark && styles.chartSubFilterRowDark]}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                          {Platform.OS === 'web' && typeof document !== 'undefined' ? (
+                            <div
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                backgroundColor: isDark ? '#1e293b' : '#eff6ff',
+                                border: '1.5px solid #2563eb',
+                                borderRadius: '10px',
+                                padding: '6px 12px',
+                                gap: '8px',
+                              }}
+                            >
+                              <Ionicons name="calendar-outline" size={14} color="#2563eb" />
+                              <span style={{ fontSize: '11px', fontWeight: '700', color: isDark ? '#94a3b8' : '#475569' }}>
+                                Từ ngày:
+                              </span>
+                              <input
+                                type="date"
+                                value={chartRangeStart}
+                                onChange={(e: any) => e?.target?.value && setChartRangeStart(e.target.value)}
+                                style={{
+                                  border: 'none',
+                                  background: 'transparent',
+                                  outline: 'none',
+                                  color: '#2563eb',
+                                  fontSize: '13px',
+                                  fontWeight: '800',
+                                  fontFamily: 'inherit',
+                                  cursor: 'pointer',
+                                }}
+                              />
+                            </div>
+                          ) : null}
+
+                          <Ionicons name="arrow-forward" size={14} color="#94a3b8" />
+
+                          {Platform.OS === 'web' && typeof document !== 'undefined' ? (
+                            <div
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                backgroundColor: isDark ? '#1e293b' : '#eff6ff',
+                                border: '1.5px solid #2563eb',
+                                borderRadius: '10px',
+                                padding: '6px 12px',
+                                gap: '8px',
+                              }}
+                            >
+                              <Ionicons name="calendar-outline" size={14} color="#2563eb" />
+                              <span style={{ fontSize: '11px', fontWeight: '700', color: isDark ? '#94a3b8' : '#475569' }}>
+                                Đến ngày:
+                              </span>
+                              <input
+                                type="date"
+                                value={chartRangeEnd}
+                                onChange={(e: any) => e?.target?.value && setChartRangeEnd(e.target.value)}
+                                style={{
+                                  border: 'none',
+                                  background: 'transparent',
+                                  outline: 'none',
+                                  color: '#2563eb',
+                                  fontSize: '13px',
+                                  fontWeight: '800',
+                                  fontFamily: 'inherit',
+                                  cursor: 'pointer',
+                                }}
+                              />
+                            </div>
+                          ) : null}
+                        </View>
+
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+                          {[
+                            { label: '7 ngày', days: 7 },
+                            { label: '14 ngày', days: 14 },
+                            { label: '30 ngày', days: 30 },
+                          ].map((p) => (
+                            <Pressable
+                              key={p.days}
+                              style={[styles.chartMonthPill, isDark && styles.chartMonthPillDark]}
+                              onPress={() => {
+                                const end = new Date();
+                                const start = new Date();
+                                start.setDate(start.getDate() - (p.days - 1));
+                                const pad = (n: number) => String(n).padStart(2, '0');
+                                setChartRangeStart(`${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`);
+                                setChartRangeEnd(`${end.getFullYear()}-${pad(end.getMonth() + 1)}-${pad(end.getDate())}`);
+                              }}
+                            >
+                              <Text style={styles.chartMonthPillText}>{p.label}</Text>
+                            </Pressable>
+                          ))}
+                        </View>
+                      </View>
+                    )}
+
+                    {/* 4 PASTEL KPI SUMMARY CARDS */}
+                    <View style={styles.kpiPastelGrid}>
+                      {/* Card 1: Xanh Dương Pastel */}
+                      <View style={[styles.kpiPastelCard, styles.kpiPastelBlue, isDark && styles.kpiPastelBlueDark]}>
+                        <View style={styles.kpiPastelWatermark} pointerEvents="none">
+                          <Ionicons name="trending-up" size={76} color={isDark ? 'rgba(37,99,235,0.08)' : 'rgba(37,99,235,0.06)'} />
+                        </View>
+                        <View style={styles.kpiPastelHeader}>
+                          <View style={[styles.kpiPastelIconBox, { backgroundColor: '#dbeafe' }]}>
+                            <Ionicons name="cart-outline" size={16} color="#2563eb" />
+                          </View>
+                          <Text style={[styles.kpiPastelLabel, isDark && styles.textDark]}>Tổng doanh thu trong kỳ</Text>
+                        </View>
+                        <Text style={[styles.kpiPastelValue, { color: '#1d4ed8' }, isDark && { color: '#60a5fa' }]} numberOfLines={1}>
+                          {formatPrice(totalPeriodRev)}
+                        </Text>
+                        <View style={styles.kpiPastelFooter}>
+                          <View style={[styles.kpiGrowthBadge, revGrowthPct >= 0 ? styles.kpiGrowthUp : styles.kpiGrowthDown]}>
+                            <Ionicons
+                              name={revGrowthPct >= 0 ? 'arrow-up' : 'arrow-down'}
+                              size={10}
+                              color={revGrowthPct >= 0 ? '#15803d' : '#b91c1c'}
+                            />
+                            <Text style={[styles.kpiGrowthText, { color: revGrowthPct >= 0 ? '#15803d' : '#b91c1c' }]}>
+                              {revGrowthPct >= 0 ? `+${revGrowthPct}%` : `${revGrowthPct}%`}
                             </Text>
                           </View>
-                        );
-                      })}
-                    </ScrollView>
+                          <Text style={[styles.kpiPastelSubtext, isDark && styles.textMutedDark]}>so với kỳ trước</Text>
+                        </View>
+                      </View>
+
+                      {/* Card 2: Xanh Lá Ngọc Lục Bảo (Emerald) Pastel */}
+                      <View style={[styles.kpiPastelCard, styles.kpiPastelEmerald, isDark && styles.kpiPastelEmeraldDark]}>
+                        <View style={styles.kpiPastelWatermark} pointerEvents="none">
+                          <Ionicons name="bag-handle" size={76} color={isDark ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.06)'} />
+                        </View>
+                        <View style={styles.kpiPastelHeader}>
+                          <View style={[styles.kpiPastelIconBox, { backgroundColor: '#dcfce7' }]}>
+                            <Ionicons name="receipt-outline" size={16} color="#16a34a" />
+                          </View>
+                          <Text style={[styles.kpiPastelLabel, isDark && styles.textDark]}>Số lượng đơn hàng</Text>
+                        </View>
+                        <Text style={[styles.kpiPastelValue, { color: '#15803d' }, isDark && { color: '#4ade80' }]}>
+                          {totalPeriodOrders} <Text style={{ fontSize: 13, fontWeight: '700' }}>đơn</Text>
+                        </Text>
+                        <View style={styles.kpiPastelFooter}>
+                          <View style={[styles.kpiGrowthBadge, ordersGrowthPct >= 0 ? styles.kpiGrowthUp : styles.kpiGrowthDown]}>
+                            <Ionicons
+                              name={ordersGrowthPct >= 0 ? 'arrow-up' : 'arrow-down'}
+                              size={10}
+                              color={ordersGrowthPct >= 0 ? '#15803d' : '#b91c1c'}
+                            />
+                            <Text style={[styles.kpiGrowthText, { color: ordersGrowthPct >= 0 ? '#15803d' : '#b91c1c' }]}>
+                              {ordersGrowthPct >= 0 ? `+${ordersGrowthPct}%` : `${ordersGrowthPct}%`}
+                            </Text>
+                          </View>
+                          <Text style={[styles.kpiPastelSubtext, isDark && styles.textMutedDark]}>so với kỳ trước</Text>
+                        </View>
+                      </View>
+
+                      {/* Card 3: Tím Pastel (Purple) */}
+                      <View style={[styles.kpiPastelCard, styles.kpiPastelPurple, isDark && styles.kpiPastelPurpleDark]}>
+                        <View style={styles.kpiPastelWatermark} pointerEvents="none">
+                          <Ionicons name="pie-chart" size={76} color={isDark ? 'rgba(147,51,234,0.08)' : 'rgba(147,51,234,0.06)'} />
+                        </View>
+                        <View style={styles.kpiPastelHeader}>
+                          <View style={[styles.kpiPastelIconBox, { backgroundColor: '#f3e8ff' }]}>
+                            <Ionicons name="wallet-outline" size={16} color="#9333ea" />
+                          </View>
+                          <Text style={[styles.kpiPastelLabel, isDark && styles.textDark]}>Doanh thu / đơn hàng (TB)</Text>
+                        </View>
+                        <Text style={[styles.kpiPastelValue, { color: '#7e22ce' }, isDark && { color: '#c084fc' }]} numberOfLines={1}>
+                          {formatPrice(aovPeriod)}
+                        </Text>
+                        <View style={styles.kpiPastelFooter}>
+                          <View style={[styles.kpiGrowthBadge, { backgroundColor: '#f3e8ff' }]}>
+                            <Ionicons name="analytics" size={10} color="#7e22ce" />
+                            <Text style={[styles.kpiGrowthText, { color: '#7e22ce' }]}>Bình quân</Text>
+                          </View>
+                          <Text style={[styles.kpiPastelSubtext, isDark && styles.textMutedDark]}>mỗi đơn thành công</Text>
+                        </View>
+                      </View>
+
+                      {/* Card 4: Vàng Cam Pastel (Amber) */}
+                      <View style={[styles.kpiPastelCard, styles.kpiPastelAmber, isDark && styles.kpiPastelAmberDark]}>
+                        <View style={styles.kpiPastelWatermark} pointerEvents="none">
+                          <Ionicons name="trophy" size={76} color={isDark ? 'rgba(217,119,6,0.08)' : 'rgba(217,119,6,0.06)'} />
+                        </View>
+                        <View style={styles.kpiPastelHeader}>
+                          <View style={[styles.kpiPastelIconBox, { backgroundColor: '#fef3c7' }]}>
+                            <Ionicons name="bar-chart-outline" size={16} color="#d97706" />
+                          </View>
+                          <Text style={[styles.kpiPastelLabel, isDark && styles.textDark]}>Doanh thu cao nhất (ngày)</Text>
+                        </View>
+                        <Text style={[styles.kpiPastelValue, { color: '#b45309' }, isDark && { color: '#fbbf24' }]} numberOfLines={1}>
+                          {formatPrice(peakRevenue)}
+                        </Text>
+                        <View style={styles.kpiPastelFooter}>
+                          <View style={[styles.kpiGrowthBadge, { backgroundColor: '#fef3c7' }]}>
+                            <Ionicons name="star" size={10} color="#b45309" />
+                            <Text style={[styles.kpiGrowthText, { color: '#b45309' }]}>Đỉnh kỳ</Text>
+                          </View>
+                          <Text style={[styles.kpiPastelSubtext, isDark && styles.textMutedDark]} numberOfLines={1}>
+                            {peakDate}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
                   </View>
 
-                  {/* BẢNG KÊ CHI TIẾT THEO MỐC */}
-                  <View style={styles.revenueTableWrap}>
-                    <View style={styles.revenueTableHeader}>
-                      <Text style={[styles.revTh, { flex: 2 }]}>Mốc thời gian</Text>
-                      <Text style={[styles.revTh, { flex: 1.5, textAlign: 'center' }]}>Đơn hoàn tất</Text>
-                      <Text style={[styles.revTh, { flex: 2, textAlign: 'right' }]}>Doanh thu thực thu</Text>
-                      <Text style={[styles.revTh, { flex: 2, textAlign: 'right' }]}>Tỷ trọng %</Text>
+                  {/* ======================================================== */}
+                  {/* CARD 2: BIỂU ĐỒ DOANH THU THEO NGÀY (CỘT & ĐƯỜNG)         */}
+                  {/* ======================================================== */}
+                  <View style={[styles.revenueDashCard, isDark && styles.cardDark]}>
+                    {/* HEADER BIỂU ĐỒ VÀ TOGGLE VIEW */}
+                    <View style={[styles.dashCardHeader, { flexWrap: 'wrap', gap: 12, alignItems: 'center' }]}>
+                      <View style={{ flex: 1, minWidth: 220 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <Ionicons name="analytics" size={18} color="#2563eb" />
+                          <Text style={[styles.dashCardTitle, isDark && styles.textDark, { fontSize: 16, fontWeight: '800' }]}>
+                            Biểu đồ doanh thu theo ngày
+                          </Text>
+                        </View>
+                        <Text style={[styles.dashCardSubtitle, isDark && styles.textMutedDark, { fontSize: 12 }]}>
+                          {periodSubtitle}
+                        </Text>
+                      </View>
+
+                      {/* NÚT CHUYỂN ĐỔI: [ 📊 Biểu đồ cột ] vs [ 📈 Biểu đồ đường ] */}
+                      <View style={[styles.chartViewToggleWrap, isDark && styles.chartViewToggleWrapDark]}>
+                        <Pressable
+                          style={[
+                            styles.chartViewToggleBtn,
+                            chartViewType === 'bar' && styles.chartViewToggleBtnActive,
+                          ]}
+                          onPress={() => setChartViewType('bar')}
+                        >
+                          <Ionicons
+                            name="bar-chart"
+                            size={13}
+                            color={chartViewType === 'bar' ? '#ffffff' : isDark ? '#94a3b8' : '#64748b'}
+                          />
+                          <Text
+                            style={[
+                              styles.chartViewToggleText,
+                              chartViewType === 'bar' && styles.chartViewToggleTextActive,
+                            ]}
+                          >
+                            Biểu đồ cột
+                          </Text>
+                        </Pressable>
+
+                        <Pressable
+                          style={[
+                            styles.chartViewToggleBtn,
+                            chartViewType === 'line' && styles.chartViewToggleBtnActive,
+                          ]}
+                          onPress={() => setChartViewType('line')}
+                        >
+                          <Ionicons
+                            name="trending-up"
+                            size={13}
+                            color={chartViewType === 'line' ? '#ffffff' : isDark ? '#94a3b8' : '#64748b'}
+                          />
+                          <Text
+                            style={[
+                              styles.chartViewToggleText,
+                              chartViewType === 'line' && styles.chartViewToggleTextActive,
+                            ]}
+                          >
+                            Biểu đồ đường
+                          </Text>
+                        </Pressable>
+                      </View>
                     </View>
-                    {chartList.map((item, i) => {
-                      const sharePct = totalPeriodRev > 0 ? Math.round((item.revenue / totalPeriodRev) * 100) : 0;
-                      return (
-                        <View key={i} style={[styles.revenueTableRow, i % 2 === 1 && (isDark ? styles.revenueTableRowAltDark : styles.revenueTableRowAlt)]}>
-                          <View style={{ flex: 2 }}>
-                            <Text style={[styles.revTdTime, isDark && styles.textDark]}>
-                              {(item as any).fullDate || (item as any).fullMonth || (item as any).fullYear || item.label}
+
+                    {/* LEGEND CHÚ THÍCH */}
+                    <View style={styles.chartLegendRow}>
+                      <View style={styles.chartLegendItem}>
+                        <View style={[styles.chartLegendPill, { backgroundColor: '#93c5fd' }]} />
+                        <Text style={[styles.chartLegendLabel, isDark && styles.textMutedDark]}>Doanh thu ngày thường</Text>
+                      </View>
+                      <View style={styles.chartLegendItem}>
+                        <View style={[styles.chartLegendPill, { backgroundColor: '#2563eb' }]} />
+                        <Text style={[styles.chartLegendLabel, isDark && styles.textMutedDark]}>
+                          Đỉnh doanh thu ({formatCompact(peakRevenue)})
+                        </Text>
+                      </View>
+                      <View style={styles.chartLegendItem}>
+                        <View style={[styles.chartLegendDot, { backgroundColor: '#10b981' }]} />
+                        <Text style={[styles.chartLegendLabel, isDark && styles.textMutedDark]}>Có đơn thành công</Text>
+                      </View>
+                    </View>
+
+                    {/* KHUNG BIỂU ĐỒ CÓ TRỤC Y VÀ ĐƯỜNG KẺ NGANG DASHED */}
+                    <View style={styles.chartCanvasRow}>
+                      {/* TRỤC TỌA ĐỘ Y BÊN TRÁI */}
+                      <View style={styles.chartYAxisCol}>
+                        {yTicks.map((t, idx) => (
+                          <Text key={idx} style={styles.chartYTickText} numberOfLines={1}>
+                            {t.label}
+                          </Text>
+                        ))}
+                      </View>
+
+                      {/* KHUNG VẼ BIỂU ĐỒ */}
+                      <View style={styles.chartPlotArea}>
+                        {/* CÁC ĐƯỜNG LƯỚI NGANG NÉT ĐỨT (HORIZONTAL DASHED GRIDLINES) */}
+                        <View style={StyleSheet.absoluteFill} pointerEvents="none">
+                          {[0, 25, 50, 75, 100].map((p, idx) => (
+                            <View
+                              key={idx}
+                              style={{
+                                position: 'absolute',
+                                left: 0,
+                                right: 0,
+                                top: `${p}%`,
+                                borderBottomWidth: 1,
+                                borderBottomColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
+                                borderStyle: 'dashed',
+                              }}
+                            />
+                          ))}
+                        </View>
+
+                        {/* HIỂN THỊ DẠNG CỘT (BAR CHART) */}
+                        {chartViewType === 'bar' && (
+                          <ScrollView
+                            horizontal
+                            showsHorizontalScrollIndicator={true}
+                            contentContainerStyle={[
+                              styles.barChartScrollContent,
+                              chartList.length > 20 && { justifyContent: 'flex-start' },
+                              { paddingBottom: 4, minHeight: 210 },
+                            ]}
+                            onWheel={(e: any) => {
+                              if (Platform.OS === 'web' && e?.deltaY) {
+                                e.currentTarget.scrollLeft += e.deltaY;
+                              }
+                            }}
+                          >
+                            {chartList.map((item, idx) => {
+                              const pct = maxRevenue > 0 ? Math.round((item.revenue / maxRevenue) * 100) : 0;
+                              const isPeak = item.revenue === maxRevenue && maxRevenue > 0;
+                              return (
+                                <View
+                                  key={idx}
+                                  style={[
+                                    styles.barColumnWrap,
+                                    chartList.length > 20 && { minWidth: 42 },
+                                  ]}
+                                >
+                                  {/* Số tiền vắn tắt trên đỉnh cột */}
+                                  <Text
+                                    style={[
+                                      styles.barAmountText,
+                                      isPeak && { color: '#2563eb', fontWeight: '800' },
+                                      item.revenue === 0 && { color: isDark ? '#475569' : '#cbd5e1' },
+                                    ]}
+                                    numberOfLines={1}
+                                  >
+                                    {formatCompact(item.revenue)}
+                                  </Text>
+
+                                  {/* Cột biểu đồ */}
+                                  <View style={[styles.barTrack, isDark && { backgroundColor: '#1e293b' }]}>
+                                    <View
+                                      style={[
+                                        styles.barFill,
+                                        { height: `${Math.max(item.revenue > 0 ? 10 : 3, pct)}%` },
+                                        item.revenue > 0
+                                          ? isPeak
+                                            ? { backgroundColor: '#2563eb', borderTopLeftRadius: 6, borderTopRightRadius: 6 }
+                                            : { backgroundColor: '#93c5fd', borderTopLeftRadius: 6, borderTopRightRadius: 6 }
+                                          : { backgroundColor: isDark ? '#334155' : '#e2e8f0' },
+                                      ]}
+                                    />
+                                  </View>
+
+                                  {/* Nhãn ngày/tháng bên dưới */}
+                                  <Text
+                                    style={[
+                                      styles.barLabelText,
+                                      isDark && styles.textMutedDark,
+                                      isPeak && { fontWeight: '800', color: '#2563eb' },
+                                    ]}
+                                  >
+                                    {item.label}
+                                  </Text>
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 1 }}>
+                                    {item.count > 0 && (
+                                      <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: '#10b981' }} />
+                                    )}
+                                    <Text style={styles.barSubCountText}>
+                                      {item.count > 0 ? `${item.count} đơn` : '-'}
+                                    </Text>
+                                  </View>
+                                </View>
+                              );
+                            })}
+                          </ScrollView>
+                        )}
+
+                        {/* HIỂN THỊ DẠNG ĐƯỜNG (LINE CHART) */}
+                        {chartViewType === 'line' && (
+                          <ScrollView
+                            horizontal
+                            showsHorizontalScrollIndicator={true}
+                            contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 6 }}
+                            onWheel={(e: any) => {
+                              if (Platform.OS === 'web' && e?.deltaY) {
+                                e.currentTarget.scrollLeft += e.deltaY;
+                              }
+                            }}
+                          >
+                            {(() => {
+                              const stepX = Math.max(50, Math.floor(700 / (chartList.length || 1)));
+                              const chartW = Math.max(chartList.length * stepX, 600);
+                              const chartH = 150;
+                              const pts = chartList.map((item, idx) => {
+                                const x = idx * stepX + stepX / 2;
+                                const norm = maxRevenue > 0 ? item.revenue / maxRevenue : 0;
+                                const y = chartH - norm * (chartH - 26) - 10;
+                                return { x, y, item, idx };
+                              });
+                              const pathD = pts.reduce((acc, p, i) => (i === 0 ? `M ${p.x} ${p.y}` : `${acc} L ${p.x} ${p.y}`), '');
+                              const areaD = pts.length > 0
+                                ? `${pathD} L ${pts[pts.length - 1].x} ${chartH} L ${pts[0].x} ${chartH} Z`
+                                : '';
+
+                              if (Platform.OS === 'web') {
+                                return (
+                                  <View style={{ width: chartW, height: chartH + 48, position: 'relative' }}>
+                                    <svg width={chartW} height={chartH} style={{ overflow: 'visible' }}>
+                                      <defs>
+                                        <linearGradient id="lineAreaGrad" x1="0" y1="0" x2="0" y2="1">
+                                          <stop offset="0%" stopColor="#2563eb" stopOpacity="0.25" />
+                                          <stop offset="100%" stopColor="#2563eb" stopOpacity="0.0" />
+                                        </linearGradient>
+                                      </defs>
+                                      {areaD ? <path d={areaD} fill="url(#lineAreaGrad)" /> : null}
+                                      {pathD ? (
+                                        <path
+                                          d={pathD}
+                                          fill="none"
+                                          stroke="#2563eb"
+                                          strokeWidth="2.5"
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                        />
+                                      ) : null}
+                                      {pts.map((p) => {
+                                        const isPeak = p.item.revenue === maxRevenue && maxRevenue > 0;
+                                        if (p.item.revenue === 0) return null;
+                                        return (
+                                          <g key={p.idx}>
+                                            <circle
+                                              cx={p.x}
+                                              cy={p.y}
+                                              r={isPeak ? 5 : 3.5}
+                                              fill={isPeak ? '#2563eb' : '#ffffff'}
+                                              stroke={isPeak ? '#ffffff' : '#2563eb'}
+                                              strokeWidth={isPeak ? 2.5 : 2}
+                                            />
+                                            <text
+                                              x={p.x}
+                                              y={p.y - 7}
+                                              textAnchor="middle"
+                                              fontSize="9"
+                                              fontWeight={isPeak ? "800" : "600"}
+                                              fill={isPeak ? "#2563eb" : (isDark ? "#94a3b8" : "#475569")}
+                                            >
+                                              {formatCompact(p.item.revenue)}
+                                            </text>
+                                          </g>
+                                        );
+                                      })}
+                                    </svg>
+                                    <View style={{ flexDirection: 'row', width: chartW, position: 'absolute', bottom: 0, left: 0 }}>
+                                      {pts.map((p) => (
+                                        <View key={p.idx} style={{ width: stepX, alignItems: 'center' }}>
+                                          <Text style={{ fontSize: 10, fontWeight: '700', color: isDark ? '#94a3b8' : '#475569' }}>
+                                            {p.item.label}
+                                          </Text>
+                                          <Text style={{ fontSize: 9, color: '#94a3b8', marginTop: 1 }}>
+                                            {p.item.count > 0 ? `${p.item.count} đơn` : '-'}
+                                          </Text>
+                                        </View>
+                                      ))}
+                                    </View>
+                                  </View>
+                                );
+                              }
+
+                              return (
+                                <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: chartH + 30 }}>
+                                  {chartList.map((item, idx) => (
+                                    <View key={idx} style={{ width: 44, alignItems: 'center' }}>
+                                      <Text style={{ fontSize: 9, color: '#2563eb', fontWeight: '700' }}>
+                                        {item.revenue > 0 ? formatCompact(item.revenue) : ''}
+                                      </Text>
+                                      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#2563eb', marginVertical: 4 }} />
+                                      <Text style={{ fontSize: 10, color: '#64748b' }}>{item.label}</Text>
+                                    </View>
+                                  ))}
+                                </View>
+                              );
+                            })()}
+                          </ScrollView>
+                        )}
+                      </View>
+                    </View>
+
+                    {/* BẢNG KÊ CHI TIẾT THEO MỐC */}
+                    {showDetailNotice && (
+                      <View style={{ marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: isDark ? '#1e293b' : '#f1f5f9' }}>
+                        <View style={{ marginBottom: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <Ionicons name="list" size={15} color="#2563eb" />
+                            <Text style={{ fontSize: 12, fontWeight: '800', color: isDark ? '#94a3b8' : '#475569', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                              Bảng kê chi tiết ({displayedTableList.length}/{chartList.length} mốc)
                             </Text>
                           </View>
-                          <Text style={[styles.revTd, { flex: 1.5, textAlign: 'center', fontWeight: '700' }]}>
-                            {item.count} đơn
-                          </Text>
-                          <Text style={[styles.revTd, { flex: 2, textAlign: 'right', fontWeight: '800', color: item.revenue > 0 ? '#16a34a' : '#94a3b8' }]}>
-                            {formatPrice(item.revenue)}
-                          </Text>
-                          <View style={{ flex: 2, alignItems: 'flex-end', justifyContent: 'center' }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                              <View style={[styles.shareBarTrack, isDark && { backgroundColor: '#334155' }]}>
-                                <View style={[styles.shareBarFill, { width: `${sharePct}%` }]} />
-                              </View>
-                              <Text style={[styles.sharePctText, isDark && styles.textMutedDark]}>{sharePct}%</Text>
-                            </View>
+                          <View style={{ flexDirection: 'row', gap: 6 }}>
+                            <Pressable
+                              style={[
+                                styles.tableFilterPill,
+                                isDark && styles.tableFilterPillDark,
+                                !chartTableOnlyActive && styles.tableFilterPillActive,
+                              ]}
+                              onPress={() => setChartTableOnlyActive(false)}
+                            >
+                              <Text style={[styles.tableFilterPillText, !chartTableOnlyActive && styles.tableFilterPillTextActive]}>
+                                Hiện tất cả ({chartList.length})
+                              </Text>
+                            </Pressable>
+                            <Pressable
+                              style={[
+                                styles.tableFilterPill,
+                                isDark && styles.tableFilterPillDark,
+                                chartTableOnlyActive && styles.tableFilterPillActive,
+                              ]}
+                              onPress={() => setChartTableOnlyActive(true)}
+                            >
+                              <Text style={[styles.tableFilterPillText, chartTableOnlyActive && styles.tableFilterPillTextActive]}>
+                                Chỉ mốc có đơn ({activeCount})
+                              </Text>
+                            </Pressable>
                           </View>
                         </View>
-                      );
-                    })}
+
+                        <View style={styles.revenueTableWrap}>
+                          <View style={styles.revenueTableHeader}>
+                            <Text style={[styles.revTh, { flex: 2 }]}>Mốc thời gian</Text>
+                            <Text style={[styles.revTh, { flex: 1.5, textAlign: 'center' }]}>Đơn hoàn tất</Text>
+                            <Text style={[styles.revTh, { flex: 2, textAlign: 'right' }]}>Doanh thu thực thu</Text>
+                            <Text style={[styles.revTh, { flex: 2, textAlign: 'right' }]}>Tỷ trọng %</Text>
+                          </View>
+                          {displayedTableList.length > 0 ? (
+                            displayedTableList.map((item, i) => {
+                              const sharePct = totalPeriodRev > 0 ? Math.round((item.revenue / totalPeriodRev) * 100) : 0;
+                              return (
+                                <View key={i} style={[styles.revenueTableRow, i % 2 === 1 && (isDark ? styles.revenueTableRowAltDark : styles.revenueTableRowAlt)]}>
+                                  <View style={{ flex: 2 }}>
+                                    <Text style={[styles.revTdTime, isDark && styles.textDark]}>
+                                      {(item as any).fullDate || (item as any).fullMonth || (item as any).fullYear || item.label}
+                                    </Text>
+                                  </View>
+                                  <Text style={[styles.revTd, { flex: 1.5, textAlign: 'center', fontWeight: '700' }]}>
+                                    {item.count} đơn
+                                  </Text>
+                                  <Text style={[styles.revTd, { flex: 2, textAlign: 'right', fontWeight: '800', color: item.revenue > 0 ? '#16a34a' : '#94a3b8' }]}>
+                                    {formatPrice(item.revenue)}
+                                  </Text>
+                                  <View style={{ flex: 2, alignItems: 'flex-end', justifyContent: 'center' }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                      <View style={[styles.shareBarTrack, isDark && { backgroundColor: '#334155' }]}>
+                                        <View style={[styles.shareBarFill, { width: `${sharePct}%` }]} />
+                                      </View>
+                                      <Text style={[styles.sharePctText, isDark && styles.textMutedDark]}>{sharePct}%</Text>
+                                    </View>
+                                  </View>
+                                </View>
+                              );
+                            })
+                          ) : (
+                            <View style={{ padding: 24, alignItems: 'center', justifyContent: 'center' }}>
+                              <Text style={{ fontSize: 13, color: isDark ? '#94a3b8' : '#64748b' }}>
+                                Không có mốc nào phát sinh đơn hàng trong kỳ này.
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                      </View>
+                    )}
                   </View>
                 </View>
               );
@@ -2901,7 +4566,7 @@ export default function AdminScreen() {
         {/* TAB 2: QUẢN LÝ ĐƠN HÀNG (ORDERS)                         */}
         {/* ======================================================== */}
         {activeTab === 'orders' && (
-          <View style={[styles.sectionCard, isDark && styles.cardDark]}>
+          <View style={[styles.sectionCard, isMobile && styles.sectionCardMobile, isDark && styles.cardDark]}>
             <View style={styles.sectionHeader}>
               <View>
                 <Text style={[styles.sectionTitle, isDark && styles.textDark]}>
@@ -3004,7 +4669,7 @@ export default function AdminScreen() {
                 {filteredOrders.map((order) => {
                   const badge = getStatusBadgeStyle(order.status);
                   return (
-                    <View key={order.id} style={[styles.orderItemCard, isDark && styles.cardDark]}>
+                    <View key={order.id} style={[styles.orderItemCard, isMobile && styles.orderItemCardMobile, isDark && styles.cardDark]}>
                       <View style={styles.orderItemTopRow}>
                         <View>
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -3277,7 +4942,7 @@ export default function AdminScreen() {
         {/* TAB 3: QUẢN LÝ SẢN PHẨM (PRODUCTS)                       */}
         {/* ======================================================== */}
         {activeTab === 'products' && (
-          <View style={[styles.sectionCard, isDark && styles.cardDark]}>
+          <View style={[styles.sectionCard, isMobile && styles.sectionCardMobile, isDark && styles.cardDark]}>
             <View style={styles.sectionHeader}>
               <View>
                 <Text style={[styles.sectionTitle, isDark && styles.textDark]}>
@@ -3380,13 +5045,13 @@ export default function AdminScreen() {
                   const isOutOfStock = stockNum <= 0;
                   const isLowStock = stockNum > 0 && stockNum <= 5;
                   return (
-                    <View key={p.id} style={[styles.productCardRow, isDark && styles.cardDark, p.isHidden && { opacity: 0.65 }]}>
+                    <View key={p.id} style={[styles.productCardRow, isMobile && styles.productCardRowMobile, isDark && styles.cardDark, p.isHidden && { opacity: 0.65 }]}>
                       <AdminProductThumb
                         image={p.image}
                         product={p}
                         style={styles.productCardThumb}
                       />
-                      <View style={styles.productCardDetails}>
+                      <View style={[styles.productCardDetails, isMobile && { minWidth: 0 }]}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                           <Text style={styles.productIdBadge}>[{p.id}]</Text>
                           <Text style={styles.productCatBadge}>{p.category_id || p.category || 'Khác'}</Text>
@@ -3426,7 +5091,7 @@ export default function AdminScreen() {
                       </View>
 
                       {/* HÀNH ĐỘNG SẢN PHẨM: ẨN, SAO CHÉP, SỬA, XÓA */}
-                      <View style={styles.productCardActions}>
+                      <View style={[styles.productCardActions, isMobile && { width: '100%', justifyContent: 'flex-end', paddingTop: 6, borderTopWidth: 1, borderTopColor: isDark ? '#334155' : '#f1f5f9' }]}>
                         {/* Ẩn / Hiện */}
                         <Pressable
                           style={[styles.actionSquareBtn, { backgroundColor: p.isHidden ? '#fffbeb' : '#f0fdf4' }]}
@@ -3491,7 +5156,7 @@ export default function AdminScreen() {
         {/* TAB 4: MÃ GIẢM GIÁ (VOUCHERS) - MỚI                      */}
         {/* ======================================================== */}
         {activeTab === 'vouchers' && (
-          <View style={[styles.sectionCard, isDark && styles.cardDark]}>
+          <View style={[styles.sectionCard, isMobile && styles.sectionCardMobile, isDark && styles.cardDark]}>
             <View style={styles.sectionHeader}>
               <View>
                 <Text style={[styles.sectionTitle, isDark && styles.textDark]}>
@@ -3551,7 +5216,7 @@ export default function AdminScreen() {
         {/* TAB 5: QUẢN LÝ NHẬP / XUẤT KHO (INVENTORY)               */}
         {/* ======================================================== */}
         {activeTab === 'inventory' && (
-          <View style={[styles.sectionCard, isDark && styles.cardDark]}>
+          <View style={[styles.sectionCard, isMobile && styles.sectionCardMobile, isDark && styles.cardDark]}>
             <View style={styles.inventoryHeroBanner}>
               <View style={styles.inventoryHeroIconWrap}>
                 <Ionicons name="cube" size={28} color="#ffffff" />
@@ -3652,7 +5317,7 @@ export default function AdminScreen() {
         {/* TAB 6: QUẢN LÝ DANH MỤC (CATEGORIES)                     */}
         {/* ======================================================== */}
         {activeTab === 'categories' && (
-          <View style={[styles.sectionCard, isDark && styles.cardDark]}>
+          <View style={[styles.sectionCard, isMobile && styles.sectionCardMobile, isDark && styles.cardDark]}>
             <View style={styles.sectionHeader}>
               <View>
                 <Text style={[styles.sectionTitle, isDark && styles.textDark]}>
@@ -3723,7 +5388,7 @@ export default function AdminScreen() {
         {/* TAB 7: QUẢN LÝ TÀI KHOẢN & PHÂN QUYỀN (USERS)            */}
         {/* ======================================================== */}
         {activeTab === 'users' && (
-          <View style={[styles.sectionCard, isDark && styles.cardDark]}>
+          <View style={[styles.sectionCard, isMobile && styles.sectionCardMobile, isDark && styles.cardDark]}>
             <View style={styles.sectionHeader}>
               <View>
                 <Text style={[styles.sectionTitle, isDark && styles.textDark]}>
@@ -4128,69 +5793,54 @@ export default function AdminScreen() {
 
                       {/* Mã BH / IMEI máy đã cấp cho đơn hàng */}
                       <View style={styles.orderItemUnitsBox}>
-                        {item.deviceUnits && item.deviceUnits.length > 0 ? (
-                          item.deviceUnits.map((u: any, uIdx: number) => (
-                            <View key={uIdx} style={{ gap: 2, paddingBottom: uIdx < (item.deviceUnits?.length || 0) - 1 ? 4 : 0, borderBottomWidth: uIdx < (item.deviceUnits?.length || 0) - 1 ? 1 : 0, borderBottomColor: isDark ? '#334155' : '#e2e8f0' }}>
-                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                                <Text style={{ fontSize: 10, color: isDark ? '#94a3b8' : '#64748b', fontWeight: '600' }}>Mã BH nội bộ:</Text>
-                                <Text selectable style={[styles.orderItemUnitsCode, isDark && { color: '#93c5fd' }]}>{u.code}</Text>
-                              </View>
-                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                                <Text style={{ fontSize: 10, color: isDark ? '#94a3b8' : '#64748b', fontWeight: '600' }}>IMEI / Serial hãng:</Text>
-                                {u.manufacturerSerial ? (
-                                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                    <Ionicons name="lock-closed" size={11} color="#059669" />
-                                    <Text selectable style={{ fontSize: 11, fontWeight: '800', color: '#059669', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>
-                                      {u.manufacturerSerial}
-                                    </Text>
-                                    <View style={{ backgroundColor: '#dcfce7', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
-                                      <Text style={{ fontSize: 9, fontWeight: '700', color: '#059669' }}>Cố định</Text>
+                        {(() => {
+                          const units = ensureDeviceUnits(item);
+                          return (
+                            <>
+                              {units.map((u, uIdx) => (
+                                <View key={uIdx} style={{ gap: 2, paddingBottom: uIdx < units.length - 1 ? 4 : 0, borderBottomWidth: uIdx < units.length - 1 ? 1 : 0, borderBottomColor: isDark ? '#334155' : '#e2e8f0' }}>
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                    <Text style={{ fontSize: 10, color: isDark ? '#94a3b8' : '#64748b', fontWeight: '600' }}>Mã BH nội bộ:</Text>
+                                    <Text selectable style={[styles.orderItemUnitsCode, isDark && { color: '#93c5fd' }]}>{u.code}</Text>
+                                  </View>
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                    <Text style={{ fontSize: 10, color: isDark ? '#94a3b8' : '#64748b', fontWeight: '600' }}>IMEI / Serial hãng:</Text>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                      <Ionicons name="lock-closed" size={11} color="#059669" />
+                                      <Text selectable style={{ fontSize: 11, fontWeight: '800', color: '#059669', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>
+                                        {u.manufacturerSerial}
+                                      </Text>
+                                      <View style={{ backgroundColor: '#dcfce7', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
+                                        <Text style={{ fontSize: 9, fontWeight: '700', color: '#059669' }}>Cố định</Text>
+                                      </View>
                                     </View>
                                   </View>
-                                ) : (
-                                  <Text style={{ fontSize: 11, fontStyle: 'italic', color: '#d97706' }}>
-                                    Chưa nhập tem máy
-                                  </Text>
-                                )}
-                              </View>
-                            </View>
-                          ))
-                        ) : (
-                          <View style={{ gap: 2 }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                              <Text style={{ fontSize: 10, color: isDark ? '#94a3b8' : '#64748b', fontWeight: '600' }}>Mã BH nội bộ:</Text>
-                              <Text selectable style={[styles.orderItemUnitsCode, isDark && { color: '#93c5fd' }]}>{formatUnitCodes(item)}</Text>
-                            </View>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                              <Text style={{ fontSize: 10, color: isDark ? '#94a3b8' : '#64748b', fontWeight: '600' }}>IMEI / Serial hãng:</Text>
-                              <Text style={{ fontSize: 11, fontStyle: 'italic', color: '#d97706' }}>
-                                Chưa nhập tem máy
-                              </Text>
-                            </View>
-                          </View>
-                        )}
+                                </View>
+                              ))}
 
-                        {item.deviceUnits && item.deviceUnits.length > 0 && item.deviceUnits.every((u: any) => !!u.manufacturerSerial) ? (
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 4, backgroundColor: '#f0fdf4', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, alignSelf: 'flex-start' }}>
-                            <Ionicons name="lock-closed" size={12} color="#059669" />
-                            <Text style={{ fontSize: 11, fontWeight: '700', color: '#059669' }}>
-                              IMEI máy đã cố định & niêm phong theo đơn
-                            </Text>
-                          </View>
-                        ) : (
-                          <Pressable
-                            style={styles.btnInputOrderSerial}
-                            onPress={() => {
-                              setUnitCodes(item.serialNumbers);
-                              setUnitProduct({ id: item.productId, name: item.name });
-                            }}
-                          >
-                            <Ionicons name="barcode-outline" size={13} color="#2563eb" />
-                            <Text style={styles.btnInputOrderSerialText}>
-                              Gán IMEI/Serial từ tem máy (còn thiếu)
-                            </Text>
-                          </Pressable>
-                        )}
+                              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginTop: 4 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#f0fdf4', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }}>
+                                  <Ionicons name="lock-closed" size={12} color="#059669" />
+                                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#059669' }}>
+                                    IMEI máy đã cố định & niêm phong theo đơn
+                                  </Text>
+                                </View>
+                                <Pressable
+                                  style={[styles.btnInputOrderSerial, { paddingHorizontal: 6, paddingVertical: 3, marginTop: 0 }]}
+                                  onPress={() => {
+                                    setUnitCodes(units.map(u => u.code));
+                                    setUnitProduct({ id: item.productId, name: item.name });
+                                  }}
+                                >
+                                  <Ionicons name="pencil-outline" size={11} color="#2563eb" />
+                                  <Text style={[styles.btnInputOrderSerialText, { fontSize: 10 }]}>
+                                    Đổi tem
+                                  </Text>
+                                </Pressable>
+                              </View>
+                            </>
+                          );
+                        })()}
                       </View>
                     </View>
                     <View style={{ alignItems: 'flex-end', flexShrink: 0 }}>
@@ -4253,367 +5903,626 @@ export default function AdminScreen() {
       </Modal>
 
       {/* ======================================================== */}
-      {/* MODAL 2: THÊM / CHỈNH SỬA SẢN PHẨM                       */}
+      {/* MODAL 2: THÊM / CHỈNH SỬA SẢN PHẨM (5 TABS CHUYÊN NGHIỆP) */}
       {/* ======================================================== */}
       <Modal visible={isProductModalOpen} transparent animationType="fade">
         <View style={[styles.modalBackdrop, isMobile && styles.modalBackdropMobile]}>
           <View style={[styles.modalBoxLarge, isMobile && styles.modalBoxLargeMobile, isDark && styles.cardDark]}>
+            {/* MODAL HEADER */}
             <View style={styles.modalHeaderRow}>
-              <Text style={[styles.modalMainTitle, isDark && styles.textDark]}>
-                {editingProduct ? 'Chỉnh sửa sản phẩm' : 'Đăng sản phẩm mới'}
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: '#eff6ff', justifyContent: 'center', alignItems: 'center' }}>
+                  <Ionicons name={editingProduct ? 'create-outline' : 'add-circle-outline'} size={18} color="#2563eb" />
+                </View>
+                <View>
+                  <Text style={[styles.modalMainTitle, isDark && styles.textDark]}>
+                    {editingProduct ? 'Chỉnh sửa sản phẩm' : 'Đăng sản phẩm mới'}
+                  </Text>
+                  <Text style={{ fontSize: 11, color: isDark ? '#94a3b8' : '#64748b' }}>
+                    {editingProduct ? `Mã: ${editingProduct.id}` : 'Điền thông tin và cấu hình chi tiết theo từng ô riêng'}
+                  </Text>
+                </View>
+              </View>
               <Pressable onPress={() => setIsProductModalOpen(false)}>
                 <Ionicons name="close" size={24} color="#64748b" />
               </Pressable>
             </View>
 
-            <ScrollView
-              style={{ flex: 1, minHeight: 0, width: '100%' }}
-              contentContainerStyle={{ paddingBottom: 24 }}
-              showsVerticalScrollIndicator={true}
-              keyboardShouldPersistTaps="handled"
-            >
-              {!editingProduct && (
-                <View style={styles.formGroup}>
-                  <View style={[styles.formGroupHeader, isMobile && { flexDirection: 'column', alignItems: 'flex-start', gap: 4 }]}>
-                    <Text style={[styles.fieldLabel, isDark && styles.textDark, isMobile && { marginBottom: 0 }]}>Mã định danh (ID):</Text>
-                    <Pressable onPress={regenerateId} style={styles.regenBtn}>
-                      <Ionicons name="refresh" size={12} color="#2563eb" />
-                      <Text style={styles.regenBtnText}>Tạo mã ngẫu nhiên</Text>
-                    </Pressable>
-                  </View>
-                  <TextInput
-                    style={[styles.inputControl, isDark && styles.inputControlDark]}
-                    value={productForm.id}
-                    onChangeText={(t) => setProductForm({ ...productForm, id: t })}
-                    placeholder="VD: lap-005, rtx-4080"
-                    placeholderTextColor="#94a3b8"
-                  />
-                </View>
-              )}
-
-              <View style={styles.formGroup}>
-                <Text style={[styles.fieldLabel, isDark && styles.textDark]}>Tên sản phẩm *:</Text>
-                <TextInput
-                  style={[styles.inputControl, isDark && styles.inputControlDark]}
-                  value={productForm.name}
-                  onChangeText={(t) => setProductForm({ ...productForm, name: t })}
-                  placeholder="VD: ASUS ROG Strix SCAR 16 RTX 4080"
-                  placeholderTextColor="#94a3b8"
-                />
-              </View>
-
-              {/* CHỌN NHANH DANH MỤC */}
-              <View style={styles.formGroup}>
-                <Text style={[styles.fieldLabel, isDark && styles.textDark]}>Danh mục linh kiện:</Text>
-                <View style={styles.categoryChipsWrap}>
-                  {(categoryList.length > 0
-                    ? categoryList.map((c) => ({ id: c.id, label: c.name, icon: c.icon }))
-                    : PRESET_CATEGORIES
-                  ).map((c) => {
-                    const isSel = productForm.category_id === c.id;
+            {/* THANH 5 TAB PHÂN BƯỚC ĐẲNG CẤP */}
+            <View style={styles.productTabsContainer}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ width: '100%' }}>
+                <View style={{ flexDirection: 'row', gap: 6, paddingRight: 8 }}>
+                  {PRODUCT_MODAL_TABS.map((tab) => {
+                    const isActive = productModalTab === tab.id;
+                    const specCount = Object.values(productSpecsForm).filter((v) => v && v.trim()).length + customSpecsList.filter((c) => c.key && c.value).length;
                     return (
                       <Pressable
-                        key={c.id}
-                        onPress={() => setProductForm({ ...productForm, category_id: c.id })}
-                        style={[styles.catPickChip, isSel && styles.catPickChipActive]}
+                        key={tab.id}
+                        style={[styles.productTabBtn, isActive && styles.productTabBtnActive]}
+                        onPress={() => setProductModalTab(tab.id)}
                       >
-                        <Text style={{ fontSize: 13 }}>{c.icon}</Text>
-                        <Text style={[styles.catPickChipText, isSel && styles.catPickChipTextActive]}>{c.label}</Text>
+                        <Ionicons name={tab.icon} size={14} color={isActive ? '#ffffff' : '#64748b'} />
+                        <Text style={[styles.productTabBtnText, isActive && styles.productTabBtnTextActive]}>
+                          {tab.label}
+                        </Text>
+                        {tab.id === 'specs' && specCount > 0 && (
+                          <View style={[styles.tabBadge, isActive && styles.tabBadgeActive]}>
+                            <Text style={[styles.tabBadgeText, isActive && styles.tabBadgeTextActive]}>
+                              {specCount}
+                            </Text>
+                          </View>
+                        )}
                       </Pressable>
                     );
                   })}
                 </View>
-              </View>
+              </ScrollView>
+            </View>
 
-              {/* TỒN KHO & STEPPER */}
-              <View style={styles.formGroup}>
-                <Text style={[styles.fieldLabel, isDark && styles.textDark]}>Số lượng trong kho:</Text>
-                <View style={styles.stepperContainer}>
-                  <Pressable style={styles.stepperBtn} onPress={() => adjustStock(-1)}>
-                    <Ionicons name="remove" size={17} color="#475569" />
-                  </Pressable>
-                  <TextInput
-                    style={[styles.stepperInput, isDark && styles.textDark]}
-                    keyboardType="numeric"
-                    value={productForm.stock}
-                    onChangeText={(t) => setProductForm({ ...productForm, stock: t.replace(/[^0-9]/g, '') })}
-                  />
-                  <Pressable style={[styles.stepperBtn, styles.stepperBtnPlus]} onPress={() => adjustStock(1)}>
-                    <Ionicons name="add" size={17} color="#2563eb" />
-                  </Pressable>
-                </View>
-                <View style={styles.quickAddRow}>
-                  {[+5, +10, +20, +50].map((num) => (
-                    <Pressable key={num} style={styles.quickAddPill} onPress={() => adjustStock(num)}>
-                      <Text style={styles.quickAddPillText}>+{num}</Text>
-                    </Pressable>
-                  ))}
-                  <Pressable
-                    style={[styles.quickAddPill, { backgroundColor: '#fee2e2' }]}
-                    onPress={() => setProductForm({ ...productForm, stock: '0' })}
-                  >
-                    <Text style={[styles.quickAddPillText, { color: '#ef4444' }]}>Hết hàng (0)</Text>
-                  </Pressable>
-                </View>
-              </View>
-
-              {/* GIÁ BÁN & GIÁ GỐC */}
-              <View style={styles.formGroup}>
-                <View style={[styles.formGroupHeader, isMobile && { flexWrap: 'wrap', gap: 4 }]}>
-                  <Text style={[styles.fieldLabel, isDark && styles.textDark]}>Giá bán thực tế (VNĐ) *:</Text>
-                  {!!productForm.price && (
-                    <Text style={styles.previewPriceLive}>{formatPrice(parseInt(productForm.price, 10) || 0)}</Text>
+            {/* NỘI DUNG SCROLL VIEW THEO TAB */}
+            <ScrollView
+              style={{ flex: 1, minHeight: 0, width: '100%' }}
+              contentContainerStyle={{ paddingBottom: 20 }}
+              showsVerticalScrollIndicator={true}
+              keyboardShouldPersistTaps="handled"
+            >
+              {/* ==================== TAB 1: CƠ BẢN ==================== */}
+              {productModalTab === 'basic' && (
+                <View style={{ gap: 14 }}>
+                  {!editingProduct && (
+                    <View style={styles.formGroup}>
+                      <View style={[styles.formGroupHeader, isMobile && { flexDirection: 'column', alignItems: 'flex-start', gap: 4 }]}>
+                        <Text style={[styles.fieldLabel, isDark && styles.textDark, isMobile && { marginBottom: 0 }]}>Mã định danh (ID):</Text>
+                        <Pressable onPress={regenerateId} style={styles.regenBtn}>
+                          <Ionicons name="refresh" size={12} color="#2563eb" />
+                          <Text style={styles.regenBtnText}>Tạo mã ngẫu nhiên</Text>
+                        </Pressable>
+                      </View>
+                      <TextInput
+                        style={[styles.inputControl, isDark && styles.inputControlDark]}
+                        value={productForm.id}
+                        onChangeText={(t) => setProductForm({ ...productForm, id: t })}
+                        placeholder="VD: lap-005, rtx-4080, cpu-i7"
+                        placeholderTextColor="#94a3b8"
+                      />
+                    </View>
                   )}
+
+                  <View style={styles.formGroup}>
+                    <Text style={[styles.fieldLabel, isDark && styles.textDark]}>Tên sản phẩm *:</Text>
+                    <TextInput
+                      style={[styles.inputControl, { fontWeight: '700', fontSize: 15 }, isDark && styles.inputControlDark]}
+                      value={productForm.name}
+                      onChangeText={(t) => setProductForm({ ...productForm, name: t })}
+                      placeholder="VD: ASUS ROG Strix SCAR 16 RTX 4080 hoặc Dell Latitude 5480"
+                      placeholderTextColor="#94a3b8"
+                    />
+                  </View>
+
+                  {/* CHỌN DANH MỤC LINH KIỆN */}
+                  <View style={styles.formGroup}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                      <Text style={[styles.fieldLabel, isDark && styles.textDark, { marginBottom: 0 }]}>Danh mục linh kiện:</Text>
+                      <Text style={{ fontSize: 11, color: '#2563eb', fontWeight: '600' }}>
+                        Tự động đổi bộ cấu hình ở Tab 2
+                      </Text>
+                    </View>
+                    <View style={styles.categoryChipsWrap}>
+                      {(categoryList.length > 0
+                        ? categoryList.map((c) => ({ id: c.id, label: c.name, icon: c.icon }))
+                        : PRESET_CATEGORIES
+                      ).map((c) => {
+                        const isSel = productForm.category_id === c.id;
+                        return (
+                          <Pressable
+                            key={c.id}
+                            onPress={() => setProductForm({ ...productForm, category_id: c.id })}
+                            style={[styles.catPickChip, isSel && styles.catPickChipActive]}
+                          >
+                            <Text style={{ fontSize: 13 }}>{c.icon}</Text>
+                            <Text style={[styles.catPickChipText, isSel && styles.catPickChipTextActive]}>{c.label}</Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  </View>
                 </View>
-                <View style={styles.stepperContainer}>
-                  <Pressable style={styles.stepperBtn} onPress={() => adjustPrice('price', -500000)}>
-                    <Ionicons name="remove" size={17} color="#475569" />
-                  </Pressable>
-                  <TextInput
-                    style={[styles.stepperInput, isDark && styles.textDark]}
-                    keyboardType="numeric"
-                    value={productForm.price}
-                    onChangeText={(t) => setProductForm({ ...productForm, price: t.replace(/[^0-9]/g, '') })}
-                    placeholder="25990000"
-                    placeholderTextColor="#94a3b8"
-                  />
-                  <Pressable style={[styles.stepperBtn, styles.stepperBtnPlus]} onPress={() => adjustPrice('price', 500000)}>
-                    <Ionicons name="add" size={17} color="#2563eb" />
-                  </Pressable>
-                </View>
-                <View style={styles.quickAddRow}>
-                  {[
-                    { label: '+500k', val: 500000 },
-                    { label: '+1tr', val: 1000000 },
-                    { label: '+2tr', val: 2000000 },
-                    { label: '+5tr', val: 5000000 },
-                  ].map((chip) => (
-                    <Pressable key={chip.label} style={styles.quickAddPill} onPress={() => adjustPrice('price', chip.val)}>
-                      <Text style={styles.quickAddPillText}>{chip.label}</Text>
+              )}
+
+              {/* ==================== TAB 2: CẤU HÌNH (THÔNG SỐ KỸ THUẬT THEO Ô RIÊNG) ==================== */}
+              {productModalTab === 'specs' && (
+                <View>
+                  {/* BANNER TIÊU ĐỀ & NÚT VÍ DỤ / XÓA TRẮNG */}
+                  {(() => {
+                    const template = getCategorySpecsTemplate(productForm.category_id);
+                    return (
+                      <View style={styles.specsHeaderBanner}>
+                        <View style={{ flex: 1, paddingRight: 8 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <Text style={{ fontSize: 16 }}>{template.icon}</Text>
+                            <Text style={styles.specsBannerTitle}>{template.title}</Text>
+                          </View>
+                          <Text style={styles.specsBannerSubtitle}>
+                            Nhập chi tiết từng ô để hiển thị bảng cấu hình chuyên nghiệp cho khách hàng
+                          </Text>
+                        </View>
+
+                        <View style={styles.specsActionGroup}>
+                          <Pressable
+                            style={styles.btnSpecsExample}
+                            onPress={handleDemoFillSpecs}
+                            accessibilityLabel="Bấm để điền nhanh thông số mẫu"
+                          >
+                            <Ionicons name="sparkles" size={13} color="#2563eb" />
+                            <Text style={styles.btnSpecsExampleText}>Ví dụ</Text>
+                          </Pressable>
+                          <Pressable style={styles.btnSpecsClear} onPress={handleClearSpecs}>
+                            <Text style={styles.btnSpecsClearText}>Xóa trắng</Text>
+                          </Pressable>
+                        </View>
+                      </View>
+                    );
+                  })()}
+
+                  {/* GRID THÔNG SỐ KỸ THUẬT 2 CỘT */}
+                  {(() => {
+                    const template = getCategorySpecsTemplate(productForm.category_id);
+                    return (
+                      <View style={styles.specsGrid}>
+                        {template.fields.map((f) => (
+                          <View key={f.key} style={[styles.specGridItem, isMobile && { minWidth: '100%' }]}>
+                            <View style={styles.specItemHeader}>
+                              <Text style={[styles.fieldLabel, isDark && styles.textDark, { marginBottom: 0 }]}>
+                                {f.label}:
+                              </Text>
+                              <Pressable
+                                style={styles.specQuickFillBtn}
+                                onPress={() => handleQuickFillSingleSpec(f.key, f.example)}
+                              >
+                                <Text style={styles.specQuickFillText} numberOfLines={1}>
+                                  Mẫu: {f.example.slice(0, 18)}...
+                                </Text>
+                              </Pressable>
+                            </View>
+                            <TextInput
+                              style={[styles.inputControl, isDark && styles.inputControlDark]}
+                              value={productSpecsForm[f.key] || ''}
+                              onChangeText={(t) => setProductSpecsForm((prev) => ({ ...prev, [f.key]: t }))}
+                              placeholder={f.placeholder}
+                              placeholderTextColor="#94a3b8"
+                            />
+                          </View>
+                        ))}
+                      </View>
+                    );
+                  })()}
+
+                  {/* THÔNG SỐ TÙY CHỈNH THÊM (NẾU CÓ) */}
+                  <View style={styles.customSpecsBox}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                      <Text style={{ fontSize: 13, fontWeight: '800', color: isDark ? '#f8fafc' : '#0f172a' }}>
+                        Thông số kỹ thuật bổ sung (Tùy chọn):
+                      </Text>
+                      <Text style={{ fontSize: 11, color: '#64748b' }}>
+                        Thêm bất kỳ thông số nào khác
+                      </Text>
+                    </View>
+
+                    {customSpecsList.map((item) => (
+                      <View key={item.id} style={styles.customSpecRow}>
+                        <TextInput
+                          style={[styles.inputControl, { flex: 1 }, isDark && styles.inputControlDark]}
+                          value={item.key}
+                          onChangeText={(t) => handleUpdateCustomSpec(item.id, 'key', t)}
+                          placeholder="Tên thông số (VD: Socket, Tản nhiệt)"
+                          placeholderTextColor="#94a3b8"
+                        />
+                        <TextInput
+                          style={[styles.inputControl, { flex: 1.5 }, isDark && styles.inputControlDark]}
+                          value={item.value}
+                          onChangeText={(t) => handleUpdateCustomSpec(item.id, 'value', t)}
+                          placeholder="Giá trị (VD: LGA1700, Đồng nguyên khối)"
+                          placeholderTextColor="#94a3b8"
+                        />
+                        <Pressable
+                          style={{ padding: 8 }}
+                          onPress={() => handleRemoveCustomSpec(item.id)}
+                          accessibilityLabel="Xóa dòng thông số"
+                        >
+                          <Ionicons name="trash-outline" size={17} color="#dc2626" />
+                        </Pressable>
+                      </View>
+                    ))}
+
+                    <Pressable style={styles.btnAddCustomSpec} onPress={handleAddCustomSpec}>
+                      <Ionicons name="add" size={16} color="#2563eb" />
+                      <Text style={styles.btnAddCustomSpecText}>+ Thêm thông số khác</Text>
                     </Pressable>
-                  ))}
+                  </View>
                 </View>
-              </View>
+              )}
 
-              <View style={styles.formGroup}>
-                <View style={[styles.formGroupHeader, isMobile && { flexWrap: 'wrap', gap: 4 }]}>
-                  <Text style={[styles.fieldLabel, isDark && styles.textDark]}>Giá gốc niêm yết (nếu có giảm giá):</Text>
-                  {!!productForm.oldPrice && (
-                    <Text style={styles.previewOldPriceLive}>{formatPrice(parseInt(productForm.oldPrice, 10) || 0)}</Text>
-                  )}
-                </View>
-                <TextInput
-                  style={[styles.inputControl, isDark && styles.inputControlDark]}
-                  keyboardType="numeric"
-                  value={productForm.oldPrice}
-                  onChangeText={(t) => setProductForm({ ...productForm, oldPrice: t.replace(/[^0-9]/g, '') })}
-                  placeholder="Để trống nếu không có khuyến mãi"
-                  placeholderTextColor="#94a3b8"
-                />
-                <View style={styles.quickAddRow}>
-                  {[
-                    { label: 'Tạo Sale +10%', val: 10 },
-                    { label: 'Tạo Sale +15%', val: 15 },
-                    { label: 'Tạo Sale +20%', val: 20 },
-                  ].map((s) => (
-                    <Pressable key={s.label} style={[styles.quickAddPill, { backgroundColor: '#fef2f2' }]} onPress={() => setMarkupOldPrice(s.val)}>
-                      <Text style={[styles.quickAddPillText, { color: '#dc2626' }]}>{s.label}</Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </View>
+              {/* ==================== TAB 3: GIÁ & KHO ==================== */}
+              {productModalTab === 'pricing' && (
+                <View style={{ gap: 14 }}>
+                  {/* GIÁ BÁN THỰC TẾ */}
+                  <View style={styles.formGroup}>
+                    <View style={[styles.formGroupHeader, isMobile && { flexWrap: 'wrap', gap: 4 }]}>
+                      <Text style={[styles.fieldLabel, isDark && styles.textDark]}>Giá bán thực tế (VNĐ) *:</Text>
+                      {!!productForm.price && (
+                        <Text style={styles.previewPriceLive}>{formatPrice(parseInt(productForm.price, 10) || 0)}</Text>
+                      )}
+                    </View>
+                    <View style={styles.stepperContainer}>
+                      <Pressable style={styles.stepperBtn} onPress={() => adjustPrice('price', -500000)}>
+                        <Ionicons name="remove" size={17} color="#475569" />
+                      </Pressable>
+                      <TextInput
+                        style={[styles.stepperInput, isDark && styles.textDark]}
+                        keyboardType="numeric"
+                        value={productForm.price}
+                        onChangeText={(t) => setProductForm({ ...productForm, price: t.replace(/[^0-9]/g, '') })}
+                        placeholder="25990000"
+                        placeholderTextColor="#94a3b8"
+                      />
+                      <Pressable style={[styles.stepperBtn, styles.stepperBtnPlus]} onPress={() => adjustPrice('price', 500000)}>
+                        <Ionicons name="add" size={17} color="#2563eb" />
+                      </Pressable>
+                    </View>
+                    <View style={styles.quickAddRow}>
+                      {[
+                        { label: '+500k', val: 500000 },
+                        { label: '+1tr', val: 1000000 },
+                        { label: '+2tr', val: 2000000 },
+                        { label: '+5tr', val: 5000000 },
+                      ].map((chip) => (
+                        <Pressable key={chip.label} style={styles.quickAddPill} onPress={() => adjustPrice('price', chip.val)}>
+                          <Text style={styles.quickAddPillText}>{chip.label}</Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </View>
 
-              {/* ẢNH SẢN PHẨM & TẢI ẢNH TỪ MÁY TÍNH */}
-              <View style={styles.formGroup}>
-                <View style={{ flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', justifyContent: 'space-between', marginBottom: 8, gap: 6 }}>
-                  <Text style={[styles.fieldLabel, isDark && styles.textDark, { marginBottom: 0 }]}>Hình ảnh sản phẩm:</Text>
-                  <Pressable
-                    style={[styles.uploadBtnHeader, isMobile && { width: '100%', justifyContent: 'center', paddingVertical: 8 }]}
-                    onPress={handlePickProductImage}
-                    disabled={isUploadingImage}
-                  >
-                    {isUploadingImage ? (
-                      <ActivityIndicator size="small" color="#2563eb" style={{ marginRight: 6 }} />
-                    ) : (
-                      <Ionicons name="cloud-upload-outline" size={15} color="#2563eb" style={{ marginRight: 6 }} />
-                    )}
-                    <Text style={styles.uploadBtnHeaderText}>
-                      {isUploadingImage ? 'Đang nén & tải ảnh...' : '📁 Tải ảnh từ máy tính / Điện thoại'}
-                    </Text>
-                  </Pressable>
-                </View>
+                  {/* GIÁ GỐC NIÊM YẾT */}
+                  <View style={styles.formGroup}>
+                    <View style={[styles.formGroupHeader, isMobile && { flexWrap: 'wrap', gap: 4 }]}>
+                      <Text style={[styles.fieldLabel, isDark && styles.textDark]}>Giá gốc niêm yết (nếu có giảm giá):</Text>
+                      {!!productForm.oldPrice && (
+                        <Text style={styles.previewOldPriceLive}>{formatPrice(parseInt(productForm.oldPrice, 10) || 0)}</Text>
+                      )}
+                    </View>
+                    <TextInput
+                      style={[styles.inputControl, isDark && styles.inputControlDark]}
+                      keyboardType="numeric"
+                      value={productForm.oldPrice}
+                      onChangeText={(t) => setProductForm({ ...productForm, oldPrice: t.replace(/[^0-9]/g, '') })}
+                      placeholder="Để trống nếu không có khuyến mãi"
+                      placeholderTextColor="#94a3b8"
+                    />
+                    <View style={styles.quickAddRow}>
+                      {[
+                        { label: 'Tạo Sale +10%', val: 10 },
+                        { label: 'Tạo Sale +15%', val: 15 },
+                        { label: 'Tạo Sale +20%', val: 20 },
+                      ].map((s) => (
+                        <Pressable key={s.label} style={[styles.quickAddPill, { backgroundColor: '#fef2f2' }]} onPress={() => setMarkupOldPrice(s.val)}>
+                          <Text style={[styles.quickAddPillText, { color: '#dc2626' }]}>{s.label}</Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </View>
 
-                {isMobile ? (
-                  // Giao diện chọn ảnh tối ưu cho Màn hình điện thoại
-                  <View style={{ gap: 10, width: '100%' }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  {/* SỐ LƯỢNG TRONG KHO */}
+                  <View style={styles.formGroup}>
+                    <Text style={[styles.fieldLabel, isDark && styles.textDark]}>Số lượng trong kho:</Text>
+                    <View style={styles.stepperContainer}>
+                      <Pressable style={styles.stepperBtn} onPress={() => adjustStock(-1)}>
+                        <Ionicons name="remove" size={17} color="#475569" />
+                      </Pressable>
+                      <TextInput
+                        style={[styles.stepperInput, isDark && styles.textDark]}
+                        keyboardType="numeric"
+                        value={productForm.stock}
+                        onChangeText={(t) => setProductForm({ ...productForm, stock: t.replace(/[^0-9]/g, '') })}
+                      />
+                      <Pressable style={[styles.stepperBtn, styles.stepperBtnPlus]} onPress={() => adjustStock(1)}>
+                        <Ionicons name="add" size={17} color="#2563eb" />
+                      </Pressable>
+                    </View>
+                    <View style={styles.quickAddRow}>
+                      {[+5, +10, +20, +50].map((num) => (
+                        <Pressable key={num} style={styles.quickAddPill} onPress={() => adjustStock(num)}>
+                          <Text style={styles.quickAddPillText}>+{num}</Text>
+                        </Pressable>
+                      ))}
+                      <Pressable
+                        style={[styles.quickAddPill, { backgroundColor: '#fee2e2' }]}
+                        onPress={() => setProductForm({ ...productForm, stock: '0' })}
+                      >
+                        <Text style={[styles.quickAddPillText, { color: '#ef4444' }]}>Hết hàng (0)</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                </View>
+              )}
+
+              {/* ==================== TAB 4: HÌNH ẢNH ==================== */}
+              {productModalTab === 'media' && (
+                <View style={{ gap: 14 }}>
+                  <View style={styles.formGroup}>
+                    <View style={{ flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', justifyContent: 'space-between', marginBottom: 8, gap: 6 }}>
+                      <Text style={[styles.fieldLabel, isDark && styles.textDark, { marginBottom: 0 }]}>Hình ảnh sản phẩm:</Text>
+                      <Pressable
+                        style={[styles.uploadBtnHeader, isMobile && { width: '100%', justifyContent: 'center', paddingVertical: 8 }]}
+                        onPress={handlePickProductImage}
+                        disabled={isUploadingImage}
+                      >
+                        {isUploadingImage ? (
+                          <ActivityIndicator size="small" color="#2563eb" style={{ marginRight: 6 }} />
+                        ) : (
+                          <Ionicons name="cloud-upload-outline" size={15} color="#2563eb" style={{ marginRight: 6 }} />
+                        )}
+                        <Text style={styles.uploadBtnHeaderText}>
+                          {isUploadingImage ? 'Đang nén & tải ảnh...' : '📁 Tải ảnh từ máy tính / Điện thoại'}
+                        </Text>
+                      </Pressable>
+                    </View>
+
+                    {/* Preview ảnh và ô nhập Link */}
+                    <View style={{ flexDirection: isMobile ? 'column' : 'row', gap: 12, alignItems: 'center' }}>
                       <Pressable
                         style={styles.imageThumbTouch}
                         onPress={handlePickProductImage}
                         accessibilityRole="button"
                         accessibilityLabel="Bấm vào để chọn ảnh từ máy tính"
                       >
-                        <Image source={{ uri: productForm.image || DEFAULT_IMAGE }} style={[styles.imageInputThumb, { width: 56, height: 56 }]} />
+                        <Image source={{ uri: productForm.image || DEFAULT_IMAGE }} style={[styles.imageInputThumb, { width: 80, height: 80, borderRadius: 12 }]} />
                         <View style={styles.imageThumbOverlay}>
-                          <Ionicons name="camera" size={12} color="#ffffff" />
+                          <Ionicons name="camera" size={13} color="#ffffff" />
                         </View>
                       </Pressable>
 
-                      <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
-                        <Pressable
-                          style={[styles.uploadActionBtn, isUploadingImage && { opacity: 0.6 }]}
-                          onPress={handlePickProductImage}
-                          disabled={isUploadingImage}
-                        >
-                          <Ionicons name="folder-open-outline" size={14} color="#0f172a" />
-                          <Text style={styles.uploadActionBtnText} numberOfLines={1}>
-                            {isUploadingImage ? 'Đang xử lý...' : 'Chọn từ tệp tin'}
-                          </Text>
-                        </Pressable>
+                      <View style={{ flex: 1, gap: 6, width: '100%' }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <TextInput
+                            style={[styles.inputControl, { flex: 1 }, isDark && styles.inputControlDark]}
+                            value={productForm.image}
+                            onChangeText={(t) => setProductForm({ ...productForm, image: t })}
+                            placeholder="Dán đường dẫn ảnh https://... hoặc tải từ máy"
+                            placeholderTextColor="#94a3b8"
+                          />
+                          {productForm.image ? (
+                            <Pressable
+                              style={styles.clearImgBtn}
+                              onPress={() => setProductForm({ ...productForm, image: '' })}
+                              accessibilityLabel="Xóa ảnh"
+                            >
+                              <Ionicons name="close" size={16} color="#64748b" />
+                            </Pressable>
+                          ) : null}
+                        </View>
 
-                        {productForm.image && productForm.image.startsWith('data:image') && (
-                          <View style={styles.localImgBadge}>
-                            <Ionicons name="checkmark-circle" size={12} color="#16a34a" />
-                            <Text style={styles.localImgBadgeText}>Ảnh từ thiết bị</Text>
-                          </View>
-                        )}
-                        {productForm.image && productForm.image.includes('/uploads/') && (
-                          <View style={styles.localImgBadge}>
-                            <Ionicons name="cloud-done" size={12} color="#16a34a" />
-                            <Text style={styles.localImgBadgeText}>Đã lưu trên máy chủ</Text>
-                          </View>
-                        )}
-                      </View>
-                    </View>
-
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, width: '100%' }}>
-                      <TextInput
-                        style={[styles.inputControl, { flex: 1, minWidth: 0, fontSize: 13 }, isDark && styles.inputControlDark]}
-                        value={productForm.image}
-                        onChangeText={(t) => setProductForm({ ...productForm, image: t })}
-                        placeholder="Hoặc dán URL: https://..."
-                        placeholderTextColor="#94a3b8"
-                      />
-                      {productForm.image ? (
-                        <Pressable
-                          style={styles.clearImgBtn}
-                          onPress={() => setProductForm({ ...productForm, image: '' })}
-                          accessibilityLabel="Xóa ảnh"
-                        >
-                          <Ionicons name="close" size={16} color="#64748b" />
-                        </Pressable>
-                      ) : null}
-                    </View>
-                  </View>
-                ) : (
-                  // Giao diện màn hình máy tính (Desktop)
-                  <View style={styles.imageInputRow}>
-                    <Pressable
-                      style={styles.imageThumbTouch}
-                      onPress={handlePickProductImage}
-                      accessibilityRole="button"
-                      accessibilityLabel="Bấm vào để chọn ảnh từ máy tính"
-                    >
-                      <Image source={{ uri: productForm.image || DEFAULT_IMAGE }} style={styles.imageInputThumb} />
-                      <View style={styles.imageThumbOverlay}>
-                        <Ionicons name="camera" size={13} color="#ffffff" />
-                      </View>
-                    </Pressable>
-
-                    <View style={{ flex: 1, gap: 6, minWidth: 0 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <TextInput
-                          style={[styles.inputControl, { flex: 1, minWidth: 0 }, isDark && styles.inputControlDark]}
-                          value={productForm.image}
-                          onChangeText={(t) => setProductForm({ ...productForm, image: t })}
-                          placeholder="Dán link ảnh https://... hoặc chọn ảnh từ máy tính"
-                          placeholderTextColor="#94a3b8"
-                        />
-                        {productForm.image ? (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                           <Pressable
-                            style={styles.clearImgBtn}
-                            onPress={() => setProductForm({ ...productForm, image: '' })}
-                            accessibilityLabel="Xóa ảnh"
+                            style={[styles.uploadActionBtn, isUploadingImage && { opacity: 0.6 }]}
+                            onPress={handlePickProductImage}
+                            disabled={isUploadingImage}
                           >
-                            <Ionicons name="close" size={16} color="#64748b" />
+                            <Ionicons name="folder-open-outline" size={13} color="#0f172a" />
+                            <Text style={styles.uploadActionBtnText}>Chọn tệp từ máy</Text>
                           </Pressable>
-                        ) : null}
+
+                          {productForm.image && productForm.image.startsWith('data:image') && (
+                            <View style={styles.localImgBadge}>
+                              <Ionicons name="checkmark-circle" size={12} color="#16a34a" />
+                              <Text style={styles.localImgBadgeText}>Ảnh từ máy tính</Text>
+                            </View>
+                          )}
+                          {productForm.image && productForm.image.includes('/uploads/') && (
+                            <View style={styles.localImgBadge}>
+                              <Ionicons name="cloud-done" size={12} color="#16a34a" />
+                              <Text style={styles.localImgBadgeText}>Đã lưu trên máy chủ</Text>
+                            </View>
+                          )}
+                        </View>
                       </View>
+                    </View>
 
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                        <Pressable
-                          style={[styles.uploadActionBtn, isUploadingImage && { opacity: 0.6 }]}
-                          onPress={handlePickProductImage}
-                          disabled={isUploadingImage}
-                        >
-                          <Ionicons name="folder-open-outline" size={13} color="#0f172a" />
-                          <Text style={styles.uploadActionBtnText}>
-                            {isUploadingImage ? 'Đang xử lý...' : 'Chọn từ máy tính / Điện thoại'}
-                          </Text>
-                        </Pressable>
-
-                        {productForm.image && productForm.image.startsWith('data:image') && (
-                          <View style={styles.localImgBadge}>
-                            <Ionicons name="checkmark-circle" size={12} color="#16a34a" />
-                            <Text style={styles.localImgBadgeText}>Ảnh từ máy tính</Text>
-                          </View>
-                        )}
-
-                        {productForm.image && productForm.image.includes('/uploads/') && (
-                          <View style={styles.localImgBadge}>
-                            <Ionicons name="cloud-done" size={12} color="#16a34a" />
-                            <Text style={styles.localImgBadgeText}>Đã lưu trên máy chủ</Text>
-                          </View>
-                        )}
-                      </View>
+                    {/* GỢI Ý ẢNH MẪU CÓ SẴN */}
+                    <View style={{ marginTop: 14 }}>
+                      <Text style={{ fontSize: 11, color: isDark ? '#94a3b8' : '#64748b', marginBottom: 6 }}>
+                        Hoặc chọn nhanh ảnh mẫu có sẵn theo linh kiện:
+                      </Text>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ width: '100%' }}>
+                        <View style={{ flexDirection: 'row', gap: 6, paddingRight: 10 }}>
+                          {PRESET_PHOTOS.map((p, idx) => (
+                            <Pressable key={idx} style={styles.presetPhotoChip} onPress={() => setProductForm({ ...productForm, image: p.url })}>
+                              <Text style={{ fontSize: 13 }}>{p.icon}</Text>
+                              <Text style={styles.presetPhotoText}>{p.label}</Text>
+                            </Pressable>
+                          ))}
+                        </View>
+                      </ScrollView>
                     </View>
                   </View>
-                )}
-
-                {/* Gợi ý ảnh nhanh */}
-                <View style={{ marginTop: 10 }}>
-                  <Text style={{ fontSize: 11, color: isDark ? '#94a3b8' : '#64748b', marginBottom: 5 }}>
-                    Hoặc chọn nhanh ảnh mẫu có sẵn:
-                  </Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ width: '100%' }}>
-                    <View style={{ flexDirection: 'row', gap: 6, paddingRight: 10 }}>
-                      {PRESET_PHOTOS.map((p, idx) => (
-                        <Pressable key={idx} style={styles.presetPhotoChip} onPress={() => setProductForm({ ...productForm, image: p.url })}>
-                          <Text style={{ fontSize: 13 }}>{p.icon}</Text>
-                          <Text style={styles.presetPhotoText}>{p.label}</Text>
-                        </Pressable>
-                      ))}
-                    </View>
-                  </ScrollView>
                 </View>
-              </View>
+              )}
 
-              {/* MÔ TẢ */}
-              <View style={styles.formGroup}>
-                <Text style={[styles.fieldLabel, isDark && styles.textDark]}>Mô tả cấu hình nổi bật:</Text>
-                <TextInput
-                  style={[styles.inputControl, { height: 75, textAlignVertical: 'top' }, isDark && styles.inputControlDark]}
-                  multiline
-                  value={productForm.description}
-                  onChangeText={(t) => setProductForm({ ...productForm, description: t })}
-                  placeholder="Mô tả CPU, RAM, VGA, Bảo hành..."
-                  placeholderTextColor="#94a3b8"
-                />
-              </View>
+              {/* ==================== TAB 5: HIỂN THỊ & XEM TRƯỚC ==================== */}
+              {productModalTab === 'display' && (
+                <View style={{ gap: 16 }}>
+                  {/* MÔ TẢ SẢN PHẨM */}
+                  <View style={styles.formGroup}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                      <Text style={[styles.fieldLabel, isDark && styles.textDark, { marginBottom: 0 }]}>
+                        Mô tả tóm tắt sản phẩm:
+                      </Text>
+                      <Pressable style={styles.autoGenDescBtn} onPress={handleGenerateDescriptionFromSpecs}>
+                        <Ionicons name="sparkles" size={12} color="#2563eb" />
+                        <Text style={styles.autoGenDescText}>Tự động tạo từ cấu hình</Text>
+                      </Pressable>
+                    </View>
+                    <TextInput
+                      style={[styles.inputControl, { height: 80, textAlignVertical: 'top' }, isDark && styles.inputControlDark]}
+                      multiline
+                      value={productForm.description}
+                      onChangeText={(t) => setProductForm({ ...productForm, description: t })}
+                      placeholder="Mô tả nổi bật CPU, RAM, VGA, Tính năng, Chế độ bảo hành..."
+                      placeholderTextColor="#94a3b8"
+                    />
+                  </View>
+
+                  {/* CHECKBOXES TRẠNG THÁI & HUY HIỆU */}
+                  <View style={styles.formGroup}>
+                    <Text style={[styles.fieldLabel, isDark && styles.textDark]}>Trạng thái kinh doanh & Nhãn nổi bật:</Text>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                      <Pressable
+                        style={[styles.catPickChip, productFlags.isHot && styles.catPickChipActive]}
+                        onPress={() => setProductFlags((prev) => ({ ...prev, isHot: !prev.isHot }))}
+                      >
+                        <Text style={{ fontSize: 13 }}>🔥</Text>
+                        <Text style={[styles.catPickChipText, productFlags.isHot && styles.catPickChipTextActive]}>Bán chạy (Hot)</Text>
+                      </Pressable>
+
+                      <Pressable
+                        style={[styles.catPickChip, productFlags.isNew && styles.catPickChipActive]}
+                        onPress={() => setProductFlags((prev) => ({ ...prev, isNew: !prev.isNew }))}
+                      >
+                        <Text style={{ fontSize: 13 }}>✨</Text>
+                        <Text style={[styles.catPickChipText, productFlags.isNew && styles.catPickChipTextActive]}>Hàng mới (New)</Text>
+                      </Pressable>
+
+                      <Pressable
+                        style={[styles.catPickChip, productFlags.isFeatured && styles.catPickChipActive]}
+                        onPress={() => setProductFlags((prev) => ({ ...prev, isFeatured: !prev.isFeatured }))}
+                      >
+                        <Text style={{ fontSize: 13 }}>⭐</Text>
+                        <Text style={[styles.catPickChipText, productFlags.isFeatured && styles.catPickChipTextActive]}>Nổi bật (Featured)</Text>
+                      </Pressable>
+
+                      <Pressable
+                        style={[styles.catPickChip, productFlags.isHidden && { backgroundColor: '#fee2e2', borderColor: '#f87171' }]}
+                        onPress={() => setProductFlags((prev) => ({ ...prev, isHidden: !prev.isHidden }))}
+                      >
+                        <Ionicons name={productFlags.isHidden ? 'eye-off' : 'eye'} size={14} color={productFlags.isHidden ? '#dc2626' : '#64748b'} />
+                        <Text style={[styles.catPickChipText, productFlags.isHidden && { color: '#dc2626', fontWeight: '700' }]}>
+                          {productFlags.isHidden ? 'Tạm ẩn bán' : 'Đang mở bán'}
+                        </Text>
+                      </Pressable>
+                    </View>
+                  </View>
+
+                  {/* THẺ XEM TRƯỚC SẢN PHẨM THỰC TẾ & BẢNG CẤU HÌNH */}
+                  <View style={styles.livePreviewCardWrap}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <Text style={{ fontSize: 13, fontWeight: '800', color: '#0f172a' }}>
+                        👁️ Xem trước giao diện người dùng (Live Preview):
+                      </Text>
+                      <View style={{ backgroundColor: '#eff6ff', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
+                        <Text style={{ fontSize: 10, fontWeight: '700', color: '#2563eb' }}>Khách hàng nhìn thấy</Text>
+                      </View>
+                    </View>
+
+                    {/* Preview Card */}
+                    <View style={{ flexDirection: isMobile ? 'column' : 'row', gap: 12, backgroundColor: '#ffffff', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#e2e8f0' }}>
+                      <Image source={{ uri: productForm.image || DEFAULT_IMAGE }} style={{ width: isMobile ? '100%' : 100, height: 100, borderRadius: 10 }} resizeMode="cover" />
+                      <View style={{ flex: 1, gap: 4 }}>
+                        <Text style={{ fontSize: 14, fontWeight: '800', color: '#0f172a' }} numberOfLines={2}>
+                          {productForm.name || 'Tên sản phẩm mẫu...'}
+                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
+                          <Text style={{ fontSize: 16, fontWeight: '900', color: '#dc2626' }}>
+                            {formatPrice(parseInt(productForm.price, 10) || 0)}
+                          </Text>
+                          {!!productForm.oldPrice && parseInt(productForm.oldPrice, 10) > (parseInt(productForm.price, 10) || 0) && (
+                            <Text style={{ fontSize: 12, color: '#94a3b8', textDecorationLine: 'line-through' }}>
+                              {formatPrice(parseInt(productForm.oldPrice, 10))}
+                            </Text>
+                          )}
+                        </View>
+                        <Text style={{ fontSize: 11, color: '#64748b' }} numberOfLines={2}>
+                          {productForm.description || 'Chưa có mô tả tóm tắt'}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Mini Bảng Thông Số Kỹ Thuật */}
+                    <Text style={{ fontSize: 12, fontWeight: '800', color: '#334155', marginTop: 4 }}>
+                      Bảng thông số kỹ thuật chi tiết:
+                    </Text>
+                    {(() => {
+                      const allSpecs = { ...productSpecsForm };
+                      customSpecsList.forEach((c) => {
+                        if (c.key && c.value) allSpecs[c.key] = c.value;
+                      });
+                      const entries = Object.entries(allSpecs).filter(([_, v]) => v && v.trim());
+                      if (entries.length === 0) {
+                        return (
+                          <View style={{ padding: 12, backgroundColor: '#f1f5f9', borderRadius: 8, alignItems: 'center' }}>
+                            <Text style={{ fontSize: 11, color: '#64748b' }}>
+                              Chưa nhập thông số nào. Vào Tab 2 "Cấu hình" hoặc bấm nút [Ví dụ] để điền mẫu.
+                            </Text>
+                          </View>
+                        );
+                      }
+                      return (
+                        <View style={styles.miniSpecsTable}>
+                          {entries.map(([k, v], idx) => (
+                            <View key={k} style={[styles.miniSpecRow, idx % 2 === 1 && { backgroundColor: '#f8fafc' }]}>
+                              <Text style={styles.miniSpecKey}>{k}</Text>
+                              <Text style={styles.miniSpecVal}>{v}</Text>
+                            </View>
+                          ))}
+                        </View>
+                      );
+                    })()}
+                  </View>
+                </View>
+              )}
             </ScrollView>
 
+            {/* MODAL FOOTER ACTIONS */}
             <View style={[styles.modalFooterActions, isMobile && styles.modalFooterActionsMobile, isDark && { borderTopColor: '#334155' }]}>
-              <Pressable style={[styles.btnSecondary, isMobile && { flex: 1, justifyContent: 'center' }]} onPress={() => setIsProductModalOpen(false)}>
-                <Text style={styles.btnSecondaryText}>Hủy bỏ</Text>
-              </Pressable>
-              <Pressable style={[styles.btnPrimary, isMobile && { flex: 1.6, justifyContent: 'center' }]} onPress={handleSaveProduct} disabled={isSavingProduct}>
-                {isSavingProduct ? (
-                  <ActivityIndicator size="small" color="#ffffff" />
-                ) : (
-                  <Text style={styles.btnPrimaryText}>{editingProduct ? 'Cập nhật' : 'Lưu sản phẩm'}</Text>
+              {productModalTab !== 'basic' ? (
+                <Pressable
+                  style={[styles.btnSecondary, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}
+                  onPress={() => handleNavigateModalTab('prev')}
+                >
+                  <Ionicons name="arrow-back" size={14} color="#475569" />
+                  <Text style={styles.btnSecondaryText}>Quay lại</Text>
+                </Pressable>
+              ) : (
+                <Pressable style={styles.btnSecondary} onPress={() => setIsProductModalOpen(false)}>
+                  <Text style={styles.btnSecondaryText}>Hủy bỏ</Text>
+                </Pressable>
+              )}
+
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                {productModalTab !== 'display' && (
+                  <Pressable
+                    style={[styles.btnSecondary, { backgroundColor: '#eff6ff', borderColor: '#bfdbfe', flexDirection: 'row', alignItems: 'center', gap: 4 }]}
+                    onPress={() => handleNavigateModalTab('next')}
+                  >
+                    <Text style={[styles.btnSecondaryText, { color: '#2563eb', fontWeight: '800' }]}>Tiếp theo</Text>
+                    <Ionicons name="arrow-forward" size={14} color="#2563eb" />
+                  </Pressable>
                 )}
-              </Pressable>
+
+                <Pressable
+                  style={[styles.btnPrimary, { flexDirection: 'row', alignItems: 'center', gap: 6 }]}
+                  onPress={handleSaveProduct}
+                  disabled={isSavingProduct}
+                >
+                  {isSavingProduct ? (
+                    <ActivityIndicator size="small" color="#ffffff" />
+                  ) : (
+                    <>
+                      <Ionicons name="checkmark-circle" size={16} color="#ffffff" />
+                      <Text style={styles.btnPrimaryText}>{editingProduct ? 'Cập nhật' : 'Lưu sản phẩm'}</Text>
+                    </>
+                  )}
+                </Pressable>
+              </View>
             </View>
           </View>
         </View>
@@ -5510,6 +7419,381 @@ const styles = StyleSheet.create({
     color: '#ffffff',
   },
 
+  chartSubFilterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+    padding: 10,
+    borderRadius: 12,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginBottom: 14,
+  },
+  chartSubFilterRowDark: {
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  chartSubNavBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  chartSubNavBtnDark: {
+    backgroundColor: '#1e293b',
+    borderColor: '#334155',
+  },
+  chartSubNavBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  chartSubNavBtnTextDark: {
+    color: '#cbd5e1',
+  },
+  chartMonthPill: {
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 6,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  chartMonthPillDark: {
+    backgroundColor: '#1e293b',
+    borderColor: '#334155',
+  },
+  chartMonthPillActive: {
+    backgroundColor: '#2563eb',
+    borderColor: '#2563eb',
+  },
+  chartMonthPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  chartMonthPillTextActive: {
+    color: '#ffffff',
+  },
+  tableFilterPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 7,
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  tableFilterPillDark: {
+    backgroundColor: '#1e293b',
+    borderColor: '#334155',
+  },
+  tableFilterPillActive: {
+    backgroundColor: '#2563eb',
+    borderColor: '#2563eb',
+  },
+  tableFilterPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  tableFilterPillTextActive: {
+    color: '#ffffff',
+  },
+
+  /* REVENUE DASHBOARD CARDS (CONTAINER FIT - NO FLEX:1 STRETCH) */
+  revenueDashCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 18,
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
+    elevation: 1,
+  },
+
+  /* 4 PASTEL KPI SUMMARY CARDS (UI PRO MAX) */
+  kpiPastelGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginTop: 6,
+  },
+  kpiPastelCard: {
+    flex: 1,
+    minWidth: 190,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    position: 'relative',
+    overflow: 'hidden',
+    justifyContent: 'space-between',
+  },
+  kpiPastelBlue: {
+    backgroundColor: '#f0f7ff',
+    borderColor: '#dbeafe',
+  },
+  kpiPastelBlueDark: {
+    backgroundColor: '#0f1d33',
+    borderColor: '#1e3a5f',
+  },
+  kpiPastelEmerald: {
+    backgroundColor: '#f0fdf4',
+    borderColor: '#bbf7d0',
+  },
+  kpiPastelEmeraldDark: {
+    backgroundColor: '#0d2818',
+    borderColor: '#16532d',
+  },
+  kpiPastelPurple: {
+    backgroundColor: '#faf5ff',
+    borderColor: '#e9d5ff',
+  },
+  kpiPastelPurpleDark: {
+    backgroundColor: '#22123a',
+    borderColor: '#4c1d95',
+  },
+  kpiPastelAmber: {
+    backgroundColor: '#fffbeb',
+    borderColor: '#fde68a',
+  },
+  kpiPastelAmberDark: {
+    backgroundColor: '#2d2008',
+    borderColor: '#5c400d',
+  },
+  kpiPastelWatermark: {
+    position: 'absolute',
+    right: -10,
+    bottom: -10,
+  },
+  kpiPastelHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  kpiPastelIconBox: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  kpiPastelLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  kpiPastelValue: {
+    fontSize: 20,
+    fontWeight: '900',
+    letterSpacing: -0.5,
+    marginBottom: 8,
+  },
+  kpiPastelFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexWrap: 'wrap',
+  },
+  kpiGrowthBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  kpiGrowthUp: {
+    backgroundColor: '#dcfce7',
+  },
+  kpiGrowthDown: {
+    backgroundColor: '#fee2e2',
+  },
+  kpiGrowthText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  kpiPastelSubtext: {
+    fontSize: 11,
+    color: '#64748b',
+    fontWeight: '500',
+  },
+
+  /* CHART VIEW SWITCHER & LEGEND */
+  chartViewToggleWrap: {
+    flexDirection: 'row',
+    backgroundColor: '#f1f5f9',
+    borderRadius: 8,
+    padding: 3,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  chartViewToggleWrapDark: {
+    backgroundColor: '#1e293b',
+    borderColor: '#334155',
+  },
+  chartViewToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+  },
+  chartViewToggleBtnActive: {
+    backgroundColor: '#2563eb',
+  },
+  chartViewToggleText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  chartViewToggleTextActive: {
+    color: '#ffffff',
+  },
+  chartLegendRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    flexWrap: 'wrap',
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    marginBottom: 8,
+  },
+  chartLegendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  chartLegendPill: {
+    width: 14,
+    height: 10,
+    borderRadius: 3,
+  },
+  chartLegendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  chartLegendLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748b',
+  },
+
+  /* YEAR DROPDOWN & CHECKBOX */
+  yearDropdownMenu: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    marginTop: 4,
+    backgroundColor: '#ffffff',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 4,
+    zIndex: 100,
+    minWidth: 120,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  yearDropdownMenuDark: {
+    backgroundColor: '#1e293b',
+    borderColor: '#334155',
+  },
+  yearDropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 6,
+  },
+  yearDropdownItemActive: {
+    backgroundColor: '#eff6ff',
+  },
+  yearDropdownItemActiveDark: {
+    backgroundColor: '#2563eb25',
+  },
+  yearDropdownItemText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  checkboxNoticeWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginLeft: 'auto',
+  },
+  checkboxNoticeWrapDark: {
+    backgroundColor: '#1e293b',
+    borderColor: '#334155',
+  },
+  checkboxBox: {
+    width: 16,
+    height: 16,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderColor: '#cbd5e1',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+  },
+  checkboxBoxChecked: {
+    backgroundColor: '#2563eb',
+    borderColor: '#2563eb',
+  },
+  checkboxNoticeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
+  },
+
+  /* CHART CANVAS WITH Y-AXIS AND GRID */
+  chartCanvasRow: {
+    flexDirection: 'row',
+    minHeight: 230,
+    position: 'relative',
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  chartYAxisCol: {
+    width: 58,
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    paddingRight: 8,
+    paddingBottom: 38,
+    paddingTop: 6,
+  },
+  chartYTickText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#94a3b8',
+  },
+  chartPlotArea: {
+    flex: 1,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+
   /* ACCESS GUARD */
   guardContainer: {
     flex: 1,
@@ -5691,6 +7975,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
+  headerMobile: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 10,
+  },
+  headerLeftMobile: {
+    width: '100%',
+    justifyContent: 'space-between',
+  },
+  headerActionsMobile: {
+    width: '100%',
+    flexWrap: 'wrap',
+    gap: 6,
+    justifyContent: 'flex-start',
+  },
+  headerActionBtnMobile: {
+    flex: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   refreshBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -5758,6 +8064,10 @@ const styles = StyleSheet.create({
     width: '100%',
     alignSelf: 'center',
   },
+  contentContainerMobile: {
+    padding: 12,
+    paddingBottom: 80,
+  },
 
   /* LOAD ERROR BANNER */
   loadErrorBanner: {
@@ -5804,6 +8114,10 @@ const styles = StyleSheet.create({
     gap: 16,
     marginBottom: 20,
   },
+  statsGridMobile: {
+    gap: 10,
+    marginBottom: 14,
+  },
   statCard: {
     flex: 1,
     minWidth: 230,
@@ -5818,11 +8132,20 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 1,
   },
+  statCardMobile: {
+    minWidth: '100%',
+    padding: 14,
+    borderRadius: 14,
+  },
   statHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 12,
+  },
+  statHeaderRowMobile: {
+    flexWrap: 'wrap',
+    gap: 8,
   },
   statIconWrap: {
     width: 44,
@@ -5848,6 +8171,9 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: '#0f172a',
     letterSpacing: -0.5,
+  },
+  statValueMobile: {
+    fontSize: 20,
   },
   statLabel: {
     fontSize: 12,
@@ -5944,12 +8270,22 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 16,
   },
+  welcomeCardMobile: {
+    padding: 16,
+    borderRadius: 16,
+    gap: 12,
+  },
   welcomeLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 16,
     flex: 1,
     minWidth: 280,
+  },
+  welcomeLeftMobile: {
+    minWidth: 0,
+    width: '100%',
+    gap: 12,
   },
   welcomeAvatar: {
     width: 54,
@@ -5973,6 +8309,10 @@ const styles = StyleSheet.create({
   welcomeRightActions: {
     flexDirection: 'row',
     gap: 10,
+  },
+  welcomeRightActionsMobile: {
+    width: '100%',
+    justifyContent: 'stretch',
   },
   welcomeBtn: {
     flexDirection: 'row',
@@ -6006,6 +8346,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.03,
     shadowRadius: 8,
     elevation: 1,
+  },
+  dashCardMobile: {
+    padding: 12,
+    borderRadius: 14,
   },
   dashCardHeader: {
     flexDirection: 'row',
@@ -6182,6 +8526,10 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 1,
   },
+  sectionCardMobile: {
+    padding: 12,
+    borderRadius: 16,
+  },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -6259,11 +8607,17 @@ const styles = StyleSheet.create({
     borderColor: '#e2e8f0',
     padding: 16,
   },
+  orderItemCardMobile: {
+    padding: 12,
+    borderRadius: 14,
+  },
   orderItemTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     marginBottom: 10,
+    flexWrap: 'wrap',
+    gap: 8,
   },
   orderNumberTitle: {
     fontSize: 15,
@@ -6336,14 +8690,14 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     flex: 1,
-    minWidth: 260,
+    minWidth: 160,
   },
   terminalStatusCompleted: {
     backgroundColor: '#f0fdf4',
     borderColor: '#bbf7d0',
   },
   terminalStatusCompletedDark: {
-    backgroundColor: 'rgba(22, 163, 74, 0.12)',
+    backgroundColor: 'rgba(220, 38, 38, 0.12)',
     borderColor: 'rgba(34, 197, 94, 0.3)',
   },
   terminalStatusCancelled: {
@@ -6364,7 +8718,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     flex: 1,
-    minWidth: 260,
+    minWidth: 160,
   },
   statusChangerLabel: {
     fontSize: 11,
@@ -6738,6 +9092,11 @@ const styles = StyleSheet.create({
     borderColor: '#e2e8f0',
     padding: 12,
     gap: 12,
+  },
+  productCardRowMobile: {
+    flexWrap: 'wrap',
+    gap: 10,
+    padding: 10,
   },
   productCardThumb: {
     width: 68,
@@ -7372,8 +9731,8 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     padding: 24,
     width: '100%',
-    maxWidth: 640,
-    maxHeight: '90%',
+    maxWidth: 820,
+    maxHeight: '92%',
     display: 'flex',
     flexDirection: 'column',
     overflow: 'hidden',
@@ -7693,6 +10052,226 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: '#ffffff',
+  },
+
+  /* PRODUCT 5-TAB STYLES */
+  productTabsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+    marginBottom: 16,
+  },
+  productTabBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 10,
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  productTabBtnActive: {
+    backgroundColor: '#2563eb',
+    borderColor: '#1d4ed8',
+    shadowColor: '#2563eb',
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  productTabBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  productTabBtnTextActive: {
+    color: '#ffffff',
+  },
+  tabBadge: {
+    backgroundColor: '#e2e8f0',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 999,
+  },
+  tabBadgeActive: {
+    backgroundColor: '#1d4ed8',
+  },
+  tabBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#475569',
+  },
+  tabBadgeTextActive: {
+    color: '#ffffff',
+  },
+  specsHeaderBanner: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#eff6ff',
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    marginBottom: 16,
+  },
+  specsBannerTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#1e40af',
+  },
+  specsBannerSubtitle: {
+    fontSize: 11,
+    color: '#3b82f6',
+    marginTop: 2,
+  },
+  specsActionGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  btnSpecsExample: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#93c5fd',
+  },
+  btnSpecsExampleText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#2563eb',
+  },
+  btnSpecsClear: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  btnSpecsClearText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748b',
+  },
+  specsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 16,
+  },
+  specGridItem: {
+    flex: 1,
+    minWidth: 280,
+  },
+  specItemHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  specQuickFillBtn: {
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  specQuickFillText: {
+    fontSize: 10,
+    color: '#2563eb',
+    fontWeight: '600',
+  },
+  customSpecsBox: {
+    backgroundColor: '#f8fafc',
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginTop: 10,
+    marginBottom: 16,
+  },
+  customSpecRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  btnAddCustomSpec: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    borderStyle: 'dashed',
+    marginTop: 4,
+  },
+  btnAddCustomSpecText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#2563eb',
+  },
+  autoGenDescBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+  },
+  autoGenDescText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#2563eb',
+  },
+  livePreviewCardWrap: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 14,
+    marginTop: 14,
+    gap: 12,
+  },
+  miniSpecsTable: {
+    backgroundColor: '#ffffff',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    overflow: 'hidden',
+  },
+  miniSpecRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  miniSpecKey: {
+    width: 120,
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  miniSpecVal: {
+    flex: 1,
+    fontSize: 11,
+    color: '#0f172a',
   },
 
   /* ORDER DETAIL MODAL SPECIFIC */

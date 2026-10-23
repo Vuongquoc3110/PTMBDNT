@@ -259,13 +259,20 @@ export default function CheckoutScreen() {
       setCreatedOrderNumber(res.orderNumber);
       if (res.orderId) setCreatedOrderId(res.orderId);
 
-      // Thông báo cho toàn bộ hook useProduct/useProducts tự refetch stock mới
+      // Thông báo cho toàn bộ hệ thống (Admin, Staff, Kho, User) refetch stock và orders theo thời gian thực
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('dpc_product_updated'));
+        window.dispatchEvent(new CustomEvent('dpc_order_created', { detail: res }));
+        window.dispatchEvent(new CustomEvent('dpc_order_updated', { detail: res }));
         try {
-          const bc = new BroadcastChannel('dpc_product_sync');
-          bc.postMessage({ type: 'stock_updated' });
-          bc.close();
+          const bcProd = new BroadcastChannel('dpc_product_sync');
+          bcProd.postMessage({ type: 'stock_updated' });
+          bcProd.close();
+        } catch {}
+        try {
+          const bcOrder = new BroadcastChannel('dpc_order_sync');
+          bcOrder.postMessage({ type: 'order_created', orderNumber: res.orderNumber, orderId: res.orderId });
+          bcOrder.close();
         } catch {}
       }
 
@@ -319,7 +326,13 @@ export default function CheckoutScreen() {
         playSuccessChime();
       }
     } catch (err: any) {
-      alert('Lỗi tạo đơn hàng: ' + (err.message || 'Vui lòng thử lại'));
+      console.error('Lỗi tạo đơn hàng:', err);
+      const msg = err?.message || 'Vui lòng thử lại';
+      if (msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
+        alert('Lỗi kết nối máy chủ: Backend (Port 5000) chưa được bật. Vui lòng chạy "npm run backend" hoặc "npm run dev"!');
+      } else {
+        alert('Lỗi tạo đơn hàng: ' + msg);
+      }
     } finally {
       setIsSubmitting(false);
     }

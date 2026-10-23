@@ -22,7 +22,7 @@ import { formatPrice, products as fallbackProducts, getProductFallbackImage, isI
 import { apiService, type Order } from '@/services/api';
 import { useAppContext } from '@/context/AppContext';
 import { playSuccessChime } from '@/utils/sound';
-import { formatUnitCodes } from '@/utils/deviceUnits';
+import { formatUnitCodes, ensureDeviceUnits } from '@/utils/deviceUnits';
 
 const RETURN_REASONS = [
   'Lỗi phần cứng / Không lên nguồn',
@@ -859,6 +859,42 @@ export default function OrderDetailScreen() {
                           {(() => {
                             const w = calculateWarrantyInfo(order.createdAt, item);
                             const hasUnits = item.deviceUnits && item.deviceUnits.length > 0;
+                            const isOrderCompleted = order.status === 'completed';
+                            const isCancelled = order.status === 'cancelled';
+
+                            if (isCancelled) {
+                              return (
+                                <View style={{ marginVertical: 4 }}>
+                                  <View style={[styles.itemWarrantyBadge, { backgroundColor: '#fef2f2', borderColor: '#fecaca' }]}>
+                                    <Ionicons name="close-circle" size={12} color="#dc2626" />
+                                    <Text style={[styles.itemWarrantyText, { color: '#dc2626' }]}>
+                                      Đơn hàng đã hủy (Không kích hoạt bảo hành)
+                                    </Text>
+                                  </View>
+                                </View>
+                              );
+                            }
+
+                            // Chỉ hiển thị Mã bảo hành & Thời hạn kích hoạt chính thức khi khách hàng đã NHẬN ĐƠN (completed)
+                            if (!isOrderCompleted) {
+                              return (
+                                <View style={{ gap: 4, marginVertical: 5 }}>
+                                  <View style={[styles.itemWarrantyBadge, { backgroundColor: '#f8fafc', borderColor: '#e2e8f0' }]}>
+                                    <Ionicons name="shield-outline" size={12} color="#475569" />
+                                    <Text style={[styles.itemWarrantyText, { color: '#475569' }]}>
+                                      Bảo hành chính hãng: <Text style={{ fontWeight: '700', color: '#0f172a' }}>{w.label}</Text>
+                                    </Text>
+                                  </View>
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 2 }}>
+                                    <Ionicons name="time-outline" size={12} color="#64748b" />
+                                    <Text style={{ fontSize: 11, color: '#64748b', fontWeight: '500' }}>
+                                      Mã bảo hành sẽ được cấp sau khi bạn nhận đơn hàng
+                                    </Text>
+                                  </View>
+                                </View>
+                              );
+                            }
+
                             return (
                               <View style={{ gap: 5, marginTop: 5, marginBottom: 5 }}>
                                 <View style={styles.itemWarrantyBadge}>
@@ -868,8 +904,9 @@ export default function OrderDetailScreen() {
                                   </Text>
                                 </View>
 
-                                {hasUnits ? (
-                                  item.deviceUnits.map((u: any, uIdx: number) => (
+                                {(() => {
+                                  const units = ensureDeviceUnits(item);
+                                  return units.map((u, uIdx) => (
                                     <View
                                       key={uIdx}
                                       style={{
@@ -882,20 +919,18 @@ export default function OrderDetailScreen() {
                                         marginTop: 2,
                                       }}
                                     >
-                                      {u.manufacturerSerial ? (
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6, flexWrap: 'wrap' }}>
-                                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                                            <Ionicons name="hardware-chip-outline" size={13} color="#059669" />
-                                            <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569' }}>IMEI máy:</Text>
-                                            <Text selectable style={{ fontSize: 12, fontWeight: '800', color: '#059669', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>
-                                              {u.manufacturerSerial}
-                                            </Text>
-                                          </View>
-                                          <View style={{ backgroundColor: '#dcfce7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                                            <Text style={{ fontSize: 9, fontWeight: '700', color: '#059669' }}>🔒 Cố định</Text>
-                                          </View>
+                                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6, flexWrap: 'wrap' }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                                          <Ionicons name="hardware-chip-outline" size={13} color="#059669" />
+                                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569' }}>IMEI máy:</Text>
+                                          <Text selectable style={{ fontSize: 12, fontWeight: '800', color: '#059669', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>
+                                            {u.manufacturerSerial}
+                                          </Text>
                                         </View>
-                                      ) : null}
+                                        <View style={{ backgroundColor: '#dcfce7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                          <Text style={{ fontSize: 9, fontWeight: '700', color: '#059669' }}>🔒 Cố định</Text>
+                                        </View>
+                                      </View>
 
                                       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 4 }}>
                                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
@@ -914,18 +949,8 @@ export default function OrderDetailScreen() {
                                         </Pressable>
                                       </View>
                                     </View>
-                                  ))
-                                ) : (
-                                  <Pressable
-                                    style={{ flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start' }}
-                                    onPress={() => router.push('/warranty' as any)}
-                                  >
-                                    <Ionicons name="barcode-outline" size={13} color="#2563eb" />
-                                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#2563eb' }}>
-                                      Mã bảo hành: {formatUnitCodes(item)}
-                                    </Text>
-                                    <Ionicons name="open-outline" size={11} color="#2563eb" />
-                                  </Pressable>
+                                  ));
+                                })()}
                                 )}
                               </View>
                             );
@@ -964,19 +989,29 @@ export default function OrderDetailScreen() {
               <View style={styles.card}>
                 <View style={styles.cardHeader}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Ionicons name="shield-checkmark" size={20} color="#16a34a" />
+                    <Ionicons
+                      name={order.status === 'completed' ? 'shield-checkmark' : 'shield-outline'}
+                      size={20}
+                      color={order.status === 'completed' ? '#16a34a' : '#64748b'}
+                    />
                     <Text style={styles.cardTitle}>Thời hạn bảo hành điện tử chính hãng</Text>
                   </View>
-                  <Pressable
-                    style={styles.lookupWarrantyBtn}
-                    onPress={() => router.push({ pathname: '/warranty', params: { q: order.orderNumber || order.id } } as any)}
-                  >
-                    <Text style={styles.lookupWarrantyBtnText}>Tra cứu chi tiết →</Text>
-                  </Pressable>
+                  {order.status === 'completed' ? (
+                    <Pressable
+                      style={styles.lookupWarrantyBtn}
+                      onPress={() => router.push({ pathname: '/warranty', params: { q: order.orderNumber || order.id } } as any)}
+                    >
+                      <Text style={styles.lookupWarrantyBtnText}>Tra cứu chi tiết →</Text>
+                    </Pressable>
+                  ) : null}
                 </View>
                 <View style={styles.warrantyCardBody}>
                   <Text style={styles.warrantyCardDesc}>
-                    Thiết bị được kích hoạt bảo hành điện tử chính hãng tại DANGVINHPC ngay khi mua máy. Thời hạn bảo hành được tính chính xác từ ngày mua máy đến ngày hết hạn bảo hành.
+                    {order.status === 'completed'
+                      ? 'Thiết bị đã được kích hoạt bảo hành điện tử chính hãng tại DANGVINHPC sau khi nhận hàng thành công. Thời hạn bảo hành được tính từ ngày kích hoạt đến ngày hết hạn bảo hành.'
+                      : order.status === 'cancelled'
+                      ? 'Đơn hàng đã hủy. Quyền lợi bảo hành điện tử không áp dụng cho đơn hàng này.'
+                      : 'Thiết bị áp dụng chính sách bảo hành chính hãng. Mã bảo hành và thời hạn hiệu lực sẽ được tự động kích hoạt ngay sau khi bạn nhận đơn hàng thành công.'}
                   </Text>
                   <View style={{ gap: 10, marginTop: 10 }}>
                     {order.items.map((it, idx) => {
@@ -985,19 +1020,50 @@ export default function OrderDetailScreen() {
                         <View key={idx} style={styles.warrantyRowItem}>
                           <View style={{ flex: 1, marginRight: 10 }}>
                             <Text style={styles.warrantyProdName} numberOfLines={1}>{it.name}</Text>
-                            <Text style={styles.warrantyRangeText}>
-                              Thời hạn bảo hành dự kiến: <Text style={{ fontWeight: '800', color: '#15803d' }}>{w.range}</Text>
-                            </Text>
-                            <Text style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
-                              Thời gian mua: <Text style={{ fontWeight: '700', color: '#334155' }}>{w.purchaseStr}</Text> • Hạn bảo hành: <Text style={{ fontWeight: '700', color: '#334155' }}>{w.expiryStr}</Text> ({w.label})
-                            </Text>
+                            {order.status === 'completed' ? (
+                              <>
+                                <Text style={styles.warrantyRangeText}>
+                                  Thời hạn bảo hành: <Text style={{ fontWeight: '800', color: '#15803d' }}>{w.range}</Text>
+                                </Text>
+                                <Text style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
+                                  Kích hoạt từ: <Text style={{ fontWeight: '700', color: '#334155' }}>{w.purchaseStr}</Text> • Hạn bảo hành: <Text style={{ fontWeight: '700', color: '#334155' }}>{w.expiryStr}</Text> ({w.label})
+                                </Text>
+                              </>
+                            ) : order.status === 'cancelled' ? (
+                              <Text style={{ fontSize: 12, color: '#dc2626', fontWeight: '600', marginTop: 2 }}>
+                                Đã hủy đơn • Không kích hoạt
+                              </Text>
+                            ) : (
+                              <>
+                                <Text style={{ fontSize: 12, color: '#475569', fontWeight: '600', marginTop: 2 }}>
+                                  Gói bảo hành: <Text style={{ fontWeight: '700', color: '#0f172a' }}>{w.label}</Text>
+                                </Text>
+                                <Text style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
+                                  ⏳ Mã bảo hành sẽ được cấp sau khi bạn nhận đơn hàng
+                                </Text>
+                              </>
+                            )}
                           </View>
                           <View style={{ alignItems: 'flex-end', justifyContent: 'center' }}>
-                            <View style={[styles.warrantyStatusPill, { backgroundColor: w.isValid ? '#dcfce7' : '#fee2e2' }]}>
-                              <Text style={{ fontSize: 11, fontWeight: '800', color: w.isValid ? '#15803d' : '#b91c1c' }}>
-                                {w.isValid ? `Còn ${w.remainingDays} ngày` : 'Hết hạn'}
-                              </Text>
-                            </View>
+                            {order.status === 'completed' ? (
+                              <View style={[styles.warrantyStatusPill, { backgroundColor: w.isValid ? '#dcfce7' : '#fee2e2' }]}>
+                                <Text style={{ fontSize: 11, fontWeight: '800', color: w.isValid ? '#15803d' : '#b91c1c' }}>
+                                  {w.isValid ? `Còn ${w.remainingDays} ngày` : 'Hết hạn'}
+                                </Text>
+                              </View>
+                            ) : order.status === 'cancelled' ? (
+                              <View style={[styles.warrantyStatusPill, { backgroundColor: '#fee2e2' }]}>
+                                <Text style={{ fontSize: 11, fontWeight: '800', color: '#b91c1c' }}>
+                                  Đã hủy
+                                </Text>
+                              </View>
+                            ) : (
+                              <View style={[styles.warrantyStatusPill, { backgroundColor: '#f1f5f9' }]}>
+                                <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569' }}>
+                                  Chờ nhận hàng
+                                </Text>
+                              </View>
+                            )}
                           </View>
                         </View>
                       );

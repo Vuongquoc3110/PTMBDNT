@@ -43,6 +43,12 @@ function getSessionId() {
   if (!memorySessionId) memorySessionId = createSessionId();
   return memorySessionId;
 }
+function clearSessionId() {
+  if (Platform.OS === 'web' && typeof localStorage !== 'undefined') {
+    localStorage.removeItem(SESSION_KEY);
+  }
+  memorySessionId = null;
+}
 
 function getReply(message: string): BotReply {
   const query = message.toLowerCase();
@@ -114,23 +120,72 @@ export function SupportChatWidget() {
   const isLive = !!ticket && ticket.status !== 'closed';
   const unread = ticket && !isOpen ? Number(ticket.unreadByCustomer) || 0 : 0;
 
+  const resetChat = useCallback((showEndedMessage = false) => {
+    clearSessionId();
+    setTicket(null);
+    setPendingText(null);
+    setDraft('');
+    messageId.current = 1;
+    if (showEndedMessage) {
+      setMessages([
+        GREETING,
+        {
+          id: `ended-${Date.now()}`,
+          role: 'assistant',
+          text: 'Cuộc trò chuyện với nhân viên đã kết thúc. Cảm ơn bạn đã liên hệ DANGVINHPC! Bạn có thể chọn chủ đề gợi ý bên dưới hoặc gửi câu hỏi mới.',
+        },
+      ]);
+    } else {
+      setMessages([GREETING]);
+    }
+  }, []);
+
+  // Khi đăng xuất, đăng nhập hoặc đổi tài khoản -> dọn sạch phiên chat cũ để không lưu lại ngoài
+  const prevUserKeyRef = useRef<string | null>(user ? `${user.id}-${user.role}` : null);
+  useEffect(() => {
+    const currentKey = user ? `${user.id}-${user.role}` : null;
+    if (prevUserKeyRef.current !== currentKey) {
+      prevUserKeyRef.current = currentKey;
+      resetChat(false);
+    }
+  }, [user, resetChat]);
+
   // Khôi phục hội thoại đang mở của phiên (nếu có)
   useEffect(() => {
+    const sid = getSessionId();
     apiService
-      .getSupportTicketBySession(getSessionId())
+      .getSupportTicketBySession(sid)
       .then((t) => {
-        if (t && t.status !== 'closed') setTicket(t);
+        if (t && t.status !== 'closed') {
+          setTicket(t);
+        } else {
+          clearSessionId();
+          setTicket(null);
+        }
       })
-      .catch(() => {});
+      .catch(() => {
+        clearSessionId();
+        setTicket(null);
+      });
   }, []);
 
   const refreshTicket = useCallback(async () => {
     if (!ticketId) return;
     try {
       const fresh = await apiService.getSupportTicket(ticketId, isOpen ? 'customer' : undefined);
+      if (!fresh || fresh.status === 'closed') {
+        // Nhân viên đã đóng cuộc trò chuyện từ trang quản trị
+        resetChat(true);
+        return;
+      }
       setTicket(fresh);
-    } catch {}
-  }, [ticketId, isOpen]);
+    } catch (err: any) {
+      // Nếu ticket không còn tồn tại trên server (đã bị xóa)
+      if (err?.status === 404 || err?.message?.includes('404') || err?.message?.includes('Không tìm thấy')) {
+        resetChat(false);
+      }
+    }
+  }, [ticketId, isOpen, resetChat]);
 
   // Polling phản hồi từ admin
   useEffect(() => {
@@ -219,17 +274,14 @@ export function SupportChatWidget() {
   };
 
   const endLiveChat = async () => {
-    if (!ticket) return;
-    try {
-      await apiService.updateSupportTicketStatus(ticket.id, 'closed');
-    } catch {}
-    // Giữ lại lịch sử trên màn hình rồi quay về trợ lý tự động
-    const history: Omit<ChatMessage, 'id'>[] = (ticket.messages || []).map((m) => ({
-      role: m.sender === 'bot' ? 'assistant' : m.sender === 'staff' ? 'admin' : m.sender,
-      text: m.text,
-    }));
-    setTicket(null);
-    pushLocal([...history, { role: 'assistant', text: 'Cuộc trò chuyện với nhân viên đã kết thúc. Cảm ơn bạn đã liên hệ DANGVINHPC!' }]);
+    const currentTicketId = ticket?.id;
+    // Dọn dẹp sạch sẽ phiên chat ở phía khách ngay lập tức, không lưu lại đoạn chat cũ
+    resetChat(true);
+    if (currentTicketId) {
+      try {
+        await apiService.updateSupportTicketStatus(currentTicketId, 'closed');
+      } catch {}
+    }
   };
 
   const ticketMessages: ChatMessage[] = (ticket?.messages || []).map((m) => ({
@@ -242,7 +294,7 @@ export function SupportChatWidget() {
     ...ticketMessages,
     ...(pendingText ? [{ id: 'pending', role: 'customer' as const, text: pendingText, pending: true }] : []),
   ];
-  const showQuickPrompts = !ticket && messages.length === 1 && !pendingText;
+  const showQuickPrompts = !ticket && !pendingText;
 
   // Ẩn hoàn toàn widget bot chat khách hàng nếu là tài khoản nhân viên / admin, hoặc đang ở trang quản trị
   const isStaffOrAdmin = user?.role === 'staff' || user?.role === 'admin';
@@ -275,7 +327,7 @@ export function SupportChatWidget() {
                 </View>
               </View>
             </View>
-            {isLive && (
+            {isLive ? (
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Kết thúc trò chuyện với nhân viên"
@@ -284,6 +336,18 @@ export function SupportChatWidget() {
               >
                 <Text style={styles.endButtonText}>Kết thúc</Text>
               </Pressable>
+            ) : (
+              messages.length > 1 && (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Làm mới cuộc trò chuyện"
+                  hitSlop={10}
+                  onPress={() => resetChat(false)}
+                  style={styles.refreshButton}
+                >
+                  <Ionicons name="refresh" size={16} color="#cbd5e1" />
+                </Pressable>
+              )
             )}
             <Pressable
               accessibilityRole="button"
@@ -545,6 +609,14 @@ const styles = StyleSheet.create({
     color: '#fecaca',
     fontSize: 11,
     fontWeight: '700',
+  },
+  refreshButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.1)',
   },
   closeButton: {
     width: 34,

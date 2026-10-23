@@ -83,6 +83,20 @@ app.use((req, res, next) => {
   next();
 });
 
+// Helper an toàn để parse JSON từ MySQL (tránh crash khi mysql2 trả về object hoặc string)
+function safeJsonParse(value, fallback = {}) {
+  if (value === null || value === undefined) return fallback;
+  if (typeof value === 'object') return value;
+  if (typeof value === 'string') {
+    try {
+      return JSON.parse(value);
+    } catch (e) {
+      return fallback;
+    }
+  }
+  return fallback;
+}
+
 // Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'API server is running', timestamp: new Date() });
@@ -318,6 +332,16 @@ async function initTables() {
     } catch (sqlErr) {
       console.warn('⚠️ Lỗi tự động đồng bộ catalog vào MySQL:', sqlErr.message);
     }
+
+    // Tự động sửa các sản phẩm mới đăng bị dính reviewCount = 1 do hardcode trước đây nhưng không có review nào
+    try {
+      await connection.query(`
+        UPDATE products
+        SET reviewCount = 0
+        WHERE reviewCount = 1 AND id NOT IN (SELECT DISTINCT productId FROM reviews)
+      `);
+      console.log('✅ Synchronized zero-review count for newly created products');
+    } catch (e) {}
 
     connection.release();
     console.log('✅ Database tables initialized (wishlist, reviews, vouchers, users)');
@@ -678,9 +702,9 @@ app.get('/products', async (req, res) => {
         ...product,
         category: product.category || product.category_id,
         image,
-        specifications: product.specifications ? (typeof product.specifications === 'string' ? JSON.parse(product.specifications) : product.specifications) : {},
-        features: product.features ? (typeof product.features === 'string' ? JSON.parse(product.features) : product.features) : [],
-        configurations: product.configurations ? (typeof product.configurations === 'string' ? JSON.parse(product.configurations) : product.configurations) : undefined,
+        specifications: safeJsonParse(product.specifications, {}),
+        features: safeJsonParse(product.features, []),
+        configurations: safeJsonParse(product.configurations, undefined),
       };
     });
 
@@ -711,6 +735,26 @@ app.get('/products/:id', async (req, res) => {
         }
       }
     }
+
+    // Đồng bộ số lượng đánh giá thực tế từ bảng reviews
+    try {
+      const [revStats] = await connection.query(
+        'SELECT COUNT(*) as revCount, AVG(rating) as avgRating FROM reviews WHERE productId = ?',
+        [req.params.id]
+      );
+      const realReviewCount = revStats[0]?.revCount || 0;
+      if (realReviewCount > 0) {
+        rows[0].reviewCount = realReviewCount;
+        if (revStats[0]?.avgRating) {
+          rows[0].rating = Math.round(revStats[0].avgRating * 10) / 10;
+        }
+      } else if (rows[0].reviewCount === 1) {
+        // Tự động xóa reviewCount = 1 ảo nếu không có bài đánh giá nào
+        rows[0].reviewCount = 0;
+        await connection.query('UPDATE products SET reviewCount = 0 WHERE id = ?', [req.params.id]);
+      }
+    } catch (rErr) {}
+
     connection.release();
 
     if (rows[0].isHidden && !isRequestAdmin) {
@@ -730,9 +774,9 @@ app.get('/products/:id', async (req, res) => {
       ...rows[0],
       category: rows[0].category || rows[0].category_id,
       image,
-      specifications: rows[0].specifications ? JSON.parse(rows[0].specifications) : {},
-      features: rows[0].features ? JSON.parse(rows[0].features) : [],
-      configurations: rows[0].configurations ? (typeof rows[0].configurations === 'string' ? JSON.parse(rows[0].configurations) : rows[0].configurations) : undefined,
+      specifications: safeJsonParse(rows[0].specifications, {}),
+      features: safeJsonParse(rows[0].features, []),
+      configurations: safeJsonParse(rows[0].configurations, undefined),
     };
 
     res.json(product);
@@ -1314,6 +1358,16 @@ app.post('/orders', async (req, res) => {
     connection = await pool.getConnection();
     const { userId, items, totalAmount, shippingAddress, shippingMethod, paymentMethod, voucherCode } = req.body;
 
+    let validUserId = Number(userId);
+    if (!validUserId || isNaN(validUserId)) validUserId = 1;
+    try {
+      const [[userExists]] = await connection.query('SELECT id FROM users WHERE id = ?', [validUserId]);
+      if (!userExists) {
+        const [[firstUser]] = await connection.query('SELECT id FROM users ORDER BY id ASC LIMIT 1');
+        if (firstUser) validUserId = firstUser.id;
+      }
+    } catch {}
+
     const parsedItems = Array.isArray(items)
       ? items
       : (typeof items === 'string' ? JSON.parse(items) : []);
@@ -1384,8 +1438,16 @@ app.post('/orders', async (req, res) => {
           error: `Sản phẩm "${prod.name}" trong kho chỉ còn ${currentStock} cái, không đủ số lượng bạn đặt (${reqQty})`
         });
       }
-      it.serialNumbers = await allocateUnits(connection, it.productId, reqQty);
-      it.serialNumber = it.serialNumbers[0];
+
+      try {
+        it.serialNumbers = await allocateUnits(connection, it.productId, reqQty);
+        it.serialNumber = it.serialNumbers[0];
+      } catch (unitErr) {
+        console.warn(`[Orders] allocateUnits fallback for product ${it.productId}:`, unitErr.message);
+        const fallbackSerials = Array.from({ length: reqQty }, (_, i) => `SN-DPC-${Date.now().toString().slice(-6)}-${i + 1}`);
+        it.serialNumbers = fallbackSerials;
+        it.serialNumber = fallbackSerials[0];
+      }
       delete it.deviceUnits;
       delete it.legacySerialNumber;
       it.unitCodeSource = 'inventory';
@@ -1411,8 +1473,20 @@ app.post('/orders', async (req, res) => {
       exp.setMonth(exp.getMonth() + months);
       const expiryDateStr = `${pad(exp.getDate())}/${pad(exp.getMonth() + 1)}/${exp.getFullYear()}`;
 
+      const serialList = it.serialNumbers && it.serialNumbers.length > 0
+        ? it.serialNumbers
+        : [it.serialNumber || `SN-DPC-${Date.now().toString().slice(-6)}-1`];
+
+      const deviceUnits = serialList.map((code) => ({
+        code,
+        manufacturerSerial: generateSerial(it.productId, it.name),
+      }));
+
       return {
         ...it,
+        serialNumbers: serialList,
+        serialNumber: serialList[0],
+        deviceUnits,
         warrantyMonths: it.warrantyMonths || months,
         purchaseDate: it.purchaseDate || purchaseDateStr,
         warrantyExpiry: it.warrantyExpiry || expiryDateStr,
@@ -1431,7 +1505,7 @@ app.post('/orders', async (req, res) => {
     `;
 
     const [result] = await connection.query(query, [
-      userId,
+      validUserId,
       orderNumber,
       JSON.stringify(enrichedItems),
       totalAmount,
@@ -1442,16 +1516,27 @@ app.post('/orders', async (req, res) => {
     ]);
 
     for (const item of enrichedItems) {
-      await connection.query('UPDATE product_units SET orderId = ? WHERE code IN (?)', [result.insertId, item.serialNumbers]);
+      if (item.deviceUnits && item.deviceUnits.length > 0) {
+        for (const u of item.deviceUnits) {
+          try {
+            await connection.query(
+              `INSERT INTO product_units (code, productId, manufacturerSerial, status, orderId)
+               VALUES (?, ?, ?, 'allocated', ?)
+               ON DUPLICATE KEY UPDATE orderId = VALUES(orderId), manufacturerSerial = COALESCE(product_units.manufacturerSerial, VALUES(manufacturerSerial))`,
+              [u.code, item.productId || 'prod-001', u.manufacturerSerial, result.insertId]
+            );
+          } catch {}
+        }
+      }
     }
 
     // Nếu đơn hàng có dùng voucher, lưu vào user_vouchers để đánh dấu đã sử dụng
-    if (voucherCode && userId) {
+    if (voucherCode && validUserId) {
       const cleanVoucher = String(voucherCode).trim().toUpperCase();
       try {
         await connection.query(
           'INSERT INTO user_vouchers (userId, voucherCode, orderId) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE orderId = VALUES(orderId)',
-          [userId, cleanVoucher, result.insertId]
+          [validUserId, cleanVoucher, result.insertId]
         );
       } catch (vErr) {
         console.warn('Could not record voucher usage:', vErr);
@@ -2051,8 +2136,8 @@ app.get('/wishlist/:userId', async (req, res) => {
 
     const wishlist = rows.map(product => ({
       ...product,
-      specifications: product.specifications ? (typeof product.specifications === 'string' ? JSON.parse(product.specifications) : product.specifications) : {},
-      features: product.features ? (typeof product.features === 'string' ? JSON.parse(product.features) : product.features) : [],
+      specifications: safeJsonParse(product.specifications, {}),
+      features: safeJsonParse(product.features, []),
     }));
 
     res.json(wishlist);
@@ -2378,7 +2463,7 @@ app.get('/support/tickets', async (req, res) => {
 
     if (sessionId) {
       const [[ticket]] = await connection.query(
-        'SELECT id FROM support_tickets WHERE sessionId = ? ORDER BY id DESC LIMIT 1',
+        "SELECT id FROM support_tickets WHERE sessionId = ? AND status != 'closed' ORDER BY id DESC LIMIT 1",
         [sessionId]
       );
       if (!ticket) return res.json(null);
@@ -2565,12 +2650,16 @@ app.get('/admin/stats', requireAdmin, async (req, res) => {
 
 // Start server
 const PORT = process.env.PORT || 5000;
-databaseReady.then(() => initializeReporting(pool)).then(() => app.listen(PORT, () => {
-  console.log(`🚀 API Server running on http://localhost:${PORT}`);
-  console.log(`📊 Database: ${process.env.DB_NAME || 'maytinh'}`);
-  console.log(`👤 DB User: ${process.env.DB_USER || 'root'}`);
-})).catch(error => {
-  console.error('Warranty initialization failed:', error.message);
-  process.exitCode = 1;
-  pool.end();
-});
+databaseReady
+  .then(() => initializeReporting(pool))
+  .catch(error => {
+    console.error('⚠️ Database initialization warning:', error.message);
+    console.warn('💡 Server backend vẫn hoạt động trên port ' + PORT + '. Hãy đảm bảo XAMPP MySQL (Port 3306) đang chạy để kết nối database!');
+  })
+  .finally(() => {
+    app.listen(PORT, () => {
+      console.log(`🚀 API Server running on http://localhost:${PORT}`);
+      console.log(`📊 Database: ${process.env.DB_NAME || 'maytinh'}`);
+      console.log(`👤 DB User: ${process.env.DB_USER || 'root'}`);
+    });
+  });

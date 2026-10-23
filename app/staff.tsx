@@ -20,7 +20,7 @@ import { ProductUnitsModal } from '@/components/ProductUnitsModal';
 import { useAppContext } from '@/context/AppContext';
 import { formatPrice, getProductFallbackImage } from '@/data/products';
 import { apiService, type Order, type Product } from '@/services/api';
-import { formatUnitCodes } from '@/utils/deviceUnits';
+import { ensureDeviceUnits } from '@/utils/deviceUnits';
 
 type StaffTab = 'orders' | 'inventory' | 'support' | 'catalog';
 
@@ -129,6 +129,7 @@ export default function StaffScreen() {
     if (typeof window !== 'undefined') {
       const handleSync = () => loadData();
       window.addEventListener('focus', handleSync);
+      window.addEventListener('dpc_order_created', handleSync);
       window.addEventListener('dpc_order_updated', handleSync);
       let bc: BroadcastChannel | null = null;
       try {
@@ -138,6 +139,7 @@ export default function StaffScreen() {
       return () => {
         clearInterval(interval);
         window.removeEventListener('focus', handleSync);
+        window.removeEventListener('dpc_order_created', handleSync);
         window.removeEventListener('dpc_order_updated', handleSync);
         if (bc) bc.close();
       };
@@ -1078,66 +1080,51 @@ export default function StaffScreen() {
 
                         {/* Mã BH & IMEI máy đã cấp cho đơn hàng */}
                         <View style={{ marginTop: 6, padding: 8, backgroundColor: isDark ? '#0f172a' : '#f8fafc', borderRadius: 8, borderWidth: 1, borderColor: isDark ? '#334155' : '#e2e8f0', gap: 3 }}>
-                          {item.deviceUnits && item.deviceUnits.length > 0 ? (
-                            item.deviceUnits.map((u: any, uIdx: number) => (
-                              <View key={uIdx} style={{ gap: 2, paddingBottom: uIdx < (item.deviceUnits?.length || 0) - 1 ? 4 : 0, borderBottomWidth: uIdx < (item.deviceUnits?.length || 0) - 1 ? 1 : 0, borderBottomColor: isDark ? '#334155' : '#e2e8f0' }}>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                                  <Text style={{ fontSize: 10, color: isDark ? '#94a3b8' : '#64748b', fontWeight: '600' }}>Mã BH nội bộ:</Text>
-                                  <Text selectable style={{ fontSize: 11, fontWeight: '700', color: isDark ? '#93c5fd' : '#1d4ed8', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{u.code}</Text>
-                                </View>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                                  <Text style={{ fontSize: 10, color: isDark ? '#94a3b8' : '#64748b', fontWeight: '600' }}>IMEI / Serial hãng:</Text>
-                                  {u.manufacturerSerial ? (
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                      <Ionicons name="lock-closed" size={11} color="#059669" />
-                                      <Text selectable style={{ fontSize: 11, fontWeight: '800', color: '#059669', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>
-                                        {u.manufacturerSerial}
-                                      </Text>
-                                      <View style={{ backgroundColor: '#dcfce7', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
-                                        <Text style={{ fontSize: 9, fontWeight: '700', color: '#059669' }}>Cố định</Text>
+                          {(() => {
+                            const units = ensureDeviceUnits(item);
+                            return (
+                              <>
+                                {units.map((u, uIdx) => (
+                                  <View key={uIdx} style={{ gap: 2, paddingBottom: uIdx < units.length - 1 ? 4 : 0, borderBottomWidth: uIdx < units.length - 1 ? 1 : 0, borderBottomColor: isDark ? '#334155' : '#e2e8f0' }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                      <Text style={{ fontSize: 10, color: isDark ? '#94a3b8' : '#64748b', fontWeight: '600' }}>Mã BH nội bộ:</Text>
+                                      <Text selectable style={{ fontSize: 11, fontWeight: '700', color: isDark ? '#93c5fd' : '#1d4ed8', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{u.code}</Text>
+                                    </View>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                      <Text style={{ fontSize: 10, color: isDark ? '#94a3b8' : '#64748b', fontWeight: '600' }}>IMEI / Serial hãng:</Text>
+                                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                        <Ionicons name="lock-closed" size={11} color="#059669" />
+                                        <Text selectable style={{ fontSize: 11, fontWeight: '800', color: '#059669', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>
+                                          {u.manufacturerSerial}
+                                        </Text>
+                                        <View style={{ backgroundColor: '#dcfce7', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
+                                          <Text style={{ fontSize: 9, fontWeight: '700', color: '#059669' }}>Cố định</Text>
+                                        </View>
                                       </View>
                                     </View>
-                                  ) : (
-                                    <Text style={{ fontSize: 11, fontStyle: 'italic', color: '#d97706' }}>
-                                      Chưa nhập tem máy
-                                    </Text>
-                                  )}
-                                </View>
-                              </View>
-                            ))
-                          ) : (
-                            <View style={{ gap: 2 }}>
-                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                <Text style={{ fontSize: 10, color: isDark ? '#94a3b8' : '#64748b', fontWeight: '600' }}>Mã BH nội bộ:</Text>
-                                <Text selectable style={{ fontSize: 11, fontWeight: '700', color: isDark ? '#93c5fd' : '#1d4ed8', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>{formatUnitCodes(item)}</Text>
-                              </View>
-                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                <Text style={{ fontSize: 10, color: isDark ? '#94a3b8' : '#64748b', fontWeight: '600' }}>IMEI / Serial hãng:</Text>
-                                <Text style={{ fontSize: 11, fontStyle: 'italic', color: '#d97706' }}>
-                                  Chưa nhập tem máy
-                                </Text>
-                              </View>
-                            </View>
-                          )}
+                                  </View>
+                                ))}
 
-                          {item.deviceUnits && item.deviceUnits.length > 0 && item.deviceUnits.every((u: any) => !!u.manufacturerSerial) ? (
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 4, backgroundColor: '#f0fdf4', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, alignSelf: 'flex-start' }}>
-                              <Ionicons name="lock-closed" size={12} color="#059669" />
-                              <Text style={{ fontSize: 11, fontWeight: '700', color: '#059669' }}>
-                                IMEI máy đã cố định & niêm phong theo đơn
-                              </Text>
-                            </View>
-                          ) : (
-                            <Pressable
-                              onPress={() => { setUnitCodes(item.serialNumbers); setUnitProduct({ id: item.productId, name: item.name }); }}
-                              style={{ flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', marginTop: 3, backgroundColor: '#eff6ff', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }}
-                            >
-                              <Ionicons name="barcode-outline" size={13} color="#2563eb" />
-                              <Text style={{ fontSize: 11, fontWeight: '700', color: '#2563eb' }}>
-                                Gán IMEI/Serial từ tem máy (còn thiếu)
-                              </Text>
-                            </Pressable>
-                          )}
+                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginTop: 4 }}>
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#f0fdf4', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }}>
+                                    <Ionicons name="lock-closed" size={12} color="#059669" />
+                                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#059669' }}>
+                                      IMEI máy đã cố định & niêm phong theo đơn
+                                    </Text>
+                                  </View>
+                                  <Pressable
+                                    onPress={() => { setUnitCodes(units.map(u => u.code)); setUnitProduct({ id: item.productId, name: item.name }); }}
+                                    style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: isDark ? '#1e293b' : '#f1f5f9', paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6 }}
+                                  >
+                                    <Ionicons name="pencil-outline" size={11} color={isDark ? '#94a3b8' : '#64748b'} />
+                                    <Text style={{ fontSize: 10, fontWeight: '600', color: isDark ? '#94a3b8' : '#64748b' }}>
+                                      Đổi tem
+                                    </Text>
+                                  </Pressable>
+                                </View>
+                              </>
+                            );
+                          })()}
                         </View>
                         {/* THỜI HẠN BẢO HÀNH DỰ KIẾN KHI MUA MÁY */}
                         {(() => {

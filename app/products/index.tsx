@@ -17,7 +17,7 @@ import { Header } from '@/components/Header';
 import { ProductCardSkeleton } from '@/components/SkeletonLoader';
 import { GEAR_CATEGORIES, isProductInCategory } from '@/constants/categories';
 import { useAppContext } from '@/context/AppContext';
-import { formatPrice, getProductFallbackImage, isInvalidOrBlockedImageUrl } from '@/data/products';
+import { formatNumberWithDots, formatPrice, getProductFallbackImage, isInvalidOrBlockedImageUrl } from '@/data/products';
 import { useProducts } from '@/hooks/useApi';
 
 const PRICE_PRESETS = [
@@ -153,12 +153,18 @@ function ProductGridItem({
                     key={s}
                     name="star"
                     size={12}
-                    color={s <= Math.floor(item.rating) ? '#f59e0b' : '#cbd5e1'}
+                    color={(item.reviewCount && s <= Math.floor(item.rating)) ? '#f59e0b' : '#cbd5e1'}
                   />
                 ))}
               </View>
-              <Text style={styles.ratingNumber}>{item.rating}</Text>
-              <Text style={styles.reviewCount}>({item.reviewCount})</Text>
+              {item.reviewCount && item.reviewCount > 0 ? (
+                <>
+                  <Text style={styles.ratingNumber}>{item.rating}</Text>
+                  <Text style={styles.reviewCount}>({item.reviewCount})</Text>
+                </>
+              ) : (
+                <Text style={[styles.reviewCount, { color: '#16a34a', fontWeight: '700' }]}>Mới</Text>
+              )}
             </View>
 
             {item.features && item.features.length > 0 && (
@@ -240,12 +246,20 @@ export default function ProductsPage() {
   };
 
   const handleApplyCustomPrice = () => {
-    const min = parseInt(customMinPrice.replace(/[^0-9]/g, ''), 10) || 0;
+    const minDigits = customMinPrice.replace(/[^0-9]/g, '');
     const maxDigits = customMaxPrice.replace(/[^0-9]/g, '');
+    if (!minDigits && !maxDigits) {
+      showToast('Vui lòng nhập khoảng giá cần lọc');
+      return;
+    }
+    const min = minDigits ? parseInt(minDigits, 10) : 0;
     const max = maxDigits ? Number(maxDigits) : Infinity;
     if (min > max && max !== Infinity) {
       showToast('Giá tối thiểu không được lớn hơn giá tối đa');
       return;
+    }
+    if (!minDigits && maxDigits) {
+      setCustomMinPrice('0');
     }
     setSelectedPricePreset('custom');
     setAppliedCustomPrice({ min, max });
@@ -297,7 +311,9 @@ export default function ProductsPage() {
       result = result.filter((item) =>
         item.name.toLowerCase().includes(normalized) ||
         (item.category && item.category.toLowerCase().includes(normalized)) ||
-        (item.category_id && item.category_id.toLowerCase().includes(normalized))
+        (item.category_id && item.category_id.toLowerCase().includes(normalized)) ||
+        (item.description && item.description.toLowerCase().includes(normalized)) ||
+        (item.specifications && Object.values(item.specifications).some((val) => String(val).toLowerCase().includes(normalized)))
       );
     }
 
@@ -652,26 +668,34 @@ export default function ProductsPage() {
                   placeholder="Từ đ"
                   placeholderTextColor="#94a3b8"
                   value={customMinPrice}
-                  onChangeText={(value) => setCustomMinPrice(value.replace(/[^0-9]/g, ''))}
+                  onChangeText={(value) => setCustomMinPrice(formatNumberWithDots(value))}
                   keyboardType="numeric"
                   accessibilityLabel="Giá từ (đồng)"
                   returnKeyType="search"
                   onSubmitEditing={handleApplyCustomPrice}
                 />
-                <Text style={{ color: '#94a3b8', fontWeight: 'bold' }}>-</Text>
+                <Text style={styles.priceDash}>-</Text>
                 <TextInput
                   style={styles.priceInput}
                   placeholder="Đến đ"
                   placeholderTextColor="#94a3b8"
                   value={customMaxPrice}
-                  onChangeText={(value) => setCustomMaxPrice(value.replace(/[^0-9]/g, ''))}
+                  onChangeText={(value) => setCustomMaxPrice(formatNumberWithDots(value))}
                   keyboardType="numeric"
                   accessibilityLabel="Giá đến (đồng)"
                   returnKeyType="search"
                   onSubmitEditing={handleApplyCustomPrice}
                 />
               </View>
-              <Pressable style={styles.applyPriceBtn} onPress={handleApplyCustomPrice} accessibilityRole="button">
+              <Pressable
+                style={({ pressed, hovered }: any) => [
+                  styles.applyPriceBtn,
+                  hovered && styles.applyPriceBtnHover,
+                  pressed && styles.applyPriceBtnActive,
+                ]}
+                onPress={handleApplyCustomPrice}
+                accessibilityRole="button"
+              >
                 <Text style={styles.applyPriceBtnText}>Áp dụng</Text>
               </Pressable>
             </View>
@@ -1195,25 +1219,37 @@ const styles = StyleSheet.create({
     gap: 6,
     marginTop: 4,
   },
+  priceDash: {
+    color: '#94a3b8',
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
   priceInput: {
     flex: 1,
     minWidth: 0,
-    height: 32,
+    height: 36,
     backgroundColor: '#ffffff',
     borderWidth: 1,
     borderColor: '#cbd5e1',
     borderRadius: 8,
-    paddingHorizontal: 8,
-    fontSize: 12,
+    paddingHorizontal: 10,
+    fontSize: 13,
     color: '#0f172a',
   },
   applyPriceBtn: {
     marginTop: 8,
-    height: 40,
+    height: 36,
     backgroundColor: '#2563eb',
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  applyPriceBtnHover: {
+    backgroundColor: '#1d4ed8',
+  },
+  applyPriceBtnActive: {
+    backgroundColor: '#1e40af',
+    transform: [{ scale: 0.98 }],
   },
   applyPriceBtnText: {
     color: '#ffffff',

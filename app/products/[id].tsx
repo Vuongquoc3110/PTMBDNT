@@ -64,6 +64,44 @@ export default function ProductDetailScreen() {
   const { reviews: apiReviews, refetch: refetchReviews } = useProductReviews(product.id);
   const isFav = isWishlisted(product.id);
 
+  // Tính toán số lượng và danh sách đánh giá thực tế
+  const actualReviews = useMemo(() => {
+    return Array.isArray(apiReviews) ? apiReviews : [];
+  }, [apiReviews]);
+
+  const effectiveReviewCount = useMemo(() => {
+    if (Array.isArray(apiReviews)) {
+      return apiReviews.length;
+    }
+    return product.reviewCount || 0;
+  }, [apiReviews, product.reviewCount]);
+
+  const averageRating = useMemo(() => {
+    if (actualReviews.length > 0) {
+      const sum = actualReviews.reduce((acc, r) => acc + (Number(r.rating) || 5), 0);
+      return (sum / actualReviews.length).toFixed(1);
+    }
+    return effectiveReviewCount > 0 ? (product.rating ? Number(product.rating).toFixed(1) : '5.0') : '5.0';
+  }, [actualReviews, effectiveReviewCount, product.rating]);
+
+  const reviewBreakdownData = useMemo(() => {
+    if (actualReviews.length === 0) {
+      return [
+        { star: 5, pct: '0%' },
+        { star: 4, pct: '0%' },
+        { star: 3, pct: '0%' },
+        { star: 2, pct: '0%' },
+        { star: 1, pct: '0%' },
+      ];
+    }
+    const total = actualReviews.length;
+    return [5, 4, 3, 2, 1].map((star) => {
+      const count = actualReviews.filter((r) => Math.round(Number(r.rating)) === star).length;
+      const pct = total > 0 ? `${Math.round((count / total) * 100)}%` : '0%';
+      return { star, pct };
+    });
+  }, [actualReviews]);
+
   const [reviewInput, setReviewInput] = useState('');
   const [reviewRating, setReviewRating] = useState(5);
   const [submittingReview, setSubmittingReview] = useState(false);
@@ -227,30 +265,44 @@ export default function ProductDetailScreen() {
     ? currentOldPrice - currentPrice
     : 0;
 
-  // Fallback specifications with selected configuration
+  // Fallback specifications with selected configuration & smart fallbacks
   const displaySpecs: Record<string, string> = useMemo(() => {
-    const baseSpecs: Record<string, string> =
-      product.specifications && Object.keys(product.specifications).length > 0
-        ? { ...product.specifications }
-        : {};
+    let rawSpecs: Record<string, string> = {};
+    if (typeof product.specifications === 'string') {
+      try {
+        rawSpecs = JSON.parse(product.specifications);
+      } catch {
+        rawSpecs = {};
+      }
+    } else if (product.specifications && typeof product.specifications === 'object') {
+      rawSpecs = { ...product.specifications };
+    }
 
+    // Nếu sản phẩm CÓ thông số kỹ thuật (do admin đăng hoặc có sẵn từ database)
+    if (rawSpecs && Object.keys(rawSpecs).length > 0) {
+      const merged: Record<string, string> = { ...rawSpecs };
+      // Nếu khách chọn cấu hình option trên UI (Color, RAM, CPU, SSD) thì sync vào bảng
+      if (selectedColor && (merged['Màu sắc'] || isLaptop)) {
+        merged['Màu sắc'] = selectedColor;
+      }
+      if (selectedRam && (merged['Bộ nhớ RAM'] || merged['RAM'] || isLaptop)) {
+        if (merged['RAM']) merged['RAM'] = selectedRam;
+        else merged['Bộ nhớ RAM'] = selectedRam;
+      }
+      if (selectedCpu && (merged['Vi xử lý (CPU)'] || merged['CPU'] || isLaptop)) {
+        if (merged['CPU']) merged['CPU'] = selectedCpu;
+        else merged['Vi xử lý (CPU)'] = selectedCpu;
+      }
+      if (selectedStorage && (merged['Ổ cứng'] || merged['Ổ cứng SSD'] || isLaptop)) {
+        if (merged['Ổ cứng SSD']) merged['Ổ cứng SSD'] = selectedStorage;
+        else merged['Ổ cứng'] = selectedStorage;
+      }
+      return merged;
+    }
+
+    // NẾU KHÔNG CÓ THÔNG SỐ (RỖNG) THÌ MỚI FALLBACK THEO DANH MỤC:
     const cat = (product.category || (product as any).category_id || '').toLowerCase();
     if (isLaptop || cat.includes('laptop')) {
-      if (selectedColor) {
-        baseSpecs['Màu sắc'] = selectedColor;
-      }
-      if (selectedRam) {
-        baseSpecs['Bộ nhớ RAM'] = selectedRam;
-      }
-      if (selectedCpu) {
-        baseSpecs['Vi xử lý (CPU)'] = selectedCpu;
-      }
-      if (selectedStorage) {
-        baseSpecs['Ổ cứng'] = selectedStorage;
-      }
-      if (Object.keys(baseSpecs).length > 0) {
-        return baseSpecs;
-      }
       return {
         'Màu sắc': selectedColor || 'Xám Titan / Đen Obsidian',
         'Vi xử lý (CPU)': selectedCpu || 'Intel Core / AMD Ryzen thế hệ tối ưu',
@@ -264,13 +316,47 @@ export default function ProductDetailScreen() {
         'Bảo hành': '24 tháng chính hãng tại TTBH ủy quyền',
       };
     }
-    if (cat.includes('gpu') || cat.includes('card')) {
+    if (cat.includes('pc') || cat.includes('máy tính') || cat.includes('desktop')) {
+      return {
+        'CPU': 'Intel Core i5 / AMD Ryzen 5',
+        'RAM': '16GB DDR4 / DDR5',
+        'Card đồ họa': 'NVIDIA GeForce RTX Series',
+        'Ổ cứng': '500GB / 1TB NVMe PCIe SSD',
+        'Mainboard': 'B760 / B650 Chipset',
+        'Nguồn': '650W - 750W 80 Plus Bronze / Gold',
+        'Tản nhiệt': 'Tản nhiệt khí / nước AIO',
+        'Vỏ case': 'Kính cường lực Airflow Gaming',
+        'Bảo hành': '36 tháng chính hãng linh kiện',
+      };
+    }
+    if (cat.includes('gpu') || cat.includes('card') || cat.includes('vga')) {
       return {
         'Chipset': 'NVIDIA GeForce RTX Series',
         'Bộ nhớ VRAM': '16GB GDDR6X 256-bit',
         'Cổng xuất hình': '3x DisplayPort 1.4a, 1x HDMI 2.1a',
         'Nguồn đề xuất': '750W - 850W Gold',
         'Tản nhiệt': '3 Quạt Axial-tech Fan + Buồng hơi đồng',
+        'Bảo hành': '36 tháng chính hãng',
+      };
+    }
+    if (cat.includes('main') || cat.includes('bo mạch')) {
+      return {
+        'Socket': 'Intel LGA1700 / AMD AM5',
+        'Chipset': 'Intel B760 / Z790 / AMD B650',
+        'Hỗ trợ RAM': 'DDR5 4 khe cắm Dual Channel',
+        'Khe mở rộng': 'PCIe 5.0 x16, M.2 NVMe PCIe 4.0',
+        'Kết nối mạng': '2.5GbE LAN, Wi-Fi 6E',
+        'Bảo hành': '36 tháng chính hãng',
+      };
+    }
+    if (cat.includes('mon') || cat.includes('màn') || cat.includes('screen') || cat.includes('display')) {
+      return {
+        'Kích thước': '27 inch',
+        'Độ phân giải': '2K QHD (2560 x 1440)',
+        'Tấm nền': 'Fast IPS 1ms GtG',
+        'Tần số quét': '180Hz / 240Hz',
+        'Màu sắc': '99% sRGB, 95% DCI-P3',
+        'Cổng kết nối': 'DisplayPort 1.4, HDMI 2.0',
         'Bảo hành': '36 tháng chính hãng',
       };
     }
@@ -472,21 +558,43 @@ export default function ProductDetailScreen() {
 
                 {/* RATING & SOCIAL PROOF */}
                 <View style={styles.socialProofRow}>
-                  <View style={styles.starsWrap}>
-                    {[1, 2, 3, 4, 5].map((s) => (
-                      <Ionicons
-                        key={s}
-                        name="star"
-                        size={15}
-                        color={s <= Math.floor(product.rating) ? '#f59e0b' : '#cbd5e1'}
-                      />
-                    ))}
-                  </View>
-                  <Text style={styles.ratingScore}>{product.rating}</Text>
-                  <Text style={styles.dotSep}>•</Text>
-                  <Text style={styles.reviewCountText}>{product.reviewCount} đánh giá</Text>
-                  <Text style={styles.dotSep}>•</Text>
-                  <Text style={styles.soldCountText}>Đã bán 180+</Text>
+                  {effectiveReviewCount > 0 ? (
+                    <>
+                      <View style={styles.starsWrap}>
+                        {[1, 2, 3, 4, 5].map((s) => (
+                          <Ionicons
+                            key={s}
+                            name="star"
+                            size={15}
+                            color={s <= Math.floor(Number(averageRating)) ? '#f59e0b' : '#cbd5e1'}
+                          />
+                        ))}
+                      </View>
+                      <Text style={styles.ratingScore}>{averageRating}</Text>
+                      <Text style={styles.dotSep}>•</Text>
+                      <Text style={styles.reviewCountText}>{effectiveReviewCount} đánh giá</Text>
+                      <Text style={styles.dotSep}>•</Text>
+                      <Text style={styles.soldCountText}>Đã bán 180+</Text>
+                    </>
+                  ) : (
+                    <>
+                      <View style={styles.starsWrap}>
+                        {[1, 2, 3, 4, 5].map((s) => (
+                          <Ionicons
+                            key={s}
+                            name="star"
+                            size={15}
+                            color="#cbd5e1"
+                          />
+                        ))}
+                      </View>
+                      <Text style={[styles.reviewCountText, { color: '#64748b' }]}>Chưa có đánh giá</Text>
+                      <Text style={styles.dotSep}>•</Text>
+                      <View style={{ backgroundColor: '#ecfdf5', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#059669' }}>✨ Hàng mới lên kệ</Text>
+                      </View>
+                    </>
+                  )}
                 </View>
 
                 {/* HERO PRICING BOX */}
@@ -948,7 +1056,7 @@ export default function ProductDetailScreen() {
                   color={activeTab === 'reviews' ? '#2563eb' : '#64748b'}
                 />
                 <Text style={[styles.tabHeaderText, activeTab === 'reviews' && styles.tabHeaderTextActive]}>
-                  Đánh giá ({product.reviewCount})
+                  Đánh giá ({effectiveReviewCount})
                 </Text>
               </Pressable>
             </View>
@@ -1041,35 +1149,50 @@ export default function ProductDetailScreen() {
             {/* TAB CONTENT: CUSTOMER REVIEWS */}
             {activeTab === 'reviews' && (
               <View style={styles.tabBody}>
-                <View style={styles.reviewOverviewCard}>
-                  <View style={styles.reviewScoreBox}>
-                    <Text style={styles.reviewScoreLarge}>{product.rating}</Text>
-                    <View style={{ flexDirection: 'row', gap: 2, marginVertical: 4 }}>
-                      {[1, 2, 3, 4, 5].map((s) => (
-                        <Ionicons key={s} name="star" size={16} color="#f59e0b" />
+                {effectiveReviewCount > 0 ? (
+                  <View style={styles.reviewOverviewCard}>
+                    <View style={styles.reviewScoreBox}>
+                      <Text style={styles.reviewScoreLarge}>{averageRating}</Text>
+                      <View style={{ flexDirection: 'row', gap: 2, marginVertical: 4 }}>
+                        {[1, 2, 3, 4, 5].map((s) => (
+                          <Ionicons
+                            key={s}
+                            name="star"
+                            size={16}
+                            color={s <= Math.floor(Number(averageRating)) ? '#f59e0b' : '#cbd5e1'}
+                          />
+                        ))}
+                      </View>
+                      <Text style={styles.reviewScoreSub}>Dựa trên {effectiveReviewCount} lượt đánh giá</Text>
+                    </View>
+
+                    <View style={styles.reviewBreakdown}>
+                      {reviewBreakdownData.map((item) => (
+                        <View key={item.star} style={styles.reviewBarRow}>
+                          <Text style={styles.reviewBarStar}>{item.star} sao</Text>
+                          <View style={styles.reviewBarTrack}>
+                            <View style={[styles.reviewBarFill, { width: item.pct as any }]} />
+                          </View>
+                          <Text style={styles.reviewBarPct}>{item.pct}</Text>
+                        </View>
                       ))}
                     </View>
-                    <Text style={styles.reviewScoreSub}>Dựa trên {product.reviewCount} lượt mua</Text>
                   </View>
-
-                  <View style={styles.reviewBreakdown}>
-                    {[
-                      { star: 5, pct: '88%' },
-                      { star: 4, pct: '10%' },
-                      { star: 3, pct: '2%' },
-                      { star: 2, pct: '0%' },
-                      { star: 1, pct: '0%' },
-                    ].map((item) => (
-                      <View key={item.star} style={styles.reviewBarRow}>
-                        <Text style={styles.reviewBarStar}>{item.star} sao</Text>
-                        <View style={styles.reviewBarTrack}>
-                          <View style={[styles.reviewBarFill, { width: item.pct as any }]} />
-                        </View>
-                        <Text style={styles.reviewBarPct}>{item.pct}</Text>
-                      </View>
-                    ))}
+                ) : (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: '#f8fafc', padding: 18, borderRadius: 16, marginBottom: 20, borderWidth: 1, borderColor: '#e2e8f0' }}>
+                    <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#fef3c7', justifyContent: 'center', alignItems: 'center' }}>
+                      <Ionicons name="star-outline" size={22} color="#d97706" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 15, fontWeight: '700', color: '#0f172a', marginBottom: 2 }}>
+                        Sản phẩm chưa có lượt đánh giá nào
+                      </Text>
+                      <Text style={{ fontSize: 12, color: '#64748b' }}>
+                        Điểm đánh giá sẽ tự động được ghi nhận khi có khách mua hàng để lại nhận xét.
+                      </Text>
+                    </View>
                   </View>
-                </View>
+                )}
 
                 {/* ADD NEW REVIEW FORM */}
                 <View style={{ backgroundColor: '#f8fafc', padding: 16, borderRadius: 16, marginBottom: 20, borderWidth: 1, borderColor: '#e2e8f0' }}>
@@ -1144,55 +1267,43 @@ export default function ProductDetailScreen() {
 
                 {/* VERIFIED CUSTOMER REVIEWS LIST */}
                 <View style={styles.verifiedReviewsList}>
-                  {(apiReviews && apiReviews.length > 0
-                    ? apiReviews.map((rev) => ({
-                      name: rev.userName,
-                      badge: 'Đã mua tại DANGVINHPC',
-                      time: new Date(rev.createdAt).toLocaleDateString('vi-VN'),
-                      rating: Math.round(rev.rating),
-                      comment: rev.comment,
-                    }))
-                    : [
-                      {
-                        name: 'Hoàng Minh Tuấn',
-                        badge: 'Đã mua tại DANGVINHPC',
-                        time: '3 ngày trước',
-                        rating: 5,
-                        comment:
-                          'Máy dùng cực kỳ mượt mà, đóng gói cẩn thận 2 lớp chống sốc. Nhân viên tư vấn nhiệt tình, giao hàng chỉ sau 1 ngày!',
-                      },
-                      {
-                        name: 'Trần Quỳnh Nga',
-                        badge: 'Đã mua tại DANGVINHPC',
-                        time: '1 tuần trước',
-                        rating: 5,
-                        comment:
-                          'Màn hình hiển thị quá xuất sắc, thiết kế rất sang trọng và nhẹ nhàng để mang đi làm hàng ngày. Rất hài lòng.',
-                      },
-                    ]
-                  ).map((rev, i) => (
-                    <View key={i} style={styles.customerReviewCard}>
-                      <View style={styles.revUserHeader}>
-                        <View style={styles.revAvatar}>
-                          <Text style={styles.revAvatarText}>{rev.name[0]}</Text>
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.revUserName}>{rev.name}</Text>
-                          <View style={styles.revBadgeRow}>
-                            <Ionicons name="checkmark-circle" size={14} color="#16a34a" />
-                            <Text style={styles.revBadgeText}>{rev.badge}</Text>
-                            <Text style={styles.revTimeText}>• {rev.time}</Text>
+                  {actualReviews.length > 0 ? (
+                    actualReviews.map((rev, i) => (
+                      <View key={rev.id || i} style={styles.customerReviewCard}>
+                        <View style={styles.revUserHeader}>
+                          <View style={styles.revAvatar}>
+                            <Text style={styles.revAvatarText}>{(rev.userName || 'K')[0]}</Text>
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.revUserName}>{rev.userName || 'Khách hàng'}</Text>
+                            <View style={styles.revBadgeRow}>
+                              <Ionicons name="checkmark-circle" size={14} color="#16a34a" />
+                              <Text style={styles.revBadgeText}>Đã mua tại DANGVINHPC</Text>
+                              <Text style={styles.revTimeText}>• {new Date(rev.createdAt).toLocaleDateString('vi-VN')}</Text>
+                            </View>
+                          </View>
+                          <View style={{ flexDirection: 'row', gap: 2 }}>
+                            {[1, 2, 3, 4, 5].map((s) => (
+                              <Ionicons key={s} name="star" size={13} color={s <= Math.round(rev.rating) ? '#f59e0b' : '#cbd5e1'} />
+                            ))}
                           </View>
                         </View>
-                        <View style={{ flexDirection: 'row', gap: 2 }}>
-                          {[1, 2, 3, 4, 5].map((s) => (
-                            <Ionicons key={s} name="star" size={13} color={s <= rev.rating ? '#f59e0b' : '#cbd5e1'} />
-                          ))}
-                        </View>
+                        <Text style={styles.revCommentText}>{rev.comment}</Text>
                       </View>
-                      <Text style={styles.revCommentText}>{rev.comment}</Text>
+                    ))
+                  ) : (
+                    <View style={{ paddingVertical: 36, paddingHorizontal: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f8fafc', borderRadius: 16, borderWidth: 1, borderColor: '#e2e8f0', marginVertical: 8 }}>
+                      <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: '#eff6ff', justifyContent: 'center', alignItems: 'center', marginBottom: 12 }}>
+                        <Ionicons name="chatbubbles-outline" size={24} color="#2563eb" />
+                      </View>
+                      <Text style={{ fontSize: 15, fontWeight: '700', color: '#1e293b', marginBottom: 6 }}>
+                        Chưa có đánh giá nào cho sản phẩm này
+                      </Text>
+                      <Text style={{ fontSize: 13, color: '#64748b', textAlign: 'center', maxWidth: 360, lineHeight: 20 }}>
+                        Hãy là người đầu tiên trải nghiệm và chia sẻ nhận xét thực tế để giúp những khách hàng khác dễ dàng lựa chọn hơn!
+                      </Text>
                     </View>
-                  ))}
+                  )}
                 </View>
               </View>
             )}

@@ -290,6 +290,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       localStorage.removeItem(STORAGE_KEYS.USER);
       localStorage.removeItem(STORAGE_KEYS.CART);
       localStorage.removeItem(STORAGE_KEYS.WISHLIST);
+      localStorage.removeItem('dvpc_support_session');
     }
   };
 
